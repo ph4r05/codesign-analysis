@@ -92,6 +92,10 @@ class MavenSpider(LinkSpider):
 
         return val
 
+    @staticmethod
+    def remove_prefix(text, prefix):
+        return text[text.startswith(prefix) and len(prefix):]
+
     def parse_obj(self, response):
         """
         Base parsing routine - pure link extractor.
@@ -128,10 +132,10 @@ class MavenSpider(LinkSpider):
 
             if re.match('^[0-9]+[.\-].*', last_segment):
                 art_conf += 1
-                versions.append({'v': last_segment, 'l': link})
+                versions.append({'v': last_segment, 'l': self.remove_prefix(link, response.url)})
 
             elif link != response.url:
-                misc_files.append(link)
+                misc_files.append(self.remove_prefix(link, response.url))
 
         # Store only artifacts related URLs
         if is_artifact or art_conf > 5:
