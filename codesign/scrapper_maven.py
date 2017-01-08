@@ -40,16 +40,13 @@ class MavenSpider(LinkSpider):
     start_urls = ['https://repo1.maven.org/']
 
     rules = (
-        Rule(LxmlLinkExtractor(allow=('.+/$'),
+        Rule(LxmlLinkExtractor(allow=('.+maven2/$'),  # '.+/$'
                                deny=(
+
                                    '.+Default\.aspx\?p=.+',
                                    '.+Default\.aspx\?s=.+',
-                                   '.+xml',
-                                   '.+pom',
-                                   '.+jar',
-                                   '.+asc',
-                                   '.+md5',
-                                   '.+sha1',
+                                   '.+xml', '.+pom', '.+jar',
+                                   '.+asc', '.+md5', '.+sha1',
                                ),
                                process_value='process_link'),
              callback='parse_obj', follow=False),
