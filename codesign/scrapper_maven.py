@@ -25,6 +25,8 @@ class ArtifactItem(scrapy.Item):
     url = scrapy.Field()
     versions = scrapy.Field()
     misc_files = scrapy.Field()
+    artifact_detected = scrapy.Field()
+    confidence = scrapy.Field()
 
 
 class MavenSpider(LinkSpider):
@@ -138,6 +140,8 @@ class MavenSpider(LinkSpider):
             item['url'] = response.url
             item['versions'] = versions
             item['misc_files'] = misc_files
+            item['artifact_detected'] = is_artifact
+            item['confidence'] = art_conf
             yield item
 
             # Do not follow any more links from this directory
