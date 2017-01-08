@@ -130,7 +130,7 @@ class MavenSpider(LinkSpider):
                 last_segment = link[0:-1]
             last_segment = last_segment.rsplit('/', 1)[1]
 
-            if re.match('^[0-9]+[.\-].*', last_segment):
+            if re.match('^([0-9]+)([.\-]|$).*', last_segment):
                 art_conf += 1
                 versions.append({'v': last_segment, 'l': self.remove_prefix(link, response.url)})
 
