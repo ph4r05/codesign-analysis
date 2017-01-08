@@ -100,7 +100,9 @@ class MavenSpider(LinkSpider):
         links_visit = set()
         links = set()
         for link in LxmlLinkExtractor(allow=(), deny=()).extract_links(response):
-            links.add(link.url)
+            # Add all links except up link.
+            if link.text != '../':
+                links.add(link.url)
 
         # Links extracted from the current page.
         # Extract links only if landed in the artifact directory.
@@ -115,12 +117,18 @@ class MavenSpider(LinkSpider):
             if link.endswith('/maven-metadata.xml'):
                 is_artifact = True
 
+            last_segment = link
+            last_slash = link[-1] == '/'
 
+            if last_slash:
+                last_segment = link[0:-1]
+            last_segment = last_segment.rsplit('/', 1)[1]
 
-            if re.match('^[0-9]+\..*', link):
+            if re.match('^[0-9]+[.\-].*', last_segment):
                 art_conf += 1
-                versions.append(link)
-            else:
+                versions.append({'v': last_segment, 'l': link})
+
+            elif link != response.url:
                 misc_files.append(link)
 
         # Store only artifacts related URLs
