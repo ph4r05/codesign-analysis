@@ -159,7 +159,7 @@ class MavenSpider(LinkSpider):
 
         logger.debug('Extracted %s links from %s' % (len(links_visit), response.url))
         for link in list(links_visit):
-            yield Request(link)
+            yield Request(link, callback=self.parse_obj)
 
 
 
