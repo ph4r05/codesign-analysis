@@ -147,7 +147,11 @@ class MavenSpider(LinkSpider):
 
             # Case: maven-metadata is present, but we have also another directories here -> crawl it.
             # otherwise do not follow any more links from this page.
-            links = [response.url + '/' + x for x in misc_files if x.endswith('/')]
+            base_url = response.url
+            if base_url[-1] != '/':
+                base_url += '/'
+
+            links = [base_url + x for x in misc_files if x.endswith('/')]
 
         # Links post processing
         for link in links:
