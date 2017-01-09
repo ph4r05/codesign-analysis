@@ -145,8 +145,9 @@ class MavenSpider(LinkSpider):
             item['confidence'] = art_conf
             yield item
 
-            # Do not follow any more links from this directory
-            return
+            # Case: maven-metadata is present, but we have also another directories here -> crawl it.
+            # otherwise do not follow any more links from this page.
+            links = [response.url + '/' + x for x in misc_files if x.endswith('/')]
 
         # Links post processing
         for link in links:
