@@ -83,15 +83,33 @@ class MavenSpider(LinkSpider):
         :param val:
         :return:
         """
-        if re.match('^[0-9]+\..*', val):
+        last_segment = val
+        last_slash = val[-1] == '/'
+        if last_slash:
+            last_segment = val[0:-1]
+
+        last_segment = last_segment.rsplit('/', 1)[1]
+        if self.is_version_folder(last_segment):
             logger.info('Skipping link with version: %s' % val)
             return None
 
-        return val
+        logger.debug('Link: %s' % val)
+        return None
 
     @staticmethod
     def remove_prefix(text, prefix):
         return text[text.startswith(prefix) and len(prefix):]
+
+    def is_version_folder(self, last_segment):
+        """
+        Returns True if the given folder is maven artifact version folder.
+        :param last_segment:
+        :return:
+        """
+        if re.match('^([rv]|commit)?([0-9]+)([.\-]|$).*', last_segment, flags=re.IGNORECASE):
+            return True
+        else:
+            return False
 
     def parse_obj(self, response):
         """
@@ -127,7 +145,7 @@ class MavenSpider(LinkSpider):
                 last_segment = link[0:-1]
             last_segment = last_segment.rsplit('/', 1)[1]
 
-            if re.match('^([0-9]+)([.\-]|$).*', last_segment):
+            if self.is_version_folder(last_segment):
                 art_conf += 1
                 versions.append({'v': last_segment, 'l': self.remove_prefix(link, response.url)})
 
