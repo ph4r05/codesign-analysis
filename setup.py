@@ -22,7 +22,8 @@ install_requires = [
     'bitstring',
     'bitarray',
     'ufx',
-    'pgpdump'
+    'pgpdump',
+    'apk_parse_ph4'
 ]
 
 dev_extras = [
