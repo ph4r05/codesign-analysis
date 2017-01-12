@@ -83,7 +83,9 @@ class ApkPureLoader(object):
         file_name = utils.slugify(apk_rec['package'] + '.apk')
         file_path = os.path.join(self.dump_dir, file_name)
 
-        logger.info('Downloading pkg %s, name: %s, url %s' % (apk_rec['package'], apk_rec['name'], url))
+        logger.info('Downloading [%d/%d] pkg %s, \n\tname: %s, \n\turl %s'
+                    % (idx, len(self.db['apks']), apk_rec['package'], apk_rec['name'], url))
+
         download_again = not os.path.exists(file_path)
         if 'size' not in apk_rec or apk_rec['size'] is None:
             logger.info('Size none or null, downloading')
@@ -129,30 +131,61 @@ class ApkPureLoader(object):
                 r = requests.get(download_link, stream=True)
                 with open(file_path, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=4096):
-                        if chunk:  # filter out keep-alive new chunks
+                        if chunk:
                             f.write(chunk)
                             sha1.update(chunk)
                             md5.update(chunk)
                     f.flush()
 
+                size = os.path.getsize(file_path)
+                if size < 500:
+                    raise Exception('File size too small: %s' % size)
+
                 logger.info('Downloaded to: %s' % file_path)
-                apk_rec['size'] = os.path.getsize(file_path)
+                apk_rec['size'] = size
                 apk_rec['sha1'] = sha1.hexdigest()
                 apk_rec['md5'] = md5.hexdigest()
 
             except Exception as e:
                 traceback.print_exc()
                 logger.error('Exception during download: %s' % e)
-                os.remove(file_path)
                 apk_rec['size'] = None
                 apk_rec['sha1'] = None
                 apk_rec['md5'] = None
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+
                 return
 
         # Process APK
         self.process_apk(file_path, apk_rec)
 
     def process_apk(self, file_path, apk_rec):
+        # Check if parsing is needed
+        parse_again = False
+        if 'pubkey_type' not in apk_rec:
+            logger.info('Parse again - key type not found')
+            parse_again = True
+        elif apk_rec['pubkey_type'] != 'RSA':
+            logger.info('Skipping re-parsing of non-RSA certificates: %s' % apk_rec['pubkey_type'])
+            return
+
+        if 'modulus' not in apk_rec or not isinstance(apk_rec['modulus'], (int, long)) or apk_rec['modulus'] == 0:
+            logger.info('Parse again - modulus invalid')
+            parse_again = True
+        if 'modulus_hex' not in apk_rec or len(apk_rec['modulus_hex']) < 10:
+            logger.info('Parse again - hex modulus invalid')
+            parse_again = True
+        if 'pubkey_type' not in apk_rec:
+            logger.info('Parse again - key type not found')
+            parse_again = True
+
+        if not parse_again:
+            print(apk_rec['modulus_hex'])
+            return
+
         # Downloaded - now parse
         try:
             logger.info('Parsing APK')
