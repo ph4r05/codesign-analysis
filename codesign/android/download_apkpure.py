@@ -21,6 +21,7 @@ import re
 import math
 import hashlib
 import inspect
+import time
 
 from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
@@ -241,15 +242,21 @@ def main():
     with open(json_path, 'r') as fh:
         db = json.load(fh, object_pairs_hook=OrderedDict)
 
+    last_save = 0
     t = ApkPureLoader(db, dump_dir)
     for idx in range(0, len(db['apks'])):
         t.load(idx)
 
-        # re-save
+        # re-save each 5 seconds.
+        cur_time = time.time()
+        if cur_time - last_save <= 5.0:
+            continue
+
         new_json = os.path.join(dump_dir, '_apks_info.json')
         with open(new_json, 'w') as fh:
             fh.write(json.dumps(db, indent=2))
             fh.flush()
+            last_save = cur_time
 
 
 # Launcher
