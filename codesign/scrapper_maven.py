@@ -151,8 +151,8 @@ class MavenSpider(LinkSpider):
 
             elif link != response.url:
                 misc_files.append(self.remove_prefix(link, response.url))
-	
-	# TODO: if non-standard format, download also maven-metadata.xml  
+
+        # TODO: if non-standard format, download also maven-metadata.xml
         # Store only artifacts related URLs
         if is_artifact or art_conf > 5:
             logger.info('New artifact(%s), confidence(%s): %s' % (is_artifact, art_conf, response.url))
