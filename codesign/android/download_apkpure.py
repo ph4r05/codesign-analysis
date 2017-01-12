@@ -20,20 +20,24 @@ import os
 import re
 import math
 import hashlib
+import inspect
 
 from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
-import codesign.utils
 from lxml import html
 from collections import OrderedDict
 from apk_parse.apk import APK
-import binascii
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.backends import default_backend
-from cryptography.x509.base import load_pem_x509_certificate
-from cryptography.hazmat.primitives import hashes
+
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0, parentdir)
+
+try:
+    from codesign import utils
+except:
+    import utils
 
 
 logger = logging.getLogger(__name__)
@@ -76,11 +80,20 @@ class ApkPureLoader(object):
         """
         apk_rec = self.db['apks'][idx]
         url = self.BASE_URL + apk_rec['download']
-        file_name = codesign.utils.slugify(apk_rec['package'] + '.apk')
+        file_name = utils.slugify(apk_rec['package'] + '.apk')
         file_path = os.path.join(self.dump_dir, file_name)
 
         logger.info('Downloading pkg %s, name: %s, url %s' % (apk_rec['package'], apk_rec['name'], url))
-        if not os.path.exists(file_path):
+        download_again = not os.path.exists(file_path)
+        if 'size' not in apk_rec or apk_rec['size'] is None:
+            logger.info('Size none or null, downloading')
+            download_again = True
+
+        if 'size' in apk_rec and apk_rec['size'] < 500:
+            logger.info('Size to small, downloading')
+            download_again = True
+
+        if download_again:
             res = requests.get(url, timeout=20)
             if math.floor(res.status_code / 100) != 2.0:
                 res.raise_for_status()
@@ -106,6 +119,7 @@ class ApkPureLoader(object):
                 return
 
             download_link = anchors[0].attrib['href']
+            apk_rec['direct_link'] = download_link
             logger.info('Downloading link: %s' % download_link)
 
             # Download with removal if exception is thrown
@@ -130,14 +144,22 @@ class ApkPureLoader(object):
                 traceback.print_exc()
                 logger.error('Exception during download: %s' % e)
                 os.remove(file_path)
+                apk_rec['size'] = None
+                apk_rec['sha1'] = None
+                apk_rec['md5'] = None
+                return
 
+        # Process APK
+        self.process_apk(file_path, apk_rec)
+
+    def process_apk(self, file_path, apk_rec):
         # Downloaded - now parse
         try:
             logger.info('Parsing APK')
             apkf = APK(file_path)
             pem = apkf.cert_pem
 
-            x509 = codesign.utils.load_x509(pem)
+            x509 = utils.load_x509(pem)
             apk_rec['cert_alg'] = x509.signature_hash_algorithm.name
 
             pub = x509.public_key()
@@ -160,7 +182,7 @@ class ApkPureLoader(object):
             else:
                 apk_rec['pubkey_type'] = ''
 
-            codesign.utils.extend_with_cert_data(apk_rec, x509, logger)
+            utils.extend_with_cert_data(apk_rec, x509, logger)
             apk_rec['pem'] = pem
 
         except Exception as e:
