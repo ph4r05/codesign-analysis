@@ -15,6 +15,7 @@ import sys
 import os
 import re
 import math
+import inspect
 from lxml import html
 from collections import OrderedDict
 
