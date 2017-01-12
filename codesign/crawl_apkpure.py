@@ -3,7 +3,6 @@
 
 """
 Crawls apkpure.com for apps chart.
-Downloads APKs directly.
 """
 
 import requests
@@ -29,13 +28,12 @@ class ApkPureLoader(object):
     Crawling apkpure.com
     """
 
-    BASE_URL = 'https://apkpure.com/'
+    BASE_URL = 'https://apkpure.com'
 
-    def __init__(self, mode='app', attempts=10):
+    def __init__(self, attempts=10):
         self.attempts = attempts
         self.total = None
         self.per_page = None
-        self.mode = mode
 
     def load(self, idx=None, mode='app', offset=0):
         """
@@ -63,7 +61,7 @@ class ApkPureLoader(object):
         if idx is None:
             idx = 1
 
-        url += '%s?page=%d&ajax=1' % (mode, idx)
+        url += '/%s?page=%d&ajax=1' % (mode, idx)
 
         res = requests.get(url, timeout=20)
         if math.floor(res.status_code / 100) != 2.0:
