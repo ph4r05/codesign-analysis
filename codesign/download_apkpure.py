@@ -4,6 +4,9 @@
 """
 Crawls apkpure.com for apps chart.
 Downloads APKs directly.
+
+Signature of the APK can be verified by:
+jarsigner -verify -verbose -certs my_application.apk
 """
 
 import requests
@@ -26,7 +29,6 @@ import utils
 from lxml import html
 from collections import OrderedDict
 from apk_parse.apk import APK
-import argparse
 import binascii
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.backends import default_backend
@@ -40,7 +42,7 @@ coloredlogs.install(level=logging.INFO)
 
 class ApkPureLoader(object):
     """
-    Crawling apkpure.com
+    Crawling apkpure.com - downloading APKs
     """
 
     BASE_URL = 'https://apkpure.com'
@@ -158,29 +160,7 @@ class ApkPureLoader(object):
             else:
                 apk_rec['pubkey_type'] = ''
 
-            apk_rec['cert_fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))
-            apk_rec['cert_not_before'] = utils.unix_time_millis(x509.not_valid_before)
-            apk_rec['cert_not_before_fmt'] = x509.not_valid_before.isoformat()
-            apk_rec['cert_not_after'] = utils.unix_time_millis(x509.not_valid_after)
-            apk_rec['cert_not_after_fmt'] = x509.not_valid_after.isoformat()
-
-            try:
-                # Subject
-                apk_rec['cert_cn'] = utils.get_dn_part(x509.subject, NameOID.COMMON_NAME)
-                apk_rec['cert_loc'] = utils.get_dn_part(x509.subject, NameOID.LOCALITY_NAME)
-                apk_rec['cert_org'] = utils.get_dn_part(x509.subject, NameOID.ORGANIZATION_NAME)
-                apk_rec['cert_orgunit'] = utils.get_dn_part(x509.subject, NameOID.ORGANIZATIONAL_UNIT_NAME)
-
-                # Issuer
-                apk_rec['cert_issuer_cn'] = utils.get_dn_part(x509.issuer, NameOID.COMMON_NAME)
-                apk_rec['cert_issuer_loc'] = utils.get_dn_part(x509.issuer, NameOID.LOCALITY_NAME)
-                apk_rec['cert_issuer_org'] = utils.get_dn_part(x509.issuer, NameOID.ORGANIZATION_NAME)
-                apk_rec['cert_issuer_orgunit'] = utils.get_dn_part(x509.issuer, NameOID.ORGANIZATIONAL_UNIT_NAME)
-
-            except Exception as e2:
-                traceback.print_exc()
-                logger.error('Cert parsing exception %s' % e2)
-
+            utils.extend_with_cert_data(apk_rec, x509, logger)
             apk_rec['pem'] = pem
 
         except Exception as e:

@@ -1,7 +1,15 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import re
+import datetime
+import binascii
+import traceback
+import logging
 from cryptography.hazmat.backends import default_backend
 from cryptography.x509.base import load_pem_x509_certificate
-import datetime
+from cryptography.hazmat.primitives import hashes
+from cryptography.x509.oid import NameOID
 
 
 def slugify(value):
@@ -68,4 +76,48 @@ def get_dn_part(subject, oid=None):
         if oid is not None and sub.oid == oid:
             return sub.value
 
+
+def extend_with_cert_data(rec, x509, logger=None):
+    """
+    Extends record with the X509 data
+    :param rec:
+    :param x509:
+    :param logger:
+    :return:
+    """
+    rec['cert_fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))
+    rec['cert_not_before'] = unix_time_millis(x509.not_valid_before)
+    rec['cert_not_before_fmt'] = x509.not_valid_before.isoformat()
+    rec['cert_not_after'] = unix_time_millis(x509.not_valid_after)
+    rec['cert_not_after_fmt'] = x509.not_valid_after.isoformat()
+
+    # Subject
+    try:
+        rec['cert_cn'] = get_dn_part(x509.subject, NameOID.COMMON_NAME)
+    except Exception as e2:
+        if logger is not None:
+            logger.error('Cert parsing exception %s' % e2)
+
+    try:
+        rec['cert_loc'] = get_dn_part(x509.subject, NameOID.LOCALITY_NAME)
+        rec['cert_org'] = get_dn_part(x509.subject, NameOID.ORGANIZATION_NAME)
+        rec['cert_orgunit'] = get_dn_part(x509.subject, NameOID.ORGANIZATIONAL_UNIT_NAME)
+    except Exception as e2:
+        if logger is not None:
+            logger.error('Cert parsing exception %s' % e2)
+
+    # Issuer
+    try:
+        rec['cert_issuer_cn'] = get_dn_part(x509.issuer, NameOID.COMMON_NAME)
+    except Exception as e2:
+        if logger is not None:
+            logger.error('Cert parsing exception %s' % e2)
+
+    try:
+        rec['cert_issuer_loc'] = get_dn_part(x509.issuer, NameOID.LOCALITY_NAME)
+        rec['cert_issuer_org'] = get_dn_part(x509.issuer, NameOID.ORGANIZATION_NAME)
+        rec['cert_issuer_orgunit'] = get_dn_part(x509.issuer, NameOID.ORGANIZATIONAL_UNIT_NAME)
+    except Exception as e2:
+        if logger is not None:
+            logger.error('Cert parsing exception %s' % e2)
 
