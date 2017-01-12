@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
-import utils
+import codesign.utils
 from lxml import html
 from collections import OrderedDict
 from apk_parse.apk import APK
@@ -76,7 +76,7 @@ class ApkPureLoader(object):
         """
         apk_rec = self.db['apks'][idx]
         url = self.BASE_URL + apk_rec['download']
-        file_name = utils.slugify(apk_rec['package'] + '.apk')
+        file_name = codesign.utils.slugify(apk_rec['package'] + '.apk')
         file_path = os.path.join(self.dump_dir, file_name)
 
         logger.info('Downloading pkg %s, name: %s, url %s' % (apk_rec['package'], apk_rec['name'], url))
@@ -137,7 +137,7 @@ class ApkPureLoader(object):
             apkf = APK(file_path)
             pem = apkf.cert_pem
 
-            x509 = utils.load_x509(pem)
+            x509 = codesign.utils.load_x509(pem)
             apk_rec['cert_alg'] = x509.signature_hash_algorithm.name
 
             pub = x509.public_key()
@@ -160,7 +160,7 @@ class ApkPureLoader(object):
             else:
                 apk_rec['pubkey_type'] = ''
 
-            utils.extend_with_cert_data(apk_rec, x509, logger)
+            codesign.utils.extend_with_cert_data(apk_rec, x509, logger)
             apk_rec['pem'] = pem
 
         except Exception as e:
