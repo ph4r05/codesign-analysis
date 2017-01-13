@@ -53,13 +53,14 @@ class ApkPureLoader(object):
 
     BASE_URL = 'https://apkpure.com'
 
-    def __init__(self, db, dump_dir, tmp_dir=None, attempts=10):
+    def __init__(self, db, dump_dir, tmp_dir=None, attempts=5):
         self.attempts = attempts
         self.total = None
         self.per_page = None
         self.db = db
         self.dump_dir = dump_dir
         self.tmp_dir = tmp_dir
+        self.terminate = False
 
     def load(self, idx=None):
         """
@@ -72,7 +73,7 @@ class ApkPureLoader(object):
                 return self.load_once(idx)
             except Exception as e:
                 traceback.print_exc()
-                pass
+                time.sleep(3.0)
         return None
 
     def load_once(self, idx=None):
@@ -158,6 +159,8 @@ class ApkPureLoader(object):
                 apk_rec['size'] = None
                 apk_rec['sha1'] = None
                 apk_rec['md5'] = None
+                if isinstance(e, KeyboardInterrupt):
+                    self.terminate = True
                 try:
                     logger.info('Removing non-finished file: %s' % file_path)
                     os.remove(file_path)
@@ -180,6 +183,10 @@ class ApkPureLoader(object):
         """
         if 'pubkey_type' not in apk_rec:
             logger.info('Parse again - key type not found')
+            return False
+
+        if 'apk_version_code' not in apk_rec:
+            logger.info('Parse again - version missing')
             return False
 
         if apk_rec['pubkey_type'] is not None and apk_rec['pubkey_type'] in ['DSA', 'ECC']:
@@ -212,7 +219,7 @@ class ApkPureLoader(object):
             logger.info('Parse again - key type not found')
             parse_again = True
 
-        elif apk_rec['pubkey_type'] != 'RSA':
+        elif 'apk_version_code' in apk_rec and apk_rec['pubkey_type'] != 'RSA':
             logger.info('Skipping re-parsing of non-RSA certificates: %s' % apk_rec['pubkey_type'])
             return
 
@@ -226,15 +233,28 @@ class ApkPureLoader(object):
         # Downloaded - now parse
         try:
             logger.info('Parsing APK')
+
+            # Optimized parsing - parse only manifest and certificate, no file type inference.
+            # In case of xapks (nested apks), use temp dir to extract it.
             apkf = APK(file_path, process_now=False, process_file_types=False, as_file_name=True, temp_dir=self.tmp_dir)
 
-            # Save some time by re-computing MD5 inside apk parsing lib
+            # Save some time - do not re-compute MD5 inside apk parsing lib
             if 'md5' in apk_rec:
                 apkf.file_md5 = apk_rec['md5']
 
             apkf.process()
             apk_rec['is_xapk'] = apkf.is_xapk
             apk_rec['sub_apk_size'] = apkf.sub_apk_size
+
+            # Android related info (versions, SDKs)
+            try:
+                apk_rec['apk_version_code'] = apkf.get_androidversion_code()
+                apk_rec['apk_version_name'] = apkf.get_androidversion_name()
+                apk_rec['apk_max_sdk'] = apkf.get_max_sdk_version()
+                apk_rec['apk_min_sdk'] = apkf.get_min_sdk_version()
+                apk_rec['apk_tgt_sdk'] = apkf.get_target_sdk_version()
+            except Exception as e:
+                logger.error('Exception in parsing android related info: ' + e)
 
             pem = apkf.cert_pem
 
@@ -306,6 +326,10 @@ def main():
             fh.flush()
             last_save = cur_time
         shutil.move(new_json_tmp, new_json)
+
+        if t.terminate:
+            logger.info('Terminating on loader request')
+            break
 
 
 # Launcher
