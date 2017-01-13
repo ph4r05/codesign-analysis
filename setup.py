@@ -8,6 +8,7 @@ version = '0.0.0'
 # Please update tox.ini when modifying dependency version requirements
 install_requires = [
     'pycrypto>=2.6',
+    'cryptography',
     'requests',
     'setuptools>=1.0',
     'six',

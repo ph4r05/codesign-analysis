@@ -84,15 +84,18 @@ class ApkPureLoader(object):
         file_name = utils.slugify(apk_rec['package'] + '.apk')
         file_path = os.path.join(self.dump_dir, file_name)
 
-        logger.info('Downloading [%d/%d] pkg %s, \n\tname: %s, \n\turl %s'
-                    % (idx, len(self.db['apks']), apk_rec['package'], apk_rec['name'], url))
+        apk_processed = self.is_apk_processed(apk_rec)
+        download_again = not apk_processed and not os.path.exists(file_path)
 
-        download_again = not os.path.exists(file_path)
-        if 'size' not in apk_rec or apk_rec['size'] is None:
+        logger.info('Downloading [%d/%d] pkg %s, apk_processed: %s, download: %s\n\tname: %s, \n\turl %s'
+                    % (idx, len(self.db['apks']), apk_rec['package'],
+                       apk_processed, download_again, apk_rec['name'], url))
+
+        if not apk_processed and not download_again and ('size' not in apk_rec or apk_rec['size'] is None):
             logger.info('Size none or null, downloading')
             download_again = True
 
-        if 'size' in apk_rec and apk_rec['size'] < 500:
+        if not apk_processed and not download_again and ('size' in apk_rec and apk_rec['size'] < 500):
             logger.info('Size to small, downloading')
             download_again = True
 
@@ -163,24 +166,54 @@ class ApkPureLoader(object):
         # Process APK
         self.process_apk(file_path, apk_rec)
 
+    def is_rsa(self, apk_rec):
+        return 'pubkey_type' in apk_rec and apk_rec['pubkey_type'] == 'RSA'
+
+    def is_apk_processed(self, apk_rec):
+        """
+        Returns true if the APK was processed correctly
+        :param apk_rec:
+        :return:
+        """
+        if 'pubkey_type' not in apk_rec:
+            logger.info('Parse again - key type not found')
+            return False
+
+        if apk_rec['pubkey_type'] is not None and apk_rec['pubkey_type'] in ['DSA', 'ECC']:
+            logger.info('DSA/ECC key type, skipping')
+            return True
+
+        if 'modulus' not in apk_rec or not isinstance(apk_rec['modulus'], (int, long)) or apk_rec['modulus'] == 0:
+            logger.info('Parse again - modulus invalid')
+            return False
+
+        if 'modulus_hex' not in apk_rec or len(apk_rec['modulus_hex']) < 10:
+            logger.info('Parse again - hex modulus invalid')
+            return False
+
+        if 'pubkey_type' not in apk_rec:
+            logger.info('Parse again - key type not found')
+            return False
+
+        return True
+
     def process_apk(self, file_path, apk_rec):
-        # Check if parsing is needed
+        """
+        Processing APK - extracting useful information, certificate.
+        :param file_path:
+        :param apk_rec:
+        :return:
+        """
         parse_again = False
         if 'pubkey_type' not in apk_rec:
             logger.info('Parse again - key type not found')
             parse_again = True
+
         elif apk_rec['pubkey_type'] != 'RSA':
             logger.info('Skipping re-parsing of non-RSA certificates: %s' % apk_rec['pubkey_type'])
             return
 
-        if 'modulus' not in apk_rec or not isinstance(apk_rec['modulus'], (int, long)) or apk_rec['modulus'] == 0:
-            logger.info('Parse again - modulus invalid')
-            parse_again = True
-        if 'modulus_hex' not in apk_rec or len(apk_rec['modulus_hex']) < 10:
-            logger.info('Parse again - hex modulus invalid')
-            parse_again = True
-        if 'pubkey_type' not in apk_rec:
-            logger.info('Parse again - key type not found')
+        if not self.is_apk_processed(apk_rec):
             parse_again = True
 
         if not parse_again:
