@@ -52,12 +52,13 @@ class ApkPureLoader(object):
 
     BASE_URL = 'https://apkpure.com'
 
-    def __init__(self, db, dump_dir, attempts=10):
+    def __init__(self, db, dump_dir, tmp_dir=None, attempts=10):
         self.attempts = attempts
         self.total = None
         self.per_page = None
         self.db = db
         self.dump_dir = dump_dir
+        self.tmp_dir = tmp_dir
 
     def load(self, idx=None):
         """
@@ -157,6 +158,7 @@ class ApkPureLoader(object):
                 apk_rec['sha1'] = None
                 apk_rec['md5'] = None
                 try:
+                    logger.info('Removing non-finished file: %s' % file_path)
                     os.remove(file_path)
                 except:
                     pass
@@ -223,7 +225,14 @@ class ApkPureLoader(object):
         # Downloaded - now parse
         try:
             logger.info('Parsing APK')
-            apkf = APK(file_path)
+            apkf = APK(file_path, process_now=False, process_file_types=False, as_file_name=True, temp_dir=self.tmp_dir)
+
+            # Save some time by re-computing MD5 inside apk parsing lib
+            if 'md5' in apk_rec:
+                apkf.file_md5 = apk_rec['md5']
+
+            apkf.process()
+
             pem = apkf.cert_pem
 
             x509 = utils.load_x509(pem)
@@ -261,10 +270,12 @@ def main():
     parser = argparse.ArgumentParser(description='Downloads APKs from the apkpure')
     parser.add_argument('-d', dest='directory', default='.', help='Directory to dump the downloaded APK files')
     parser.add_argument('-c', dest='config', default=None, help='JSON config file')
+    parser.add_argument('--tmp', dest='tmp_dir', default='/tmp', help='temporary folder for analysis')
 
     args = parser.parse_args()
     dump_dir = args.directory
     json_path = args.config
+    tmp_dir = args.tmp_dir
 
     if json_path is None or not os.path.exists(json_path):
         print('JSON file not found')
@@ -276,7 +287,7 @@ def main():
         db = json.load(fh, object_pairs_hook=OrderedDict)
 
     last_save = 0
-    t = ApkPureLoader(db, dump_dir)
+    t = ApkPureLoader(db, dump_dir, tmp_dir)
     for idx in range(0, len(db['apks'])):
         t.load(idx)
 
