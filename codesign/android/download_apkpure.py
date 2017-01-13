@@ -247,15 +247,7 @@ class ApkPureLoader(object):
             apk_rec['sub_apk_size'] = apkf.sub_apk_size
 
             # Android related info (versions, SDKs)
-            try:
-                apk_rec['apk_version_code'] = apkf.get_androidversion_code()
-                apk_rec['apk_version_name'] = apkf.get_androidversion_name()
-                apk_rec['apk_max_sdk'] = apkf.get_max_sdk_version()
-                apk_rec['apk_min_sdk'] = apkf.get_min_sdk_version()
-                apk_rec['apk_tgt_sdk'] = apkf.get_target_sdk_version()
-            except Exception as e:
-                logger.error('Exception in parsing android related info: ' + e)
-
+            utils.extend_with_android_data(apk_rec, apkf, logger)
             pem = apkf.cert_pem
 
             x509 = utils.load_x509(pem)

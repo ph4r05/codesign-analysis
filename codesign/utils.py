@@ -77,6 +77,36 @@ def get_dn_part(subject, oid=None):
             return sub.value
 
 
+def extend_with_android_data(rec, apkf, logger=None):
+    """
+    Android related info (versions, SDKs)
+    :param rec:
+    :param apkf:
+    :param logger:
+    :return:
+    """
+    try:
+        rec['apk_version_code'] = apkf.get_androidversion_code()
+    except Exception as e:
+        logger.error('Exception in parsing android related info: %s' % e)
+    try:
+        rec['apk_version_name'] = apkf.get_androidversion_name()
+    except Exception as e:
+        logger.error('Exception in parsing android related info: %s' % e)
+    try:
+        rec['apk_min_sdk'] = apkf.get_min_sdk_version()
+    except Exception as e:
+        logger.error('Exception in parsing android related info: %s' % e)
+    try:
+        rec['apk_tgt_sdk'] = apkf.get_target_sdk_version()
+    except Exception as e:
+        logger.error('Exception in parsing android related info: %s' % e)
+    try:
+        rec['apk_max_sdk'] = apkf.get_max_sdk_version()
+    except Exception as e:
+        logger.error('Exception in parsing android related info: %s' % e)
+
+
 def extend_with_cert_data(rec, x509, logger=None):
     """
     Extends record with the X509 data
