@@ -232,6 +232,8 @@ class ApkPureLoader(object):
                 apkf.file_md5 = apk_rec['md5']
 
             apkf.process()
+            apk_rec['is_xapk'] = apkf.is_xapk
+            apk_rec['sub_apk_size'] = apkf.sub_apk_size
 
             pem = apkf.cert_pem
 

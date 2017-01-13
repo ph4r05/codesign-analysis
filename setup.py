@@ -24,7 +24,7 @@ install_requires = [
     'bitarray',
     'ufx',
     'pgpdump',
-    'apk_parse_ph4',
+    'apk_parse_ph4>=0.1.3',
     'BeautifulSoup',
     'lxml'
 ]
