@@ -22,6 +22,7 @@ import math
 import hashlib
 import inspect
 import time
+import shutil
 
 from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
@@ -299,10 +300,12 @@ def main():
             continue
 
         new_json = os.path.join(dump_dir, '_apks_info.json')
-        with open(new_json, 'w') as fh:
+        new_json_tmp = os.path.join(dump_dir, '_apks_info.json.tmp')
+        with open(new_json_tmp, 'w') as fh:
             fh.write(json.dumps(db, indent=2))
             fh.flush()
             last_save = cur_time
+        shutil.move(new_json_tmp, new_json)
 
 
 # Launcher
