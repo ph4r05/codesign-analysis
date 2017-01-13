@@ -152,7 +152,7 @@ class ApkPureLoader(object):
                 apk_rec['sha1'] = sha1.hexdigest()
                 apk_rec['md5'] = md5.hexdigest()
 
-            except Exception as e:
+            except (KeyboardInterrupt, Exception) as e:
                 traceback.print_exc()
                 logger.error('Exception during download: %s' % e)
                 apk_rec['size'] = None
