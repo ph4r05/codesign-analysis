@@ -131,11 +131,6 @@ def extend_with_pkcs7_data(rec, p7der, logger=None):
             signed_date, valid_from, valid_to, signer = p7.get_timestamp_info()
             rec['sign_date'] = unix_time_millis(signed_date)
             rec['sign_date_fmt'] = fmt_time(signed_date)
-            rec['sign_not_before'] = unix_time_millis(valid_from)
-            rec['sign_not_before_fmt'] = fmt_time(valid_from)
-            rec['sign_not_after'] = unix_time_millis(valid_to)
-            rec['sign_not_after_fmt'] = fmt_time(valid_to)
-            rec['sign_signer'] = str(signer)
         except Exception as e:
             logger.error('Exception in parsing PKCS7 signer: %s' % e)
 
