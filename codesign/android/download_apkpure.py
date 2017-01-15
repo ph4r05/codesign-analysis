@@ -316,7 +316,7 @@ def main():
 
         # re-save each 5 seconds.
         cur_time = time.time()
-        if cur_time - last_save <= 5.0:
+        if cur_time - last_save <= 5.0 and idx + 1 < len(db['apks']) and not t.terminate:
             continue
 
         new_json = os.path.join(dump_dir, '_apks_info.json')
