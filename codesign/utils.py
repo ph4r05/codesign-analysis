@@ -126,22 +126,25 @@ def extend_with_pkcs7_data(rec, p7der, logger=None):
     """
     try:
         p7 = PKCS7.from_der(p7der)
-        signed_date, valid_from, valid_to, signer = p7.get_timestamp_info()
 
-        rec['sign_date'] = unix_time_millis(signed_date)
-        rec['sign_date_fmt'] = fmt_time(signed_date)
-        rec['sign_not_before'] = unix_time_millis(valid_from)
-        rec['sign_not_before_fmt'] = fmt_time(valid_from)
-        rec['sign_not_after'] = unix_time_millis(valid_to)
-        rec['sign_not_after_fmt'] = fmt_time(valid_to)
-        rec['sign_signer'] = str(signer)
+        try:
+            signed_date, valid_from, valid_to, signer = p7.get_timestamp_info()
+            rec['sign_date'] = unix_time_millis(signed_date)
+            rec['sign_date_fmt'] = fmt_time(signed_date)
+            rec['sign_not_before'] = unix_time_millis(valid_from)
+            rec['sign_not_before_fmt'] = fmt_time(valid_from)
+            rec['sign_not_after'] = unix_time_millis(valid_to)
+            rec['sign_not_after_fmt'] = fmt_time(valid_to)
+            rec['sign_signer'] = str(signer)
+        except Exception as e:
+            logger.error('Exception in parsing PKCS7 signer: %s' % e)
 
-        if not isinstance(p7, PKCS7_SignedData):
+        if not isinstance(p7.content, PKCS7_SignedData):
             return
 
-        rec['sign_info_cnt'] = len(p7.signerInfos)
-        if len(p7.signerInfos) > 0:
-            signer_info = p7.signerInfos[0]
+        rec['sign_info_cnt'] = len(p7.content.signerInfos)
+        if len(p7.content.signerInfos) > 0:
+            signer_info = p7.content.signerInfos[0]
             rec['sign_serial'] = signer_info.serial_number
             rec['sign_issuer'] = signer_info.issuer
             rec['sign_alg'] = signer_info.oid2name(signer_info.digest_algorithm)
