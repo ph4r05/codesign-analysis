@@ -140,9 +140,9 @@ def extend_with_pkcs7_data(rec, p7der, logger=None):
         rec['sign_info_cnt'] = len(p7.content.signerInfos)
         if len(p7.content.signerInfos) > 0:
             signer_info = p7.content.signerInfos[0]
-            rec['sign_serial'] = signer_info.serial_number
-            rec['sign_issuer'] = signer_info.issuer
-            rec['sign_alg'] = signer_info.oid2name(signer_info.digest_algorithm)
+            rec['sign_serial'] = str(signer_info.serial_number)
+            rec['sign_issuer'] = str(signer_info.issuer)
+            rec['sign_alg'] = str(signer_info.oid2name(signer_info.digest_algorithm))
 
     except Exception as e:
         logger.error('Exception in parsing PKCS7: %s' % e)
