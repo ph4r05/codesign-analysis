@@ -6,6 +6,9 @@ import datetime
 import binascii
 import traceback
 import logging
+import requests
+import math
+from lxml import html
 from cryptography.hazmat.backends import default_backend
 from cryptography.x509.base import load_pem_x509_certificate
 from cryptography.hazmat.primitives import hashes
@@ -195,4 +198,33 @@ def extend_with_cert_data(rec, x509, logger=None):
     except Exception as e2:
         if logger is not None:
             logger.error('Cert parsing exception %s' % e2)
+
+
+def get_pgp_key(key_id, attempts=3, timeout=20, logger=None):
+    """
+    Simple PGP key getter - tries to fetch given key from the key server
+    :param id:
+    :return:
+    """
+    if not key_id.startswith('0x'):
+        key_id = '0x' + key_id
+
+    res = requests.get('https://pgp.mit.edu/pks/lookup?op=get&search=%s' % key_id, timeout=20)
+    if math.floor(res.status_code / 100) != 2.0:
+        res.raise_for_status()
+
+    data = res.content
+    if data is None:
+        raise Exception('Empty response')
+
+    tree = html.fromstring(data)
+    txt = tree.xpath('//pre/text()')
+    if len(txt) > 0:
+        return txt[0].strip()
+
+    return None
+
+
+
+
 
