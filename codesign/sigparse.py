@@ -59,35 +59,48 @@ def main():
             packets = list(pgp_key_data.packets())
             print('Packets: %s' % len(packets))
             print('-' * 80)
+
+            identities = []
+            pubkeys = []
             for idx, packet in enumerate(packets):
                 if isinstance(packet, PublicKeyPacket): # PublicSubkeyPacket
-                    print('Is subkey: %s' % isinstance(packet, PublicSubkeyPacket))
-                    print('Algorithm: %s' % packet.pub_algorithm)
-                    print('Pub key version: %s' % packet.pubkey_version)
-                    print('Fingerprint: %s' % packet.fingerprint)
-                    print('key_id: %s' % packet.key_id)
-                    print('creation_time: %s' % packet.creation_time)
-                    print('expiration_time: %s' % packet.expiration_time)
-                    print('raw_days_valid: %s' % packet.raw_days_valid)
-                    print('pub_algorithm_type: %s' % packet.pub_algorithm_type)
-                    print('modulus: %s' % packet.modulus)
-                    print('modulus_bitlen: %s' % packet.modulus_bitlen)
-                    print('exponent: %s' % packet.exponent)
-                    print('prime: %s' % packet.prime)
-                    print('group_order: %s' % packet.group_order)
-                    print('group_gen: %s' % packet.group_gen)
-                    print('key_value: %s' % packet.key_value)
-                    print('-' * 80)
-
+                    pubkeys.append(packet)
                 elif isinstance(packet, UserIDPacket):
-                    print('User: %s' % packet.user)
-                    print('User name: %s' % packet.user_name)
-                    print('User email: %s' % packet.user_email)
-                    print('-' * 80)
-                # else:
-                #     print(packet)
-                #     print(packet.subpackets)
-                #     print([x.data for x in packet.subpackets])
+                    identities.append(packet)
+            # else:
+            #     print(packet)
+            #     print(packet.subpackets)
+            #     print([x.data for x in packet.subpackets])
+
+            print('Identities: ')
+            for packet in identities:
+                print('User: %s' % packet.user)
+                print('User name: %s' % packet.user_name)
+                print('User email: %s' % packet.user_email)
+                print('-' * 80)
+
+            print('Publickeys: ')
+            for packet in pubkeys:
+                print('Is subkey: %s' % isinstance(packet, PublicSubkeyPacket))
+                print('Algorithm: %s' % packet.pub_algorithm)
+                print('Pub key version: %s' % packet.pubkey_version)
+                print('Fingerprint: %s' % packet.fingerprint)
+                print('key_id: %s' % packet.key_id)
+                print('creation_time: %s' % packet.creation_time)
+                print('expiration_time: %s' % packet.expiration_time)
+                print('raw_days_valid: %s' % packet.raw_days_valid)
+                print('pub_algorithm_type: %s' % packet.pub_algorithm_type)
+                print('modulus: %s' % packet.modulus)
+                print('modulus_bitlen: %s' % packet.modulus_bitlen)
+                print('exponent: %s' % packet.exponent)
+                print('prime: %s' % packet.prime)
+                print('group_order: %s' % packet.group_order)
+                print('group_gen: %s' % packet.group_gen)
+                print('key_value: %s' % packet.key_value)
+                print('-' * 80)
+
+
+
 
 
 
