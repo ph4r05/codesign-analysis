@@ -46,8 +46,8 @@ setup(
     name='codesign-analysis',
     version=version,
     description='Codesign analysis tools',
-    url='https://deadcode`.me',
-    author="Dusan Klinec",
+    url='https://github.com/ph4r05/codesign-analysis',
+    author='Dusan Klinec',
     author_email='dusan.klinec@gmail.com',
     license='MIT',
     classifiers=[
