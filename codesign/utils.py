@@ -10,6 +10,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.x509.base import load_pem_x509_certificate
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
+from pyx509.models import PKCS7, PKCS7_SignedData
 
 
 def slugify(value):
@@ -33,7 +34,15 @@ def load_x509(data, backend=None):
 
 
 def unix_time_millis(dt):
+    if dt is None:
+        return None
     return (dt - datetime.datetime.utcfromtimestamp(0)).total_seconds()
+
+
+def fmt_time(dt):
+    if dt is None:
+        return None
+    return dt.isoformat()
 
 
 def get_cn(obj):
@@ -107,6 +116,40 @@ def extend_with_android_data(rec, apkf, logger=None):
         logger.error('Exception in parsing android related info: %s' % e)
 
 
+def extend_with_pkcs7_data(rec, p7der, logger=None):
+    """
+    Extends APK record with the PKCS7 related data.
+    :param rec:
+    :param p7der:
+    :param logger:
+    :return:
+    """
+    try:
+        p7 = PKCS7.from_der(p7der)
+        signed_date, valid_from, valid_to, signer = p7.get_timestamp_info()
+
+        rec['sign_date'] = unix_time_millis(signed_date)
+        rec['sign_date_fmt'] = fmt_time(signed_date)
+        rec['sign_not_before'] = unix_time_millis(valid_from)
+        rec['sign_not_before_fmt'] = fmt_time(valid_from)
+        rec['sign_not_after'] = unix_time_millis(valid_to)
+        rec['sign_not_after_fmt'] = fmt_time(valid_to)
+        rec['sign_signer'] = str(signer)
+
+        if not isinstance(p7, PKCS7_SignedData):
+            return
+
+        rec['sign_info_cnt'] = len(p7.signerInfos)
+        if len(p7.signerInfos) > 0:
+            signer_info = p7.signerInfos[0]
+            rec['sign_serial'] = signer_info.serial_number
+            rec['sign_issuer'] = signer_info.issuer
+            rec['sign_alg'] = signer_info.oid2name(signer_info.digest_algorithm)
+
+    except Exception as e:
+        logger.error('Exception in parsing PKCS7: %s' % e)
+
+
 def extend_with_cert_data(rec, x509, logger=None):
     """
     Extends record with the X509 data
@@ -115,11 +158,15 @@ def extend_with_cert_data(rec, x509, logger=None):
     :param logger:
     :return:
     """
-    rec['cert_fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))
-    rec['cert_not_before'] = unix_time_millis(x509.not_valid_before)
-    rec['cert_not_before_fmt'] = x509.not_valid_before.isoformat()
-    rec['cert_not_after'] = unix_time_millis(x509.not_valid_after)
-    rec['cert_not_after_fmt'] = x509.not_valid_after.isoformat()
+    try:
+        rec['cert_fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))
+        rec['cert_not_before'] = unix_time_millis(x509.not_valid_before)
+        rec['cert_not_before_fmt'] = fmt_time(x509.not_valid_before)
+        rec['cert_not_after'] = unix_time_millis(x509.not_valid_after)
+        rec['cert_not_after_fmt'] = fmt_time(x509.not_valid_after)
+    except Exception as e2:
+        if logger is not None:
+            logger.error('Cert parsing exception %s' % e2)
 
     # Subject
     try:

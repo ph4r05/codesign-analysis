@@ -274,6 +274,7 @@ class ApkPureLoader(object):
                 apk_rec['pubkey_type'] = ''
 
             utils.extend_with_cert_data(apk_rec, x509, logger)
+            utils.extend_with_pkcs7_data(apk_rec, apkf.pkcs7_der, logger)
             apk_rec['pem'] = pem
 
         except Exception as e:
