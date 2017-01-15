@@ -53,7 +53,7 @@ class ApkPureLoader(object):
 
     BASE_URL = 'https://apkpure.com'
 
-    def __init__(self, db, dump_dir, tmp_dir=None, attempts=5):
+    def __init__(self, db, dump_dir, tmp_dir=None, attempts=5, rescan=False):
         self.attempts = attempts
         self.total = None
         self.per_page = None
@@ -61,6 +61,7 @@ class ApkPureLoader(object):
         self.dump_dir = dump_dir
         self.tmp_dir = tmp_dir
         self.terminate = False
+        self.rescan = rescan
 
     def load(self, idx=None):
         """
@@ -90,7 +91,7 @@ class ApkPureLoader(object):
         apk_processed = self.is_apk_processed(apk_rec)
         download_again = not apk_processed and not os.path.exists(file_path)
 
-        logger.info('Downloading [%d/%d] pkg %s, apk_processed: %s, download: %s\n\tname: %s, \n\turl %s'
+        logger.info('Processing [%d/%d] pkg %s, apk_processed: %s, download: %s\n\tname: %s, \n\turl %s'
                     % (idx, len(self.db['apks']), apk_rec['package'],
                        apk_processed, download_again, apk_rec['name'], url))
 
@@ -109,11 +110,11 @@ class ApkPureLoader(object):
 
             data = res.content
             if data is None:
-                return []
+                return
 
             data = data.strip()
             if len(data) == 0:
-                return []
+                return
 
             tree = None
             try:
@@ -181,6 +182,10 @@ class ApkPureLoader(object):
         :param apk_rec:
         :return:
         """
+        if self.rescan:
+            logger.info('Parse again - rescan enabled')
+            return False
+
         if 'pubkey_type' not in apk_rec:
             logger.info('Parse again - key type not found')
             return False
@@ -219,7 +224,7 @@ class ApkPureLoader(object):
             logger.info('Parse again - key type not found')
             parse_again = True
 
-        elif 'apk_version_code' in apk_rec and apk_rec['pubkey_type'] != 'RSA':
+        elif not self.rescan and 'apk_version_code' in apk_rec and apk_rec['pubkey_type'] != 'RSA':
             logger.info('Skipping re-parsing of non-RSA certificates: %s' % apk_rec['pubkey_type'])
             return
 
@@ -279,7 +284,7 @@ class ApkPureLoader(object):
 
         except Exception as e:
             traceback.print_exc()
-            logger.error('APK parsing failed')
+            logger.error('APK parsing failed: %s' % e)
 
 
 def main():
@@ -287,6 +292,8 @@ def main():
     parser.add_argument('-d', dest='directory', default='.', help='Directory to dump the downloaded APK files')
     parser.add_argument('-c', dest='config', default=None, help='JSON config file')
     parser.add_argument('--tmp', dest='tmp_dir', default='/tmp', help='temporary folder for analysis')
+    parser.add_argument('--rescan', dest='rescan', default=False, action='store_const', const=True,
+                        help='Rescans the whole APK database again')
 
     args = parser.parse_args()
     dump_dir = args.directory
@@ -303,7 +310,7 @@ def main():
         db = json.load(fh, object_pairs_hook=OrderedDict)
 
     last_save = 0
-    t = ApkPureLoader(db, dump_dir, tmp_dir)
+    t = ApkPureLoader(db, dump_dir, tmp_dir, rescan=args.rescan)
     for idx in range(0, len(db['apks'])):
         t.load(idx)
 
