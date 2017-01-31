@@ -51,6 +51,50 @@ def json_or_default(js, key, defval=None):
     return js[key]
 
 
+def process_db_config(js):
+    """
+    Loads database configuration from the passed dictionary
+    :param js: db config dictionary
+    :return: DatabaseCredentials
+    """
+    dbtype = json_or_default(js, 'dbtype', 'memory').strip().lower()
+    host = json_or_default(js, 'host')
+    port = json_or_default(js, 'port')
+    db = json_or_default(js, 'db')
+    user = json_or_default(js, 'user')
+    passwd = json_or_default(js, 'passwd')
+    dbfile = json_or_default(js, 'dbfile')
+    dbengine = json_or_default(js, 'dbengine')
+
+    # Build connection string
+    con_string = None
+    if dbtype in ['mysql', 'postgresql', 'oracle', 'mssql']:
+        port_str = ':' + port if port is not None else ''
+        host_str = host if host is not None else 'localhost'
+        dbengine_str = '+' + dbengine if dbengine is not None else ''
+
+        if user is None or passwd is None or db is None:
+            raise ValueError('User, password and database are mandatory for DB type ' + dbtype)
+
+        con_string = '%s%s://%s:%s@%s%s/%s' % (dbtype, dbengine_str, user, passwd, host_str, port_str, db)
+
+    elif dbtype == 'sqlite':
+        if dbfile is None:
+            raise ValueError('Database file (dbfile) is mandatory for SQLite database type')
+
+        con_string = 'sqlite:///%s' % (os.path.abspath(dbfile))
+
+    elif dbtype == 'memory':
+        con_string = 'sqlite://'
+
+    else:
+        raise ValueError('Unknown database type: ' + dbtype)
+
+    creds = DatabaseCredentials(constr=con_string, dbtype=dbtype, host=host, port=port, dbfile=dbfile,
+                                user=user, passwd=passwd, db=db, dbengine=dbengine, data=js)
+    return creds
+
+
 def load_db_config(config_file):
     """
     Loads config file from the config file path
@@ -60,41 +104,6 @@ def load_db_config(config_file):
     with open(config_file, 'r'):
         data = config_file.read()
         js = json.loads(data)
+        return process_db_config(js)
 
-        dbtype = json_or_default(js, 'dbtype', 'memory').strip().lower()
-        host = json_or_default(js, 'host')
-        port = json_or_default(js, 'port')
-        db = json_or_default(js, 'db')
-        user = json_or_default(js, 'user')
-        passwd = json_or_default(js, 'passwd')
-        dbfile = json_or_default(js, 'dbfile')
-        dbengine = json_or_default(js, 'dbengine')
-
-        # Build connection string
-        con_string = None
-        if dbtype in ['mysql', 'postgresql', 'oracle', 'mssql']:
-            port_str = ':' + port if port is not None else ''
-            host_str = host if host is not None else 'localhost'
-            dbengine_str = '+' + dbengine if dbengine is not None else ''
-
-            if user is None or passwd is None or db is None:
-                raise ValueError('User, password and database are mandatory for DB type ' + dbtype)
-
-            con_string = '%s%s://%s:%s@%s%s/%s' % (dbtype, dbengine_str, user, passwd, host_str, port_str, db)
-
-        elif dbtype == 'sqlite':
-            if dbfile is None:
-                raise ValueError('Database file (dbfile) is mandatory for SQLite database type')
-
-            con_string = 'sqlite:///%s' % (os.path.abspath(dbfile))
-
-        elif dbtype == 'memory':
-            con_string = 'sqlite://'
-
-        else:
-            raise ValueError('Unknown database type: ' + dbtype)
-
-        creds = DatabaseCredentials(constr=con_string, dbtype=dbtype, host=host, port=port, dbfile=dbfile,
-                                    user=user, passwd=passwd, db=db, dbengine=dbengine, data=js)
-        return creds
 
