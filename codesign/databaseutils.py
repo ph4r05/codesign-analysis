@@ -76,11 +76,21 @@ def load_db_config(config_file):
             port_str = ':' + port if port is not None else ''
             host_str = host if host is not None else 'localhost'
             dbengine_str = '+' + dbengine if dbengine is not None else ''
+
+            if user is None or passwd is None or db is None:
+                raise ValueError('User, password and database are mandatory for DB type ' + dbtype)
+
             con_string = '%s%s://%s:%s@%s%s/%s' % (dbtype, dbengine_str, user, passwd, host_str, port_str, db)
+
         elif dbtype == 'sqlite':
+            if dbfile is None:
+                raise ValueError('Database file (dbfile) is mandatory for SQLite database type')
+
             con_string = 'sqlite:///%s' % (os.path.abspath(dbfile))
+
         elif dbtype == 'memory':
             con_string = 'sqlite://'
+
         else:
             raise ValueError('Unknown database type: ' + dbtype)
 
