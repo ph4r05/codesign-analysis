@@ -27,7 +27,8 @@ install_requires = [
     'apk_parse_ph4>=0.1.7',
     'pyx509_ph4',
     'BeautifulSoup',
-    'lxml'
+    'lxml',
+    'SQLAlchemy'
 ]
 
 dev_extras = [
