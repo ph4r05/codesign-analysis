@@ -20,6 +20,7 @@ def find_db_config(base_name='db.json', dirs=None):
     """
     Finds database configuration file - looks in the current working directory and project directory.
     :param base_name: database configuration name
+    :param dirs: directory list to explore
     :return: path to the config file or None if the config file was not found
     """
     file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -40,9 +41,9 @@ def find_db_config(base_name='db.json', dirs=None):
 def json_or_default(js, key, defval=None):
     """
     Loads key from the JS if exists, otherwise returns defval
-    :param js:
-    :param key:
-    :param defval:
+    :param js: dictionary
+    :param key: key
+    :param defval: default value
     :return:
     """
     if key not in js:
@@ -52,8 +53,8 @@ def json_or_default(js, key, defval=None):
 
 def load_db_config(config_file):
     """
-    Loads config file from the file name
-    :param config_file:
+    Loads config file from the config file path
+    :param config_file: config file path
     :return: DatabaseCredentials
     """
     with open(config_file, 'r'):
