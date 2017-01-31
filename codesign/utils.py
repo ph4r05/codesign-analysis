@@ -2,12 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import re
+import os
 import datetime
 import binascii
 import traceback
 import logging
 import requests
 import math
+import json
+import shutil
 from lxml import html
 from cryptography.hazmat.backends import default_backend
 from cryptography.x509.base import load_pem_x509_certificate
@@ -223,6 +226,22 @@ def get_pgp_key(key_id, attempts=3, timeout=20, logger=None):
         return txt[0].strip()
 
     return None
+
+
+def flush_json(js, filepath):
+    """
+    Flushes JSON state file / configuration to the file name using move strategy
+    :param js:
+    :param filepath:
+    :return:
+    """
+    abs_filepath = os.path.abspath(filepath)
+    tmp_filepath = abs_filepath + '.tmpfile'
+    with open(tmp_filepath, 'w') as fw:
+        json.dump(js, fp=fw, indent=2)
+        fw.flush()
+
+    shutil.move(tmp_filepath, abs_filepath)
 
 
 
