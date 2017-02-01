@@ -157,6 +157,10 @@ class GitHubLoader(object):
                 res = requests.get(url, timeout=10, auth=auth)
                 headers = res.headers
 
+                if res.status_code == 404:
+                    logger.warning('URL not found: %s' % url)
+                    return None, None, None
+
                 self.rate_limit_reset = float(headers.get('X-RateLimit-Reset')) + 10
                 self.rate_limit_remaining = int(headers.get('X-RateLimit-Remaining'))
                 if self.rate_limit_remaining <= 1:
@@ -175,12 +179,13 @@ class GitHubLoader(object):
                     raise Exception('Empty response')
 
                 js = json.loads(data, object_pairs_hook=OrderedDict)
-                return js, headers
+                return js, headers, res
 
             except Exception as e:
                 logger.warning('Exception in loading page: %s, page: %s' % (e, url))
 
-        raise Exception('Could not load URL: %s' % url)
+        logger.warning('Skipping url: %s' % url)
+        return None, None, None
 
     def sleep_interruptible(self, until_time):
         """
@@ -202,7 +207,7 @@ class GitHubLoader(object):
         url = self.USERS_URL % self.since_id
         logging.info('Loading users: %s' % url)
 
-        users, headers = self.load_page(url)
+        users, headers, res = self.load_page(url)
         self.last_users_count = len(users)
 
         max_id = 0L
@@ -296,15 +301,11 @@ class GitHubLoader(object):
         :return:
         """
         url = self.KEYS_URL % user.user_name
-        for attempt in range(self.attempts):
-            if self.terminate:
-                return None
+        if self.terminate:
+            return None
 
-            keys, headers = self.load_page(url)
-            return keys
-
-        logger.error('Too many attempts to load user: ' % user.user_name)
-        return None
+        keys, headers, res = self.load_page(url)
+        return keys
 
     def flush_state(self):
         """
