@@ -280,7 +280,7 @@ class GitHubLoader(object):
                     db_key.key_modulus_hex = '%x' % numbers.n
                     db_key.key_exponent = numbers.e
             except Exception as e:
-                logger.info('Exception during processing the key: %s' % e)
+                logger.info('Exception during processing the key[%s]: %s' % (key_type, e))
 
             s.add(db_key)
             return 0
