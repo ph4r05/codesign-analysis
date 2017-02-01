@@ -159,7 +159,7 @@ class GitHubLoader(object):
 
                 self.rate_limit_reset = float(headers.get('X-RateLimit-Reset')) + 10
                 self.rate_limit_remaining = int(headers.get('X-RateLimit-Remaining'))
-                if self.rate_limit_remaining == 0:
+                if self.rate_limit_remaining <= 1:
                     sleep_sec = self.rate_limit_reset - time.time()
 
                     logger.info('Rate limit exceeded, sleeping till: %d, it is %d seconds, %d minutes'
@@ -312,6 +312,8 @@ class GitHubLoader(object):
         :return:
         """
         self.state['since_id'] = self.since_id
+        self.state['rate_limit_remaining'] = self.rate_limit_remaining
+        self.state['rate_limit_reset'] = self.rate_limit_reset
         utils.flush_json(self.state, self.state_file_path)
 
 
