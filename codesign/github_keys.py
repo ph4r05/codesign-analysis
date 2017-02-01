@@ -146,7 +146,7 @@ class GitHubLoader(object):
         :return:
         """
         auth = None
-        if 'github_token' in self.state:
+        if 'github_token' in self.state and 'github_user' in self.state:
             auth = HTTPBasicAuth(self.state['github_user'], self.state['github_token'])
 
         for attempt in range(self.attempts):
