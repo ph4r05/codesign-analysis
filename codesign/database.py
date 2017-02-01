@@ -64,14 +64,14 @@ class PGPKey(Base):
     key_algorithm = Column(String(32), nullable=True)
 
     # RSA
-    key_modulus = Column(BigInteger, nullable=True)
+    key_modulus = Column(Text, nullable=True)
     key_exponent = Column(BigInteger, nullable=True)
 
     # (EC)DSA
-    prime = Column(BigInteger, nullable=True)
-    group_order = Column(BigInteger, nullable=True)
-    group_gen = Column(BigInteger, nullable=True)
-    key_value = Column(BigInteger, nullable=True)
+    prime = Column(Text, nullable=True)
+    group_order = Column(Text, nullable=True)
+    group_gen = Column(Text, nullable=True)
+    key_value = Column(Text, nullable=True)
 
 
 class GitHubKey(Base):
@@ -85,7 +85,8 @@ class GitHubKey(Base):
     date_last_check = Column(DateTime, default=func.now())
     key_id = Column(Integer, unique=True)
     key_type = Column(String(32), nullable=True)
-    key_modulus = Column(BigInteger, nullable=True)
+    key_modulus_hex = Column(Text, nullable=True)
+    key_modulus_dec = Column(Text, nullable=True)
     key_exponent = Column(BigInteger, nullable=True)
     key_size = Column(Integer, nullable=True)
 
