@@ -63,7 +63,7 @@ def main():
             identities = []
             pubkeys = []
             for idx, packet in enumerate(packets):
-                if isinstance(packet, PublicKeyPacket): # PublicSubkeyPacket
+                if isinstance(packet, PublicKeyPacket):  # PublicSubkeyPacket
                     pubkeys.append(packet)
                 elif isinstance(packet, UserIDPacket):
                     identities.append(packet)
