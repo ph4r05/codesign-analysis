@@ -34,9 +34,14 @@ import time
 import signal
 import utils
 import databaseutils
+import collections
+import threading
+from threading import Lock as Lock
+import Queue
 
 from database import GitHubKey
 from database import Base as DB_Base
+from sqlalchemy.orm import scoped_session
 
 
 from lxml import html
@@ -51,6 +56,80 @@ coloredlogs.install(level=logging.INFO)
 GitHubUser = namedtuple('GitHubUser', ['user_id', 'user_name', 'user_type'])
 
 
+class AccessResource(object):
+    """
+    Represents one access token
+    """
+
+    def __init__(self, usr=None, token=None, remaining=None, reset_time=None, idx=0, *args, **kwargs):
+        self.idx = idx
+        self.usr = usr
+        self.token = token
+        self.remaining = remaining
+        self.reset_time = reset_time
+
+    def __cmp__(self, other):
+        """
+        Compare operation for priority queue.
+        :param other:
+        :return:
+        """
+        if self.remaining is None and other.remaining is None:
+            return self.idx - other.idx
+        elif self.remaining is None:
+            return -1
+        elif other.remaining is None:
+            return 1
+        else:
+            return other.remaining - self.remaining
+
+    def to_json(self):
+        js = collections.OrderedDict()
+        js['usr'] = self.usr
+        js['remaining'] = self.remaining
+        js['reset_time'] = self.reset_time
+        return js
+
+
+class DownloadJob(object):
+    """
+    Represents link to download
+    """
+
+    TYPE_USERS = 1
+    TYPE_KEYS = 2
+
+    def __init__(self, url, jtype=TYPE_USERS, user=None, *args, **kwargs):
+        self.url = url
+        self.type = jtype
+        self.user = user
+        self.fail_cnt = 0
+        self.last_fail = 0
+
+    def to_json(self):
+        js = collections.OrderedDict()
+        js['url'] = self.url
+        js['type'] = self.type
+        js['fail_cnt'] = self.fail_cnt
+        js['last_fail'] = self.last_fail
+        if self.user is not None:
+            js['user_id'] = self.user.user_id
+            js['user_name'] = self.user.user_name
+            js['user_type'] = self.user.user_type
+        return js
+
+    @classmethod
+    def from_json(cls, js):
+        tj = cls()
+        tj.url = js['url']
+        tj.type = js['type']
+        tj.fail_cnt = js['fail_cnt']
+        tj.last_fail = js['last_fail']
+        if 'user_id' in js:
+            tj.user = GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'])
+        return tj
+
+
 class GitHubLoader(object):
     """
     GitHub SSH keys loader
@@ -59,7 +138,7 @@ class GitHubLoader(object):
     USERS_URL = 'https://api.github.com/users?since=%s'
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
-    def __init__(self, attempts=5, state=None, state_file=None):
+    def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None):
         self.attempts = attempts
         self.total = None
         self.terminate = False
@@ -71,14 +150,29 @@ class GitHubLoader(object):
         self.rate_limit_reset = None
         self.rate_limit_remaining = None
 
+        self.config = None
+        self.config_file = config_file
+
+        self.audit_file = audit_file
+        self.audit_records_buffered = []
+        self.audit_lock = Lock()
+
+        self.stop_event = threading.Event()
+        self.threads = threads
+        self.link_queue = Queue.Queue()  # Store links to download here
+        self.worker_threads = []
+
+        self.state_thread = None
+        self.state_thread_lock = Lock()
+
+        self.resources_list = []
+        self.resources_queue = Queue.PriorityQueue()
+        self.resources_queue_lock = Lock()
+        self.local_data = None
+
         self.db_config = None
         self.engine = None
         self.session = None
-
-        if state is None and state_file is not None:
-            with open(state_file, 'r') as fh:
-                self.state = json.load(fh, object_pairs_hook=OrderedDict)
-                logger.info('State loaded: %s' % os.path.abspath(self.state_file_path))
 
     def signal_handler(self, signal, frame):
         """
@@ -88,104 +182,294 @@ class GitHubLoader(object):
         :return:
         """
         logger.info('CTRL+C pressed')
+        self.trigger_stop()
+
+    def trigger_stop(self):
+        """
+        Sets terminal conditions to true
+        :return:
+        """
         self.terminate = True
+        self.stop_event.set()
+
+    def init_config(self):
+        """
+        Loads config & state files
+        :return:
+        """
+        if self.state_file_path is not None:
+            with open(self.state_file_path, 'r') as fh:
+                self.state = json.load(fh, object_pairs_hook=OrderedDict)
+                logger.info('State loaded: %s' % os.path.abspath(self.state_file_path))
+
+        with open(self.config_file, 'r') as fh:
+            self.config = json.load(fh, object_pairs_hook=OrderedDict)
+            logger.info('Config loaded: %s' % os.path.abspath(self.config_file))
+
+            # Process resources
+            if 'res' in self.config:
+                for idx, res in enumerate(self.config['res']):
+                    r = AccessResource(usr=res['usr'], token=res['token'], idx=idx)
+                    self.resources_list.append(r)
+                    self.resources_queue.put(r)
+            else:
+                # unauth
+                r = AccessResource(usr=None, token=None)
+                self.resources_list.append(r)
+                self.resources_queue.put(r)
 
     def init_db(self):
         """
         Initializes database engine & session.
+        Has to be done on main thread.
         :return:
         """
-        self.db_config = databaseutils.process_db_config(self.state['db'])
+        self.db_config = databaseutils.process_db_config(self.config['db'])
 
         from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker, scoped_session
         self.engine = create_engine(self.db_config.constr, pool_recycle=3600)
+        self.session = scoped_session(sessionmaker(bind=self.engine))
 
-        from sqlalchemy.orm import sessionmaker
-        self.session = sessionmaker()
-        self.session.configure(bind=self.engine)
-
+        # Make sure tables are created
         DB_Base.metadata.create_all(self.engine)
 
-    def load(self):
+    def init_workers(self):
         """
-        Loads page with attempts
+        Initialize worker threads
+        :return:
+        """
+        for idx in range(self.threads):
+            t = threading.Thread(target=self.work_thread_main, args=(idx))
+            self.worker_threads.append(t)
+
+        # Kick-off all threads
+        for t in self.worker_threads:
+            t.start()
+
+    def work(self):
+        """
+        Main thread work method
         :return:
         """
         # Interrupt signals
         signal.signal(signal.SIGINT, self.signal_handler)
 
+        self.init_config()
+        self.init_db()
+
         # Resume last state
-        if self.state is not None and 'since_id' in self.state:
-            self.since_id = self.state['since_id']
+        self.state_resume()
 
-        # Load all pages available
-        while not self.terminate:
+        # Monitor threads.
+        self.state_thread = threading.Thread(target=self.state_main, args=())
+        self.state_thread.start()
 
-            if self.terminate:
-                return None
+        # If there is no link to process - create from since.
+        if self.link_queue.qsize() == 0:
+            job = DownloadJob(url=self.USERS_URL % self.since_id, jtype=DownloadJob.TYPE_USERS)
+            self.link_queue.put(job)
+            logger.info('Kickoff link added: %s' % job.url)
 
-            try:
-                self.load_once_since()
-                continue
+        # Worker threads
+        self.init_workers()
 
-            except KeyboardInterrupt:
-                logger.info('Keyboard interrupt detected - setting to terminate')
-                self.terminate = True
-                return None
+        # Wait here for termination of all workers and monitors.
+        self.state_thread.join()
+        for t in self.worker_threads:
+            t.join()
 
-            except Exception as e:
-                traceback.print_exc()
-                time.sleep(3.0)
-
+        logger.info('Terminating main thread')
         return None
 
-    def load_page(self, url):
+    def work_thread_main(self, idx):
         """
-        Loads URL to json
-        :param url:
+        Worker thread main loop
         :return:
         """
-        auth = None
-        if 'github_token' in self.state and 'github_user' in self.state:
-            auth = HTTPBasicAuth(self.state['github_user'], self.state['github_token'])
+        self.local_data = threading.local()
+        self.local_data.idx = idx
 
-        for attempt in range(self.attempts):
-            if self.terminate:
-                raise Exception('Terminating')
+        while not self.terminate and not self.stop_event.is_set():
+            self.interruptible_sleep_delta(0.1)
 
+            # Get credential to process link with
+            resource = self.resource_allocate()
+            if resource is None:
+                continue
+
+            # We have resource, now get the job
+            job = None
             try:
-                res = requests.get(url, timeout=10, auth=auth)
-                headers = res.headers
+                job = self.link_queue.get(True, timeout=1.0)
+            except queue.Empty:
+                self.resource_return(resource)
+                continue
 
-                if res.status_code == 404:
-                    logger.warning('URL not found: %s' % url)
-                    return None, None, None
+            # If job last fail is too recent - put again back to queue
+            if time.time() - job.last_fail < 3.0:
+                self.link_queue.put(job)  # re-insert to the back of the queue for later processing
+                self.resource_return(resource)
+                continue
 
-                self.rate_limit_reset = float(headers.get('X-RateLimit-Reset')) + 10
-                self.rate_limit_remaining = int(headers.get('X-RateLimit-Remaining'))
-                if self.rate_limit_remaining <= 1:
-                    sleep_sec = self.rate_limit_reset - time.time()
-
-                    logger.info('Rate limit exceeded, sleeping till: %d, it is %d seconds, %d minutes'
-                                % (self.rate_limit_reset, sleep_sec, sleep_sec / 60.0))
-                    self.sleep_interruptible(self.rate_limit_reset)
-                    raise Exception('Rate limit exceeded')
-
-                if res.status_code // 100 != 2:
-                    res.raise_for_status()
-
-                data = res.content
-                if data is None:
-                    raise Exception('Empty response')
-
-                js = json.loads(data, object_pairs_hook=OrderedDict)
-                return js, headers, res
+            # Job processing starts here - decide what to do with it.
+            js_data = None
+            try:
+                self.local_data.job = job
+                self.local_data.resource = resource
+                js_data, headers, raw_response = self.load_page_local()
 
             except Exception as e:
-                logger.warning('Exception in loading page: %s, page: %s' % (e, url))
+                logger.error('Exception in processing job: %s' % job.url)
+                self.on_job_failed(job)
+                continue
 
-        logger.warning('Skipping url: %s' % url)
-        return None, None, None
+            finally:
+                self.resource_return(resource)
+                self.local_data.resource = None
+
+            # Process downloaded data here.
+            try:
+                if js_data is None:
+                    self.audit_log('404', job.url, jtype=job.jtype)
+                    continue
+
+                if job.jtype == DownloadJob.TYPE_USERS:
+                    self.process_users_data(job, js_data, headers, raw_response)
+                else:
+                    self.process_keys_data(job, js_data, headers, raw_response)
+
+            except Exception as e:
+                logger.error('Unexpected exception, processing type %s, link %s: %s' % (job.type, job.url, e))
+                self.on_job_failed(job)
+
+        pass
+        logger.info('Terminating worker thread %d' % idx)
+
+    def on_job_failed(self, job):
+        """
+        If job failed, this teaches it how to behave
+        :param job:
+        :return:
+        """
+        job.fail_cnt += 1
+        job.last_fail = time.time()
+
+        # if failed too many times - log and discard.
+        if job.fail_cnt > 10:
+            self.audit_log('too-many-fails', job.url, jtype=job.jtype)
+        else:
+            self.link_queue.put(job)  # re-insert to the queue for later processing
+
+    def load_page_local(self):
+        """
+        Loads page stored in thread local
+        :return:
+        """
+
+        auth = None
+        resource = self.local_data.resource
+        if resource.usr is not None:
+            auth = HTTPBasicAuth(resource.usr, resource.token)
+
+        job = self.local_data.job
+
+        res = requests.get(job.url, timeout=10, auth=auth)
+        headers = res.headers
+
+        resource.reset_time = float(headers.get('X-RateLimit-Reset'))
+        resource.remaining = int(headers.get('X-RateLimit-Remaining'))
+
+        if res.status_code == 404:
+            logger.warning('URL not found: %s' % job.url)
+            return None, None, None
+
+        if res.status_code // 100 != 2:
+            res.raise_for_status()
+
+        data = res.content
+        if data is None:
+            raise Exception('Empty response')
+
+        js = json.loads(data, object_pairs_hook=OrderedDict)
+        return js, headers, res
+
+    def process_users_data(self, job, js, headers, raw_response):
+        """
+        Process user data - produce keys links + next user link
+        :param job:
+        :param js:
+        :param headers:
+        :param raw_response:
+        :return:
+        """
+        max_id = 0
+        for user in js:
+            if 'id' not in user:
+                logger.error('Field ID not found in user')
+                continue
+
+            github_user = GitHubUser(user_id=long(user['id']), user_name=user['login'], user_type=user['type'])
+            key_url = self.KEYS_URL % user.user_name
+            new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user)
+            self.link_queue.put(new_job)
+
+            if github_user.user_id > max_id:
+                max_id = github_user.user_id
+
+        # Link with the maximal user id
+        users_url = self.USERS_URL % self.since_id
+        new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
+        self.link_queue.put(new_job)
+
+    def process_keys_data(self, job, js, headers, raw_response):
+        """
+        Processing key loaded data
+        :param job:
+        :param js:
+        :param headers:
+        :param raw_response:
+        :return:
+        """
+        for key in js:
+            s = self.session()
+            self.store_key(job.user, key, s)
+            try:
+                s.commit()
+            except Exception as e:
+                logger.warning('Exception in storing key %s' % e)
+            finally:
+                utils.silent_close(s)
+
+    def resource_allocate(self, blocking=True, timeout=1.0):
+        """
+        Takes resource from the pool.
+        If the resource has low remaining credit, thread is suspended to re-charge.
+        :return: resource or None if not available in the time
+        """
+        try:
+            resource = self.resources_queue.get(True, timeout=1.0)
+            if resource.remaining is not None and resource.remaining <= self.threads + 2:
+                sleep_sec = resource.reset_time - time.time()
+                sleep_sec += 120  # extra 2 minutes to avoid problems with resources
+
+                logger.info('Rate limit exceeded on resource %s, sleeping till: %d, it is %d seconds, %d minutes'
+                            % (resource.usr, resource.reset_time, sleep_sec, sleep_sec / 60.0))
+                self.sleep_interruptible(self.rate_limit_reset)
+                logger.info('Resource sleep finished %s' % resource.usr)
+
+            return resource
+
+        except queue.Empty:
+            return None
+
+    def resource_return(self, res):
+        """
+        Returns resource to the pool
+        :param res:
+        :return:
+        """
+        self.resources_queue.put(res)
 
     def sleep_interruptible(self, until_time):
         """
@@ -195,64 +479,28 @@ class GitHubLoader(object):
         """
         while time.time() <= until_time:
             time.sleep(1.0)
-            if self.terminate:
+            if self.terminate or self.stop_event.is_set():
                 return
 
-    def load_once_since(self):
+    def interruptible_sleep_delta(self, sleep_time):
         """
-        Loads github user page with since var
-        :param since:
+        Sleeps the current thread for given amount of seconds, stop event terminates the sleep - to exit the thread.
+        :param sleep_time:
         :return:
         """
-        url = self.USERS_URL % self.since_id
-        logging.info('Loading users: %s' % url)
+        if sleep_time is None:
+            return
 
-        users, headers, res = self.load_page(url)
-        self.last_users_count = len(users)
+        sleep_time = float(sleep_time)
 
-        max_id = 0L
-        github_users = []
-        for user in users:
-            if 'id' not in user:
-                logger.error('Field ID not found in user')
-                continue
+        if sleep_time == 0:
+            return
 
-            github_user = GitHubUser(user_id=long(user['id']), user_name=user['login'], user_type=user['type'])
-            github_users.append(github_user)
-
-            if github_user.user_id > max_id:
-                max_id = github_user.user_id
-
-        # Load SSH keys here
-        for user in github_users:
-            if self.terminate:
-                logger.info('Terminating')
+        sleep_start = time.time()
+        while not self.stop_event.is_set() and not self.terminate:
+            time.sleep(0.1)
+            if time.time() - sleep_start >= sleep_time:
                 return
-
-            keys = self.load_user_keys(user)
-            if keys is None:
-                continue
-
-            for key in keys:
-                s = self.session()
-                self.store_key(user, key, s)
-                try:
-                    s.commit()
-                except Exception as e:
-                    logger.warning('Exception in storing key %s' % e)
-                finally:
-                    try:
-                        s.close()
-                    except:
-                        pass
-
-            # State update - user processed
-            self.since_id = user.user_id
-            self.flush_state()
-
-        # Serialize - final round, all users loaded
-        self.since_id = max_id
-        self.flush_state()
 
     def store_key(self, user, key, s):
         """
@@ -294,19 +542,6 @@ class GitHubLoader(object):
             logger.warning('Exception during key store: %s' % e)
             return 1
 
-    def load_user_keys(self, user):
-        """
-        Loads user keys page
-        :param user:
-        :return:
-        """
-        url = self.KEYS_URL % user.user_name
-        if self.terminate:
-            return None
-
-        keys, headers, res = self.load_page(url)
-        return keys
-
     def flush_state(self):
         """
         Flushes state/config to the state file
@@ -317,19 +552,131 @@ class GitHubLoader(object):
         self.state['rate_limit_reset'] = self.rate_limit_reset
         utils.flush_json(self.state, self.state_file_path)
 
+    #
+    # Auditing - errors, problems for further analysis
+    #
+
+    def audit_log(self, evt=None, link=None, jtype=None):
+        """
+        Appends audit log to the buffer. Lock protected.
+        :param evt:
+        :param link:
+        :return:
+        """
+        log = collections.OrderedDict()
+        log['time'] = time.time()
+        log['evt'] = evt
+        log['jtype'] = jtype
+        log['link'] = link
+        with self.audit_lock:
+            self.audit_records_buffered.append(log)
+
+    def flush_audit(self):
+        """
+        Flushes audit logs to the JSON append only file.
+        Routine protected by the lock (no new audit record can be inserted while holding the lock)
+        :return:
+        """
+        if self.audit_file is None:
+            self.audit_records_buffered = []
+            return
+
+        self.audit_lock.acquire()
+        try:
+            if len(self.audit_records_buffered) == 0:
+                return
+            with open(self.audit_file, 'a') as fa:
+                for x in self.audit_records_buffered:
+                    fa.write(json.dumps(x) + "\n")
+            self.audit_records_buffered = []
+        except Exception as e:
+            logger.error('Exception in audit log dump %s' % e)
+        finally:
+            self.audit_lock.release()
+
+    #
+    # State save / resume
+    #
+
+    def state_main(self):
+        """
+        State thread - periodical dump of the queues.
+        :return:
+        """
+        logger.info('State thread started %s %s %s' % (os.getpid(), os.getppid(), threading.current_thread()))
+        try:
+            while not self.stop_event.is_set() and not self.terminate:
+                try:
+                    # Dump stats each x seconds
+                    # Sleep is here because of dumping the state for the last time just before program quits.
+                    self.interruptible_sleep_delta(10)
+
+                    js_q = collections.OrderedDict()
+                    js_q['gen'] = time.time()
+                    js_q['link_size'] = self.link_queue.qsize()
+                    js_q['since_id'] = self.since_id
+
+                    # Stats.
+                    js_q['resource_stats'] = [x.to_json() for x in list(self.resources_list)]
+
+                    # Finally - the queue
+                    js_q['link_queue'] = [x.to_json() for x in list(self.link_queue.queue)]
+                    utils.flush_json(js_q, self.state_file_path)
+
+                except Exception as e:
+                    traceback.print_exc()
+                    logger.error('Exception in state: %s', e)
+
+        except Exception as e:
+            traceback.print_exc()
+            logger.error('Exception in state: %s' % e)
+
+        finally:
+            pass
+
+        logger.info('State loop terminated')
+
+    def state_resume(self):
+        """
+        Attempts to resume the queues from the monitoring files
+        :return:
+        """
+        try:
+            if self.state is None:
+                return
+
+            if 'since_id' in self.state:
+                self.since_id = self.state['since_id']
+
+            if 'link_queue' in self.state:
+                for rec in self.state['follow_queue']:
+                    job = DownloadJob.from_json(rec)
+                    self.link_queue.put(job)
+                logger.info('Link queue resumed, entries: %d' % len(self.state['follow_queue']))
+
+        except Exception as e:
+            traceback.print_exc()
+            logger.warning('Exception in resuming the state %s' % e)
+            logger.error('State resume failed, exiting')
+            sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Downloads GitHub SSH keys')
-    parser.add_argument('-c', dest='config', default=None, help='JSON config/status file')
-    parser.add_argument('--tmp', dest='tmp_dir', default='/tmp', help='temporary folder for analysis')
+    parser.add_argument('-c', dest='config', default=None, help='JSON config file')
+    parser.add_argument('-s', dest='status', default=None, help='JSON status file')
+    parser.add_argument('-t', dest='threads', default=1, help='Number of download threads to use')
 
     args = parser.parse_args()
-    json_path = args.config
-    tmp_dir = args.tmp_dir
+    config_file = args.config
 
-    l = GitHubLoader(state_file=json_path)
-    l.init_db()
-    l.load()
+    audit_file = os.path.join(os.getcwd(), 'audit.json')
+    state_file = args.status if args.status is not None else os.path.join(os.getcwd(), 'state.json')
+    if os.path.exists(state_file):
+        utils.file_backup(state_file, backup_dir='.')
+
+    l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file)
+    l.work()
 
 
 # Launcher
