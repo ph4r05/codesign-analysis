@@ -9,6 +9,9 @@ We use this for academic research on SSH keys entropy.
 import os
 import sys
 import inspect
+
+from requests.auth import HTTPBasicAuth
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
@@ -65,6 +68,8 @@ class GitHubLoader(object):
 
         self.state = state
         self.state_file_path = state_file
+        self.rate_limit_reset = None
+        self.rate_limit_remaining = None
 
         self.db_config = None
         self.engine = None
@@ -93,7 +98,7 @@ class GitHubLoader(object):
         self.db_config = databaseutils.process_db_config(self.state['db'])
 
         from sqlalchemy import create_engine
-        self.engine = create_engine(self.db_config.constr)
+        self.engine = create_engine(self.db_config.constr, pool_recycle=3600)
 
         from sqlalchemy.orm import sessionmaker
         self.session = sessionmaker()
@@ -116,22 +121,21 @@ class GitHubLoader(object):
         # Load all pages available
         while not self.terminate:
 
-            # Load page with x-attempts
-            for i in range(0, self.attempts):
-                if self.terminate:
-                    return None
+            if self.terminate:
+                return None
 
-                try:
-                    self.load_once_since()
+            try:
+                self.load_once_since()
+                continue
 
-                except KeyboardInterrupt:
-                    logger.info('Keyboard interrupt detected - setting to terminate')
-                    self.terminate = True
-                    return None
+            except KeyboardInterrupt:
+                logger.info('Keyboard interrupt detected - setting to terminate')
+                self.terminate = True
+                return None
 
-                except Exception as e:
-                    traceback.print_exc()
-                    time.sleep(3.0)
+            except Exception as e:
+                traceback.print_exc()
+                time.sleep(3.0)
 
         return None
 
@@ -141,14 +145,53 @@ class GitHubLoader(object):
         :param url:
         :return:
         """
-        res = requests.get(url, timeout=10)
-        if math.floor(res.status_code / 100) != 2.0:
-            res.raise_for_status()
-        data = res.content
-        if data is None:
-            raise Exception('Empty response')
+        auth = None
+        if 'github_token' in self.state:
+            auth = HTTPBasicAuth(self.state['github_user'], self.state['github_token'])
 
-        return json.loads(data, object_pairs_hook=OrderedDict)
+        for attempt in range(self.attempts):
+            if self.terminate:
+                raise Exception('Terminating')
+
+            try:
+                res = requests.get(url, timeout=10, auth=auth)
+                headers = res.headers
+
+                self.rate_limit_reset = float(headers.get('X-RateLimit-Reset')) + 10
+                self.rate_limit_remaining = int(headers.get('X-RateLimit-Remaining'))
+                if self.rate_limit_remaining == 0:
+                    sleep_sec = self.rate_limit_reset - time.time()
+
+                    logger.info('Rate limit exceeded, sleeping till: %d, it is %d seconds, %d minutes'
+                                % (self.rate_limit_reset, sleep_sec, sleep_sec / 60.0))
+                    self.sleep_interruptible(self.rate_limit_reset)
+                    raise Exception('Rate limit exceeded')
+
+                if res.status_code // 100 != 2:
+                    res.raise_for_status()
+
+                data = res.content
+                if data is None:
+                    raise Exception('Empty response')
+
+                js = json.loads(data, object_pairs_hook=OrderedDict)
+                return js, headers
+
+            except Exception as e:
+                logger.warning('Exception in loading page: %s, page: %s' % (e, url))
+
+        raise Exception('Could not load URL: %s' % url)
+
+    def sleep_interruptible(self, until_time):
+        """
+        Interruptible sleep
+        :param until_time:
+        :return:
+        """
+        while time.time() <= until_time:
+            time.sleep(1.0)
+            if self.terminate:
+                return
 
     def load_once_since(self):
         """
@@ -159,7 +202,7 @@ class GitHubLoader(object):
         url = self.USERS_URL % self.since_id
         logging.info('Loading users: %s' % url)
 
-        users = self.load_page(url)
+        users, headers = self.load_page(url)
         self.last_users_count = len(users)
 
         max_id = 0L
@@ -185,10 +228,18 @@ class GitHubLoader(object):
             if keys is None:
                 continue
 
-            s = self.session()
             for key in keys:
+                s = self.session()
                 self.store_key(user, key, s)
-            s.commit()
+                try:
+                    s.commit()
+                except Exception as e:
+                    logger.warning('Exception in storing key %s' % e)
+                finally:
+                    try:
+                        s.close()
+                    except:
+                        pass
 
             # State update - user processed
             self.since_id = user.user_id
@@ -229,7 +280,7 @@ class GitHubLoader(object):
                     db_key.key_modulus_hex = '%x' % numbers.n
                     db_key.key_exponent = numbers.e
             except Exception as e:
-                logger.warning('Exception during processing the key: %s' % e)
+                logger.info('Exception during processing the key: %s' % e)
 
             s.add(db_key)
             return 0
@@ -249,7 +300,7 @@ class GitHubLoader(object):
             if self.terminate:
                 return None
 
-            keys = self.load_page(url)
+            keys, headers = self.load_page(url)
             return keys
 
         logger.error('Too many attempts to load user: ' % user.user_name)
