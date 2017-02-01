@@ -82,11 +82,12 @@ class GitHubKey(Base):
     id = Column(Integer, primary_key=True)
     text_raw = Column(Text)
 
-    date_last_check = Column(DateTime)
+    date_last_check = Column(DateTime, default=func.now())
     key_id = Column(Integer, unique=True)
     key_type = Column(String, nullable=True)
     key_modulus = Column(BigInteger, nullable=True)
     key_exponent = Column(BigInteger, nullable=True)
+    key_size = Column(Integer, nullable=True)
 
     key_user_found = Column(String, nullable=True)
     key_user_id_found = Column(Integer, nullable=True)
