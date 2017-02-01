@@ -69,9 +69,9 @@ def process_db_config(js):
     # Build connection string
     con_string = None
     if dbtype in ['mysql', 'postgresql', 'oracle', 'mssql']:
-        port_str = ':' + port if port is not None else ''
+        port_str = ':%s' % port if port is not None else ''
         host_str = host if host is not None else 'localhost'
-        dbengine_str = '+' + dbengine if dbengine is not None else ''
+        dbengine_str = '+%s' % dbengine if dbengine is not None else ''
 
         if user is None or passwd is None or db is None:
             raise ValueError('User, password and database are mandatory for DB type ' + dbtype)
