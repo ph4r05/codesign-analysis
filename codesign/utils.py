@@ -14,6 +14,7 @@ import shutil
 from lxml import html
 from cryptography.hazmat.backends import default_backend
 from cryptography.x509.base import load_pem_x509_certificate
+from cryptography.hazmat.primitives.serialization import load_ssh_public_key
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
 from pyx509.models import PKCS7, PKCS7_SignedData
@@ -244,6 +245,13 @@ def flush_json(js, filepath):
     shutil.move(tmp_filepath, abs_filepath)
 
 
+def load_ssh_pubkey(key_data):
+    """
+    Loads SH public key
+    :param key_data:
+    :return:
+    """
+    return load_ssh_public_key(key_data, get_backend())
 
 
 
