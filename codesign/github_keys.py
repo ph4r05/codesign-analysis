@@ -850,7 +850,7 @@ class GitHubLoader(Cmd):
             while not self.stop_event.is_set() and not self.terminate:
                 # Dump stats each x seconds
                 # Sleep is here because of dumping the state for the last time just before program quits.
-                self.interruptible_sleep_delta(3)
+                self.interruptible_sleep_delta(2)
                 self.state_save()
 
         except Exception as e:
