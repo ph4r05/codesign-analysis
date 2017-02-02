@@ -361,7 +361,9 @@ class GitHubLoader(Cmd):
                 continue
 
             except Exception as e:
-                logger.error('[%d] Exception in processing job: %s' % (idx, job.url))
+                logger.error('[%d] Exception in processing job: %s, failcnt: %d, exception: %s'
+                             % (idx, job.url, job.fail_cnt, e))
+
                 self.on_job_failed(job)
                 continue
 
@@ -384,7 +386,9 @@ class GitHubLoader(Cmd):
                     self.process_keys_data(job, js_data, headers, raw_response)
 
             except Exception as e:
-                logger.error('[%d] Unexpected exception, processing type %s, link %s: %s' % (idx, job.type, job.url, e))
+                logger.error('[%d] Unexpected exception, processing type %s, link %s: cnt: %d, %s'
+                             % (idx, job.type, job.url, job.fail_cnt, e))
+
                 traceback.print_exc()
                 self.on_job_failed(job)
 
