@@ -256,6 +256,7 @@ class GitHubLoader(Cmd):
         Initialize worker threads
         :return:
         """
+        logger.info('Starting %d working threads' % self.threads)
         for idx in range(self.threads):
             t = threading.Thread(target=self.work_thread_main, args=(idx, ))
             self.worker_threads.append(t)
@@ -263,6 +264,8 @@ class GitHubLoader(Cmd):
         # Kick-off all threads
         for t in self.worker_threads:
             t.start()
+
+        logger.info('Worker threads started')
 
     def work(self):
         """
@@ -452,9 +455,9 @@ class GitHubLoader(Cmd):
         new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
         self.link_queue.put(new_job)
 
-        logger.info('Processed users link %s, next since: %s. with usr %s, remaining %s, New users: %s'
-                    % (len(github_users)+1, max_id, self.local_data.last_usr, self.local_data.last_remaining,
-                       [x.user_name for x in github_users]))
+        logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. New users: [%s]'
+                    % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
+                       len(github_users)+1, max_id, ', '.join([str(x.user_name) for x in github_users])))
 
     def process_keys_data(self, job, js, headers, raw_response):
         """
@@ -711,7 +714,7 @@ def main():
         utils.file_backup(state_file, backup_dir='.')
 
     sys.argv = [args_src[0]]
-    l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file)
+    l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file, threads=args.threads)
     l.work()
     sys.argv = args_src
 
