@@ -617,7 +617,7 @@ class GitHubLoader(Cmd):
         if queue_size > 5*self.threads:
             jobs_to_add.append(new_job)  # queue is quite long - add to the end
         else:
-            new_pos = max(0, int(math.ceil(len(jobs_to_add) - self.threads * 1.75)))
+            new_pos = max(0, int(math.ceil(len(jobs_to_add) - self.threads * 2.2)))
             jobs_to_add.insert(new_pos, new_job)  # add closer to the workers so they do not all wait all on new users
 
         if self.since_id < max_id:
