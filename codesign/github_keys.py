@@ -174,7 +174,7 @@ class GitHubLoader(Cmd):
         self.resources_list = []
         self.resources_queue = Queue.PriorityQueue()
         self.resources_queue_lock = Lock()
-        self.local_data = None
+        self.local_data = threading.local()
 
         self.db_config = None
         self.engine = None
@@ -312,8 +312,8 @@ class GitHubLoader(Cmd):
         Worker thread main loop
         :return:
         """
-        self.local_data = threading.local()
         self.local_data.idx = idx
+        logger.info('Working thread %d started' % idx)
 
         while not self.terminate and not self.stop_event.is_set():
             self.interruptible_sleep_delta(0.1)
@@ -345,7 +345,7 @@ class GitHubLoader(Cmd):
                 js_data, headers, raw_response = self.load_page_local()
 
             except Exception as e:
-                logger.error('Exception in processing job: %s' % job.url)
+                logger.error('[%d] Exception in processing job: %s' % (idx, job.url))
                 self.on_job_failed(job)
                 continue
 
@@ -368,7 +368,7 @@ class GitHubLoader(Cmd):
                     self.process_keys_data(job, js_data, headers, raw_response)
 
             except Exception as e:
-                logger.error('Unexpected exception, processing type %s, link %s: %s' % (job.type, job.url, e))
+                logger.error('[%d] Unexpected exception, processing type %s, link %s: %s' % (idx, job.type, job.url, e))
                 traceback.print_exc()
                 self.on_job_failed(job)
 
