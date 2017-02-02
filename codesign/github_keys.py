@@ -774,7 +774,7 @@ class GitHubLoader(Cmd):
         log['jtype'] = jtype
         log['link'] = link
 
-        if job is None and isinstance(job, DownloadJob):
+        if job is not None and isinstance(job, DownloadJob):
             log['job'] = job.to_json()
 
         with self.audit_lock:
