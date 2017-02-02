@@ -37,6 +37,7 @@ import databaseutils
 import collections
 import threading
 from threading import Lock as Lock
+import types
 import Queue
 from blessed import Terminal
 from cmd2 import Cmd
@@ -125,6 +126,106 @@ class AccessResource(object):
         return js
 
 
+class EvtDequeue(object):
+    """
+    Class for sampling events in time.
+    Protected by the lock.
+    """
+    LIMIT = 5*60.0
+
+    def __init__(self, *args, **kwargs):
+        self.dequeue = collections.deque()
+
+    def len(self):
+        return len(self.dequeue)
+
+    def __len__(self):
+        return self.len()
+
+    def __str__(self):
+        return str(self.dequeue)
+
+    def __repr(self):
+        return str(self.dequeue)
+
+    def to_list(self):
+        """
+        Copies dequeue to the list. Shallow copy.
+        :return:
+        """
+        return list(self.dequeue)
+
+    def append(self, x):
+        self.dequeue.append(x)
+
+    def extend(self, lst):
+        for x in lst:
+            self.dequeue.append(x)
+
+    def pop(self):
+        self.dequeue.pop()
+
+    def popleft(self):
+        self.dequeue.popleft()
+
+    def maintain(self, limit=None):
+        """
+        Maintains dequeue - removes old elements under the limit
+        :return:
+        """
+        cur_time = time.time()
+        if limit is None:
+            limit = self.LIMIT
+
+        thr = cur_time - limit
+
+        if len(self.dequeue) == 0:
+            return
+
+        # Remove oldest elements. Oldest are on the left side of the queue.
+        while self.dequeue[0] < thr:
+            self.dequeue.popleft()
+
+    def insert(self, cur_time=None):
+        """
+        Inserts new event to the dequeue
+        :return:
+        """
+        if cur_time is None:
+            cur_time = time.time()
+        self.dequeue.append(cur_time)
+
+    def under_limit(self, timeout):
+        """
+        Returns number of events done in last <timeout> seconds
+        :param timeout:
+        :return:
+        """
+
+        was_array = isinstance(timeout, types.ListType)
+        timeouts = timeout if was_array else [timeout]
+        results = [0] * len(timeouts)
+
+        if len(self.dequeue) == 0:
+            return results if was_array else results[0]
+
+        now = time.time()
+        lst = list(self.dequeue)
+        num = 0
+        for cur in reversed(lst):
+            delta = now - cur
+            skipped = 0
+            for idx, tmo in enumerate(timeouts):
+                if delta <= tmo:
+                    results[idx] += 1
+                else:
+                    skipped += 1
+            if skipped == len(timeouts):
+                break
+
+        return results if was_array else results[0]
+
+
 class DownloadJob(object):
     """
     Represents link to download
@@ -209,6 +310,9 @@ class GitHubLoader(Cmd):
         self.resources_queue = Queue.PriorityQueue()
         self.resources_queue_lock = Lock()
         self.local_data = threading.local()
+
+        self.new_users_events = EvtDequeue()
+        self.new_keys_events = EvtDequeue()
 
         self.db_config = None
         self.engine = None
@@ -525,7 +629,11 @@ class GitHubLoader(Cmd):
         :param raw_response:
         :return:
         """
+        self.new_users_events.insert()
+
         for key in js:
+            self.new_keys_events.insert()
+
             s = self.session()
             self.store_key(job.user, key, s)
             try:
@@ -732,6 +840,20 @@ class GitHubLoader(Cmd):
             js_q['gen'] = time.time()
             js_q['link_size'] = self.link_queue.qsize()
             js_q['since_id'] = self.since_id
+
+            # Dequeues
+            self.new_users_events.maintain()
+            self.new_keys_events.maintain()
+
+            users_in_5min = self.new_users_events.under_limit(5*60)
+            keys_in_5min = self.new_keys_events.under_limit(5*60)
+
+            js_q['users_dequeue_size'] = self.new_users_events.len()
+            js_q['keys_dequeue_size'] = self.new_keys_events.len()
+            js_q['users_5min'] = users_in_5min
+            js_q['keys_5min'] = keys_in_5min
+            js_q['users_1min'] = users_in_5min / 5.0
+            js_q['keys_1min'] = keys_in_5min / 5.0
 
             # Stats.
             js_q['resource_stats'] = [x.to_json() for x in list(self.resources_list)]
