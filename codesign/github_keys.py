@@ -735,7 +735,6 @@ class GitHubLoader(Cmd):
                 if isinstance(key_obj, RSAPublicKey):
                     db_key.key_size = key_obj.key_size
                     numbers = key_obj.public_numbers()
-                    db_key.key_modulus_dec = '%d' % numbers.n
                     db_key.key_modulus_hex = '%x' % numbers.n
                     db_key.key_exponent = numbers.e
             except Exception as e:
