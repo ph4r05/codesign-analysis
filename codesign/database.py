@@ -18,7 +18,7 @@ class MavenSignature(Base):
     Maven signature entity - stores single PGP signature for the Maven artifact
     """
     __tablename__ = 'maven_signature'
-    id = Column(Integer, primary_key=True)
+    id = Column(BigInteger, primary_key=True)
 
     group_id = Column(String(255), nullable=False,)
     artifact_id = Column(String(255), nullable=True)
@@ -40,7 +40,7 @@ class PGPKey(Base):
     Entity storing PGP keys
     """
     __tablename__ = 'pgp_key'
-    id = Column(Integer, primary_key=True)
+    id = Column(BigInteger, primary_key=True)
     key_id = Column(String(64), nullable=True)
     fingerprint = Column(String(255), nullable=True)
     key_file = Column(BLOB, nullable=True)
@@ -79,17 +79,16 @@ class GitHubKey(Base):
     GitHub SSH auth keys
     """
     __tablename__ = 'github_key'
-    id = Column(Integer, primary_key=True)
+    id = Column(BigInteger, primary_key=True)
     text_raw = Column(Text)
 
     date_last_check = Column(DateTime, default=func.now())
-    key_id = Column(Integer, unique=True)
+    key_id = Column(BigInteger, unique=True)
     key_type = Column(String(32), nullable=True)
     key_modulus_hex = Column(Text, nullable=True)
-    key_modulus_dec = Column(Text, nullable=True)
     key_exponent = Column(BigInteger, nullable=True)
     key_size = Column(Integer, nullable=True)
 
     key_user_found = Column(String(255), nullable=True)
-    key_user_id_found = Column(Integer, nullable=True)
+    key_user_id_found = Column(BigInteger, nullable=True)
 
