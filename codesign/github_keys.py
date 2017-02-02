@@ -363,7 +363,7 @@ class GitHubLoader(Cmd):
             # Process downloaded data here.
             try:
                 if js_data is None:
-                    self.audit_log('404', job.url, jtype=job.type)
+                    self.audit_log('404', job.url, jtype=job.type, job=job)
                     self.flush_audit()
                     continue
 
@@ -391,7 +391,8 @@ class GitHubLoader(Cmd):
 
         # if failed too many times - log and discard.
         if job.fail_cnt > 10:
-            self.audit_log('too-many-fails', job.url, jtype=job.type)
+            logger.warning('Job failed too many times %s' % job.url)
+            self.audit_log('too-many-fails', job.url, jtype=job.type, job=job)
             self.flush_audit()
         else:
             self.link_queue.put(job)  # re-insert to the queue for later processing
@@ -605,7 +606,7 @@ class GitHubLoader(Cmd):
     # Auditing - errors, problems for further analysis
     #
 
-    def audit_log(self, evt=None, link=None, jtype=None):
+    def audit_log(self, evt=None, link=None, jtype=None, job=None):
         """
         Appends audit log to the buffer. Lock protected.
         :param evt:
@@ -617,6 +618,10 @@ class GitHubLoader(Cmd):
         log['evt'] = evt
         log['jtype'] = jtype
         log['link'] = link
+
+        if job is None and isinstance(job, DownloadJob):
+            log['job'] = job.to_json()
+
         with self.audit_lock:
             self.audit_records_buffered.append(log)
 
