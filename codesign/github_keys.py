@@ -304,6 +304,9 @@ class GitHubLoader(Cmd):
         for t in self.worker_threads:
             t.join()
 
+        logger.info('All threads terminates, last state save')
+        self.state_save()
+
         logger.info('Terminating main thread')
         return None
 
@@ -643,26 +646,10 @@ class GitHubLoader(Cmd):
         logger.info('State thread started %s %s %s' % (os.getpid(), os.getppid(), threading.current_thread()))
         try:
             while not self.stop_event.is_set() and not self.terminate:
-                try:
-                    # Dump stats each x seconds
-                    # Sleep is here because of dumping the state for the last time just before program quits.
-                    self.interruptible_sleep_delta(10)
-
-                    js_q = collections.OrderedDict()
-                    js_q['gen'] = time.time()
-                    js_q['link_size'] = self.link_queue.qsize()
-                    js_q['since_id'] = self.since_id
-
-                    # Stats.
-                    js_q['resource_stats'] = [x.to_json() for x in list(self.resources_list)]
-
-                    # Finally - the queue
-                    js_q['link_queue'] = [x.to_json() for x in list(self.link_queue.queue)]
-                    utils.flush_json(js_q, self.state_file_path)
-
-                except Exception as e:
-                    traceback.print_exc()
-                    logger.error('Exception in state: %s', e)
+                # Dump stats each x seconds
+                # Sleep is here because of dumping the state for the last time just before program quits.
+                self.interruptible_sleep_delta(10)
+                self.state_save()
 
         except Exception as e:
             traceback.print_exc()
@@ -672,6 +659,28 @@ class GitHubLoader(Cmd):
             pass
 
         logger.info('State loop terminated')
+
+    def state_save(self):
+        """
+        saves the state
+        :return:
+        """
+        try:
+            js_q = collections.OrderedDict()
+            js_q['gen'] = time.time()
+            js_q['link_size'] = self.link_queue.qsize()
+            js_q['since_id'] = self.since_id
+
+            # Stats.
+            js_q['resource_stats'] = [x.to_json() for x in list(self.resources_list)]
+
+            # Finally - the queue
+            js_q['link_queue'] = [x.to_json() for x in list(self.link_queue.queue)]
+            utils.flush_json(js_q, self.state_file_path)
+
+        except Exception as e:
+            traceback.print_exc()
+            logger.error('Exception in state: %s', e)
 
     def state_resume(self):
         """
