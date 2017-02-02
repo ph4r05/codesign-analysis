@@ -58,6 +58,12 @@ coloredlogs.install(level=logging.INFO)
 GitHubUser = namedtuple('GitHubUser', ['user_id', 'user_name', 'user_type', 'user_url'])
 
 
+class RateLimitHit(Exception):
+    """
+    Rate limit exceeded
+    """
+
+
 class AccessResource(object):
     """
     Represents one access token
@@ -349,6 +355,11 @@ class GitHubLoader(Cmd):
                 self.local_data.resource = resource
                 js_data, headers, raw_response = self.load_page_local()
 
+            except RateLimitHit as e:
+                logger.error('[%d] Rate limit hit: %s, failcnt: %d, exception: %s'
+                             % (idx, job.url, job.fail_cnt, e))
+                continue
+
             except Exception as e:
                 logger.error('[%d] Exception in processing job: %s' % (idx, job.url))
                 self.on_job_failed(job)
@@ -415,6 +426,9 @@ class GitHubLoader(Cmd):
 
         resource.reset_time = float(headers.get('X-RateLimit-Reset'))
         resource.remaining = int(headers.get('X-RateLimit-Remaining'))
+
+        if res.status_code == 403 and resource.remaining < 10:
+            raise RateLimitHit
 
         if res.status_code == 404:
             logger.warning('URL not found: %s' % job.url)
