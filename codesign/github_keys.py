@@ -42,7 +42,7 @@ import Queue
 from blessed import Terminal
 from cmd2 import Cmd
 
-from database import GitHubKey
+from database import GitHubKey, GitHubUser as GitHubUserDb
 from database import Base as DB_Base
 from sqlalchemy.orm import scoped_session
 
@@ -730,7 +730,7 @@ class GitHubLoader(Cmd):
         :return:
         """
         try:
-            db_user = GitHubUser()
+            db_user = GitHubUserDb()
             db_user.id = user.user_id
             db_user.username = user.user_name
             s.add(db_user)
