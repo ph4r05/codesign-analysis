@@ -73,8 +73,29 @@ class AccessResource(object):
         self.idx = idx
         self.usr = usr
         self.token = token
-        self.remaining = remaining
+        self._remaining = remaining
         self.reset_time = reset_time
+        self.last_used = idx
+        self.used_cnt = 0
+
+    @property
+    def remaining(self):
+        """
+        If reset time is 5 minutes expired then remaining estimation is not correct.
+        In that case we reset the counters so workers try again this credential & reload estimation.
+        :return:
+        """
+        if self._remaining is None or self.reset_time is None:
+            return self._remaining
+
+        if self.reset_time + 300 < time.time():
+            self._remaining = None
+
+        return self._remaining
+
+    @remaining.setter
+    def remaining(self, val):
+        self._remaining = val
 
     def __cmp__(self, other):
         """
@@ -82,20 +103,25 @@ class AccessResource(object):
         :param other:
         :return:
         """
-        if self.remaining is None and other.remaining is None:
-            return self.idx - other.idx
-        elif self.remaining is None:
+        me_rem = self.remaining
+        he_rem = other.remaining
+
+        if me_rem is None and he_rem is None:
+            return self.last_used - other.last_used
+        elif me_rem is None:
             return -1
-        elif other.remaining is None:
+        elif he_rem is None:
             return 1
         else:
-            return other.remaining - self.remaining
+            return he_rem - me_rem
 
     def to_json(self):
         js = collections.OrderedDict()
         js['usr'] = self.usr
         js['remaining'] = self.remaining
         js['reset_time'] = self.reset_time
+        js['last_used'] = self.last_used
+        js['used_cnt'] = self.used_cnt
         return js
 
 
@@ -431,6 +457,8 @@ class GitHubLoader(Cmd):
 
         resource.reset_time = float(headers.get('X-RateLimit-Reset'))
         resource.remaining = int(headers.get('X-RateLimit-Remaining'))
+        resource.last_used = time.time()
+        resource.used_cnt += 1
 
         if res.status_code == 403 and resource.remaining < 10:
             raise RateLimitHit
