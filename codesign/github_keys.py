@@ -145,7 +145,7 @@ class GitHubLoader(Cmd):
         Cmd.__init__(self, *args, **kwargs)
         self.t = Terminal()
 
-        self.attempts = attempts
+        self.attempts = int(attempts)
         self.total = None
         self.terminate = False
         self.since_id = 0
@@ -164,7 +164,7 @@ class GitHubLoader(Cmd):
         self.audit_lock = Lock()
 
         self.stop_event = threading.Event()
-        self.threads = threads
+        self.threads = int(threads)
         self.link_queue = Queue.Queue()  # Store links to download here
         self.worker_threads = []
 
