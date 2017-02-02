@@ -55,7 +55,7 @@ coloredlogs.install(level=logging.INFO)
 
 
 # GitHub User ID & Name
-GitHubUser = namedtuple('GitHubUser', ['user_id', 'user_name', 'user_type'])
+GitHubUser = namedtuple('GitHubUser', ['user_id', 'user_name', 'user_type', 'user_url'])
 
 
 class AccessResource(object):
@@ -118,6 +118,7 @@ class DownloadJob(object):
             js['user_id'] = self.user.user_id
             js['user_name'] = self.user.user_name
             js['user_type'] = self.user.user_type
+            js['user_url'] = self.user.user_url
         return js
 
     @classmethod
@@ -128,7 +129,8 @@ class DownloadJob(object):
         tj.fail_cnt = js['fail_cnt']
         tj.last_fail = js['last_fail']
         if 'user_id' in js:
-            tj.user = GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'])
+            user_url = js['user_url'] if 'user_url' in js else None
+            tj.user = GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
         return tj
 
 
@@ -443,10 +445,10 @@ class GitHubLoader(Cmd):
                 logger.error('Field ID not found in user')
                 continue
 
-            github_user = GitHubUser(user_id=long(user['id']), user_name=user['login'], user_type=user['type'])
+            github_user = GitHubUser(user_id=long(user['id']), user_name=user['login'], user_type=user['type'], user_url=user['url'])
             github_users.append(github_user)
 
-            key_url = self.KEYS_URL % github_user.user_name
+            key_url = '%s/keys' % github_user.user_url
             new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user)
             self.link_queue.put(new_job)
 
