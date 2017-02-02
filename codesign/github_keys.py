@@ -460,6 +460,9 @@ class GitHubLoader(Cmd):
         new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
         self.link_queue.put(new_job)
 
+        if self.since_id < max_id:
+            self.since_id = max_id
+
         logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. New users: [%s]'
                     % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
                        len(github_users)+1, max_id, ', '.join([str(x.user_name) for x in github_users])))
