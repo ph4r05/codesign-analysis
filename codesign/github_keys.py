@@ -38,6 +38,8 @@ import collections
 import threading
 from threading import Lock as Lock
 import Queue
+from blessed import Terminal
+from cmd2 import Cmd
 
 from database import GitHubKey
 from database import Base as DB_Base
@@ -99,7 +101,7 @@ class DownloadJob(object):
     TYPE_USERS = 1
     TYPE_KEYS = 2
 
-    def __init__(self, url, jtype=TYPE_USERS, user=None, *args, **kwargs):
+    def __init__(self, url=None, jtype=TYPE_USERS, user=None, *args, **kwargs):
         self.url = url
         self.type = jtype
         self.user = user
@@ -130,15 +132,19 @@ class DownloadJob(object):
         return tj
 
 
-class GitHubLoader(object):
+class GitHubLoader(Cmd):
     """
     GitHub SSH keys loader
     """
+    prompt = '$> '
 
     USERS_URL = 'https://api.github.com/users?since=%s'
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
-    def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None):
+    def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None, *args, **kwargs):
+        Cmd.__init__(self, *args, **kwargs)
+        self.t = Terminal()
+
         self.attempts = attempts
         self.total = None
         self.terminate = False
@@ -192,12 +198,20 @@ class GitHubLoader(object):
         self.terminate = True
         self.stop_event.set()
 
+    def do_quit(self, arg):
+        self.trigger_stop()
+        logger.info('Waiting for thread termination')
+
+        time.sleep(1)
+        logger.info('Quitting')
+        return Cmd.do_quit(self, arg)
+
     def init_config(self):
         """
         Loads config & state files
         :return:
         """
-        if self.state_file_path is not None:
+        if self.state_file_path is not None and os.path.exists(self.state_file_path):
             with open(self.state_file_path, 'r') as fh:
                 self.state = json.load(fh, object_pairs_hook=OrderedDict)
                 logger.info('State loaded: %s' % os.path.abspath(self.state_file_path))
@@ -205,6 +219,9 @@ class GitHubLoader(object):
         with open(self.config_file, 'r') as fh:
             self.config = json.load(fh, object_pairs_hook=OrderedDict)
             logger.info('Config loaded: %s' % os.path.abspath(self.config_file))
+
+            if 'since_id' in self.config:
+                self.since_id = self.config['since_id']
 
             # Process resources
             if 'res' in self.config:
@@ -240,7 +257,7 @@ class GitHubLoader(object):
         :return:
         """
         for idx in range(self.threads):
-            t = threading.Thread(target=self.work_thread_main, args=(idx))
+            t = threading.Thread(target=self.work_thread_main, args=(idx, ))
             self.worker_threads.append(t)
 
         # Kick-off all threads
@@ -274,6 +291,11 @@ class GitHubLoader(object):
         # Worker threads
         self.init_workers()
 
+        logger.info('Main thread started %s %s %s' % (os.getpid(), os.getppid(), threading.current_thread()))
+        self.cmdloop()
+
+        logger.info('Waiting termination of slave threads')
+
         # Wait here for termination of all workers and monitors.
         self.state_thread.join()
         for t in self.worker_threads:
@@ -302,7 +324,7 @@ class GitHubLoader(object):
             job = None
             try:
                 job = self.link_queue.get(True, timeout=1.0)
-            except queue.Empty:
+            except Queue.Empty:
                 self.resource_return(resource)
                 continue
 
@@ -312,7 +334,7 @@ class GitHubLoader(object):
                 self.resource_return(resource)
                 continue
 
-            # Job processing starts here - decide what to do with it.
+            # Job processing starts here - fetch data page with the resource.
             js_data = None
             try:
                 self.local_data.job = job
@@ -327,20 +349,24 @@ class GitHubLoader(object):
             finally:
                 self.resource_return(resource)
                 self.local_data.resource = None
+                self.local_data.last_usr = resource.usr
+                self.local_data.last_remaining = resource.remaining
 
             # Process downloaded data here.
             try:
                 if js_data is None:
-                    self.audit_log('404', job.url, jtype=job.jtype)
+                    self.audit_log('404', job.url, jtype=job.type)
+                    self.flush_audit()
                     continue
 
-                if job.jtype == DownloadJob.TYPE_USERS:
+                if job.type == DownloadJob.TYPE_USERS:
                     self.process_users_data(job, js_data, headers, raw_response)
                 else:
                     self.process_keys_data(job, js_data, headers, raw_response)
 
             except Exception as e:
                 logger.error('Unexpected exception, processing type %s, link %s: %s' % (job.type, job.url, e))
+                traceback.print_exc()
                 self.on_job_failed(job)
 
         pass
@@ -357,7 +383,8 @@ class GitHubLoader(object):
 
         # if failed too many times - log and discard.
         if job.fail_cnt > 10:
-            self.audit_log('too-many-fails', job.url, jtype=job.jtype)
+            self.audit_log('too-many-fails', job.url, jtype=job.type)
+            self.flush_audit()
         else:
             self.link_queue.put(job)  # re-insert to the queue for later processing
 
@@ -404,13 +431,16 @@ class GitHubLoader(object):
         :return:
         """
         max_id = 0
+        github_users = []
         for user in js:
             if 'id' not in user:
                 logger.error('Field ID not found in user')
                 continue
 
             github_user = GitHubUser(user_id=long(user['id']), user_name=user['login'], user_type=user['type'])
-            key_url = self.KEYS_URL % user.user_name
+            github_users.append(github_user)
+
+            key_url = self.KEYS_URL % github_user.user_name
             new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user)
             self.link_queue.put(new_job)
 
@@ -418,9 +448,13 @@ class GitHubLoader(object):
                 max_id = github_user.user_id
 
         # Link with the maximal user id
-        users_url = self.USERS_URL % self.since_id
+        users_url = self.USERS_URL % max_id
         new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
         self.link_queue.put(new_job)
+
+        logger.info('Processed users link %s, next since: %s. with usr %s, remaining %s, New users: %s'
+                    % (len(github_users)+1, max_id, self.local_data.last_usr, self.local_data.last_remaining,
+                       [x.user_name for x in github_users]))
 
     def process_keys_data(self, job, js, headers, raw_response):
         """
@@ -460,7 +494,7 @@ class GitHubLoader(object):
 
             return resource
 
-        except queue.Empty:
+        except Queue.Empty:
             return None
 
     def resource_return(self, res):
@@ -649,10 +683,10 @@ class GitHubLoader(object):
                 self.since_id = self.state['since_id']
 
             if 'link_queue' in self.state:
-                for rec in self.state['follow_queue']:
+                for rec in self.state['link_queue']:
                     job = DownloadJob.from_json(rec)
                     self.link_queue.put(job)
-                logger.info('Link queue resumed, entries: %d' % len(self.state['follow_queue']))
+                logger.info('Link queue resumed, entries: %d' % len(self.state['link_queue']))
 
         except Exception as e:
             traceback.print_exc()
@@ -662,12 +696,13 @@ class GitHubLoader(object):
 
 
 def main():
+    args_src = sys.argv
     parser = argparse.ArgumentParser(description='Downloads GitHub SSH keys')
     parser.add_argument('-c', dest='config', default=None, help='JSON config file')
     parser.add_argument('-s', dest='status', default=None, help='JSON status file')
     parser.add_argument('-t', dest='threads', default=1, help='Number of download threads to use')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=args_src[1:])
     config_file = args.config
 
     audit_file = os.path.join(os.getcwd(), 'audit.json')
@@ -675,8 +710,10 @@ def main():
     if os.path.exists(state_file):
         utils.file_backup(state_file, backup_dir='.')
 
+    sys.argv = [args_src[0]]
     l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file)
     l.work()
+    sys.argv = args_src
 
 
 # Launcher
