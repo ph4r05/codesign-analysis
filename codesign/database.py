@@ -92,3 +92,14 @@ class GitHubKey(Base):
     key_user_found = Column(String(255), nullable=True)
     key_user_id_found = Column(BigInteger, nullable=True)
 
+
+class GitHubUser(Base):
+    """
+    GitHub users
+    """
+    __tablename__ = 'github_user'
+    id = Column(BigInteger, primary_key=True)
+    username = Column(String(255), nullable=False)
+    date_last_check = Column(DateTime, default=func.now())
+
+

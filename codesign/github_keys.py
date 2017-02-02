@@ -615,7 +615,8 @@ class GitHubLoader(Cmd):
         if self.since_id < max_id:
             self.since_id = max_id
 
-        logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. ResQSize: %d, New users: [%s]'
+        logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. ResQSize: %d, '
+                    'New users: [%s]'
                     % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
                        len(github_users)+1, max_id, self.resources_queue.qsize(),
                        ', '.join([str(x.user_name) for x in github_users])))
@@ -631,17 +632,31 @@ class GitHubLoader(Cmd):
         """
         self.new_users_events.insert()
 
+        # Store user to the DB
+        s = None
+        try:
+            s = self.session()
+            self.store_user(job.user, s)
+            s.commit()
+        except Exception as e:
+            logger.warning('Exception in storing user %s' % e)
+        finally:
+            utils.silent_close(s)
+            s = None
+
+        # Store each key.
         for key in js:
             self.new_keys_events.insert()
 
-            s = self.session()
-            self.store_key(job.user, key, s)
             try:
+                s = self.session()
+                self.store_key(job.user, key, s)
                 s.commit()
             except Exception as e:
                 logger.warning('Exception in storing key %s' % e)
             finally:
                 utils.silent_close(s)
+                s = None
 
     def resource_allocate(self, blocking=True, timeout=1.0):
         """
@@ -707,6 +722,24 @@ class GitHubLoader(Cmd):
             time.sleep(0.1)
             if time.time() - sleep_start >= sleep_time:
                 return
+
+    def store_user(self, user, s):
+        """
+        Stores username to the database.
+        :param user:
+        :return:
+        """
+        try:
+            db_user = GitHubUser()
+            db_user.id = user.user_id
+            db_user.username = user.user_name
+            s.add(db_user)
+            return 0
+
+        except Exception as e:
+            traceback.print_exc()
+            logger.warning('Exception during user store: %s' % e)
+            return 1
 
     def store_key(self, user, key, s):
         """
