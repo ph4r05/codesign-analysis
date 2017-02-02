@@ -83,7 +83,7 @@ class GitHubKey(Base):
     text_raw = Column(Text)
 
     date_last_check = Column(DateTime, default=func.now())
-    key_id = Column(BigInteger, unique=True)
+    key_id = Column(BigInteger, nullable=True)
     key_type = Column(String(32), nullable=True)
     key_modulus_hex = Column(Text, nullable=True)
     key_exponent = Column(BigInteger, nullable=True)
