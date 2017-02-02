@@ -592,6 +592,7 @@ class GitHubLoader(Cmd):
         """
         max_id = 0
         github_users = []
+        jobs_to_add = []
         for user in js:
             if 'id' not in user:
                 logger.error('Field ID not found in user')
@@ -602,7 +603,7 @@ class GitHubLoader(Cmd):
 
             key_url = '%s/keys' % github_user.user_url
             new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user)
-            self.link_queue.put(new_job)
+            jobs_to_add.append(new_job)
 
             if github_user.user_id > max_id:
                 max_id = github_user.user_id
@@ -610,10 +611,20 @@ class GitHubLoader(Cmd):
         # Link with the maximal user id
         users_url = self.USERS_URL % max_id
         new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
-        self.link_queue.put(new_job)
+
+        # Optimizing the position of this link in the link queue
+        queue_size = self.link_queue.qsize()
+        if queue_size > 5*self.threads:
+            jobs_to_add.append(new_job)  # queue is quite long - add to the end
+        else:
+            new_pos = max(0, int(math.ceil(len(jobs_to_add) - self.threads * 1.75)))
+            jobs_to_add.insert(new_pos, new_job)  # add closer to the workers so they do not all wait all on new users
 
         if self.since_id < max_id:
             self.since_id = max_id
+
+        for job in jobs_to_add:
+            self.link_queue.put(job)
 
         logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. ResQSize: %d, '
                     'New users: [%s]'
