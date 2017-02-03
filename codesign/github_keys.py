@@ -299,7 +299,7 @@ class GitHubLoader(Cmd):
     """
     prompt = '$> '
 
-    LINK_FACTOR = 50
+    LINK_FACTOR = 70
     USERS_URL = 'https://api.github.com/users?since=%s'
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
@@ -646,9 +646,11 @@ class GitHubLoader(Cmd):
 
         # Key jobs are uniformly distributed on priorities 0...1000.
         # To increase queue size pick priority closer to 1000, do decrease, closer to 0
-        priority = random.randint(100, 500)
+        priority = random.randint(0, 500)
         if queue_size < queue_size_max:
             priority = int((1 - fill_up_ratio) * 5000) + 500
+        if queue_size > 10*queue_size_max:
+            priority = 0
         new_job.priority = priority
         self.link_queue.put(new_job)
 
