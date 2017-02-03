@@ -235,14 +235,14 @@ class DownloadJob(object):
     TYPE_USERS = 1
     TYPE_KEYS = 2
 
-    def __init__(self, url=None, jtype=TYPE_USERS, user=None, priority=0, *args, **kwargs):
+    def __init__(self, url=None, jtype=TYPE_USERS, user=None, priority=0, time_added=None, *args, **kwargs):
         self.url = url
         self.type = jtype
         self.user = user
         self.fail_cnt = 0
         self.last_fail = 0
         self.priority = priority
-        self.time_added = time.time()
+        self.time_added = time.time() if time_added is None else time_added
 
     def to_json(self):
         js = collections.OrderedDict()
@@ -284,7 +284,10 @@ class DownloadJob(object):
         # Inside the category: fail cnt, time added.
         if self.type == other.type:
             if self.fail_cnt == other.fail_cnt:
-                return int(self.time_added - other.time_added)
+                if self.time_added == other.time_added:
+                    return int(other.priority - self.priority)
+                else:
+                    return int(self.time_added - other.time_added)
             else:
                 return int(self.fail_cnt - other.fail_cnt)
         else:
@@ -629,6 +632,7 @@ class GitHubLoader(Cmd):
         """
         max_id = 0
         github_users = []
+        cur_time = int(time.time())
         for user in js:
             if 'id' not in user:
                 logger.error('Field ID not found in user')
@@ -639,7 +643,7 @@ class GitHubLoader(Cmd):
 
             key_url = '%s/keys' % github_user.user_url
             new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,
-                                  priority=random.randint(0, 1000))
+                                  priority=random.randint(0, 1000), time_added=cur_time)
             self.link_queue.put(new_job)
 
             if github_user.user_id > max_id:
@@ -647,7 +651,7 @@ class GitHubLoader(Cmd):
 
         # Link with the maximal user id
         users_url = self.USERS_URL % max_id
-        new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
+        new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS, time_added=cur_time)
 
         # Optimizing the position of this link in the link queue
         queue_size = self.link_queue.qsize()
