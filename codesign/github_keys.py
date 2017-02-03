@@ -613,11 +613,17 @@ class GitHubLoader(Cmd):
         new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
 
         # Optimizing the position of this link in the link queue
+        link_queue_max_factor = 15  # maximum factor * threads - size of the link queue
         queue_size = self.link_queue.qsize()
-        if queue_size > 5*self.threads:
+        fill_up_ratio = queue_size / float(link_queue_max_factor * self.threads)
+
+        new_pos = 0
+        if queue_size > 3 * self.threads:
+            new_pos = max(0, int(math.ceil(fill_up_ratio * (len(jobs_to_add) - 2*self.threads))))
+
+        if queue_size > link_queue_max_factor * self.threads:
             jobs_to_add.append(new_job)  # queue is quite long - add to the end
         else:
-            new_pos = max(0, int(math.ceil(len(jobs_to_add) - self.threads * 2.2)))
             jobs_to_add.insert(new_pos, new_job)  # add closer to the workers so they do not all wait all on new users
 
         if self.since_id < max_id:
@@ -627,9 +633,10 @@ class GitHubLoader(Cmd):
             self.link_queue.put(job)
 
         logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. ResQSize: %d, '
-                    'New users: [%s]'
+                    'LQSize: %d, fill-up: %0.4f, new_pos: %s, New users: [%s]'
                     % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
                        len(github_users)+1, max_id, self.resources_queue.qsize(),
+                       queue_size, fill_up_ratio, new_pos,
                        ', '.join([str(x.user_name) for x in github_users])))
 
     def process_keys_data(self, job, js, headers, raw_response):
