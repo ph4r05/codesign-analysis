@@ -26,6 +26,7 @@ import argparse
 import re
 import urllib
 import math
+import random
 import hashlib
 import time
 import shutil
@@ -234,12 +235,14 @@ class DownloadJob(object):
     TYPE_USERS = 1
     TYPE_KEYS = 2
 
-    def __init__(self, url=None, jtype=TYPE_USERS, user=None, *args, **kwargs):
+    def __init__(self, url=None, jtype=TYPE_USERS, user=None, priority=0, *args, **kwargs):
         self.url = url
         self.type = jtype
         self.user = user
         self.fail_cnt = 0
         self.last_fail = 0
+        self.priority = priority
+        self.time_added = time.time()
 
     def to_json(self):
         js = collections.OrderedDict()
@@ -247,6 +250,8 @@ class DownloadJob(object):
         js['type'] = self.type
         js['fail_cnt'] = self.fail_cnt
         js['last_fail'] = self.last_fail
+        js['priority'] = self.priority
+        js['time_added'] = self.time_added
         if self.user is not None:
             js['user_id'] = self.user.user_id
             js['user_name'] = self.user.user_name
@@ -261,10 +266,31 @@ class DownloadJob(object):
         tj.type = js['type']
         tj.fail_cnt = js['fail_cnt']
         tj.last_fail = js['last_fail']
+        tj.priority = utils.defvalkey(js, 'priority', 0)
+        tj.time_added = utils.defvalkey(js, 'time_added', 0)
         if 'user_id' in js:
             user_url = js['user_url'] if 'user_url' in js else None
             tj.user = GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
         return tj
+
+    def __cmp__(self, other):
+        """
+        Compare operation for priority queue.
+        :param other:
+        :return:
+        """
+        # Inside the category: fail cnt, time added.
+        if self.type == other.type:
+            if self.fail_cnt == other.fail_cnt:
+                return self.time_added - other.time_added
+            else:
+                return self.fail_cnt - other.fail_cnt
+        else:
+            # Outside the category - priority ordering. Higher the priority, sooner will be picked
+            if self.priority == other.priority:
+                return self.time_added - other.time_added
+            else:
+                return other.priority - self.priority
 
 
 class GitHubLoader(Cmd):
@@ -273,6 +299,7 @@ class GitHubLoader(Cmd):
     """
     prompt = '$> '
 
+    LINK_FACTOR = 50
     USERS_URL = 'https://api.github.com/users?since=%s'
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
@@ -300,7 +327,7 @@ class GitHubLoader(Cmd):
 
         self.stop_event = threading.Event()
         self.threads = int(threads)
-        self.link_queue = Queue.Queue()  # Store links to download here
+        self.link_queue = Queue.PriorityQueue()  # Store links to download here
         self.worker_threads = []
 
         self.state_thread = None
@@ -592,7 +619,6 @@ class GitHubLoader(Cmd):
         """
         max_id = 0
         github_users = []
-        jobs_to_add = []
         for user in js:
             if 'id' not in user:
                 logger.error('Field ID not found in user')
@@ -602,8 +628,9 @@ class GitHubLoader(Cmd):
             github_users.append(github_user)
 
             key_url = '%s/keys' % github_user.user_url
-            new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user)
-            jobs_to_add.append(new_job)
+            new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,
+                                  priority=random.randint(0, 1000))
+            self.link_queue.put(new_job)
 
             if github_user.user_id > max_id:
                 max_id = github_user.user_id
@@ -613,30 +640,26 @@ class GitHubLoader(Cmd):
         new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS)
 
         # Optimizing the position of this link in the link queue
-        link_queue_max_factor = 15  # maximum factor * threads - size of the link queue
         queue_size = self.link_queue.qsize()
-        fill_up_ratio = queue_size / float(link_queue_max_factor * self.threads)
+        queue_size_max = self.LINK_FACTOR * self.threads
+        fill_up_ratio = queue_size / float(queue_size_max)
 
-        new_pos = 0
-        if queue_size > 3 * self.threads:
-            new_pos = max(0, int(math.ceil(fill_up_ratio * (len(jobs_to_add) - 2*self.threads))))
-
-        if queue_size > link_queue_max_factor * self.threads:
-            jobs_to_add.append(new_job)  # queue is quite long - add to the end
-        else:
-            jobs_to_add.insert(new_pos, new_job)  # add closer to the workers so they do not all wait all on new users
+        # Key jobs are uniformly distributed on priorities 0...1000.
+        # To increase queue size pick priority closer to 1000, do decrease, closer to 0
+        priority = random.randint(100, 500)
+        if queue_size < queue_size_max:
+            priority = int((1 - fill_up_ratio) * 5000) + 500
+        new_job.priority = priority
+        self.link_queue.put(new_job)
 
         if self.since_id < max_id:
             self.since_id = max_id
 
-        for job in jobs_to_add:
-            self.link_queue.put(job)
-
         logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. ResQSize: %d, '
-                    'LQSize: %d, fill-up: %0.4f, new_pos: %s, New users: [%s]'
+                    'LQSize: %d, fill-up: %0.4f, priority: %s, New users: [%s]'
                     % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
                        len(github_users)+1, max_id, self.resources_queue.qsize(),
-                       queue_size, fill_up_ratio, new_pos,
+                       queue_size, fill_up_ratio, priority,
                        ', '.join([str(x.user_name) for x in github_users])))
 
     def process_keys_data(self, job, js, headers, raw_response):
@@ -905,11 +928,17 @@ class GitHubLoader(Cmd):
             js_q['users_1min'] = users_in_5min / 5.0
             js_q['keys_1min'] = keys_in_5min / 5.0
 
+            # link queue structure
+            qdata = list(self.link_queue.queue)
+            qdata.sort(key=lambda x: x.priority, reverse=True)
+            js_q['link_structure'] = ''.join(['.' if x.type == DownloadJob.TYPE_KEYS else 'U' for x in qdata])
+
             # Stats.
             js_q['resource_stats'] = [x.to_json() for x in list(self.resources_list)]
 
             # Finally - the queue
-            js_q['link_queue'] = [x.to_json() for x in list(self.link_queue.queue)]
+
+            js_q['link_queue'] = [x.to_json() for x in qdata]
             utils.flush_json(js_q, self.state_file_path)
 
         except Exception as e:
