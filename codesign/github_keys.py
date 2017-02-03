@@ -273,24 +273,34 @@ class DownloadJob(object):
             tj.user = GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
         return tj
 
-    def __cmp__(self, other):
+    @staticmethod
+    def cmp(self, other):
         """
-        Compare operation for priority queue.
+        Comparator
+        :param self:
         :param other:
         :return:
         """
         # Inside the category: fail cnt, time added.
         if self.type == other.type:
             if self.fail_cnt == other.fail_cnt:
-                return self.time_added - other.time_added
+                return int(self.time_added - other.time_added)
             else:
-                return self.fail_cnt - other.fail_cnt
+                return int(self.fail_cnt - other.fail_cnt)
         else:
             # Outside the category - priority ordering. Higher the priority, sooner will be picked
             if self.priority == other.priority:
-                return self.time_added - other.time_added
+                return int(self.time_added - other.time_added)
             else:
-                return other.priority - self.priority
+                return int(other.priority - self.priority)
+
+    def __cmp__(self, other):
+        """
+        Compare operation for priority queue.
+        :param other:
+        :return:
+        """
+        return self.cmp(self, other)
 
 
 class GitHubLoader(Cmd):
@@ -649,7 +659,7 @@ class GitHubLoader(Cmd):
         priority = random.randint(0, 500)
         if queue_size < queue_size_max:
             priority = int((1 - fill_up_ratio) * 5000) + 500
-        if queue_size > 10*queue_size_max:
+        if queue_size > 3*queue_size_max:
             priority = 0
         new_job.priority = priority
         self.link_queue.put(new_job)
@@ -932,7 +942,7 @@ class GitHubLoader(Cmd):
 
             # link queue structure
             qdata = list(self.link_queue.queue)
-            qdata.sort(key=lambda x: x.priority, reverse=True)
+            qdata.sort(cmp=DownloadJob.cmp)
             js_q['link_structure'] = ''.join(['.' if x.type == DownloadJob.TYPE_KEYS else 'U' for x in qdata])
 
             # Stats.
