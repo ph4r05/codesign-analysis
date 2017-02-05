@@ -531,13 +531,13 @@ class GitHubLoader(Cmd):
                 js_data, headers, raw_response = self.load_page_local()
 
             except RateLimitHit as e:
-                logger.error('[%d] Rate limit hit: %s, failcnt: %d, exception: %s'
-                             % (idx, job.url, job.fail_cnt, e))
+                logger.error('[%d] Rate limit hit: %s, failcnt: %d, res: %s, exception: %s'
+                             % (idx, job.url, job.fail_cnt, resource.usr, e))
                 continue
 
             except Exception as e:
-                logger.error('[%d] Exception in processing job: %s, failcnt: %d, exception: %s'
-                             % (idx, job.url, job.fail_cnt, e))
+                logger.error('[%d] Exception in processing job: %s, failcnt: %d, res: %s, exception: %s'
+                             % (idx, job.url, job.fail_cnt, resource.usr, e))
 
                 self.on_job_failed(job)
                 continue
@@ -561,8 +561,8 @@ class GitHubLoader(Cmd):
                     self.process_keys_data(job, js_data, headers, raw_response)
 
             except Exception as e:
-                logger.error('[%d] Unexpected exception, processing type %s, link %s: cnt: %d, %s'
-                             % (idx, job.type, job.url, job.fail_cnt, e))
+                logger.error('[%d] Unexpected exception, processing type %s, link %s: cnt: %d, res: %s, %s'
+                             % (idx, job.type, job.url, job.fail_cnt, resource.usr, e))
 
                 traceback.print_exc()
                 self.on_job_failed(job)
