@@ -79,6 +79,7 @@ class AccessResource(object):
         self.reset_time = reset_time
         self.last_used = idx
         self.used_cnt = 0
+        self.fail_cnt = 0
 
     @property
     def remaining(self):
@@ -124,6 +125,7 @@ class AccessResource(object):
         js['reset_time'] = self.reset_time
         js['last_used'] = self.last_used
         js['used_cnt'] = self.used_cnt
+        js['fail_cnt'] = self.fail_cnt
         return js
 
 
@@ -605,17 +607,21 @@ class GitHubLoader(Cmd):
         resource.used_cnt += 1
 
         if res.status_code == 403 and resource.remaining < 10:
+            resource.fail_cnt += 1
             raise RateLimitHit
 
         if res.status_code == 404:
+            resource.fail_cnt += 1
             logger.warning('URL not found: %s' % job.url)
             return None, None, None
 
         if res.status_code // 100 != 2:
+            resource.fail_cnt += 1
             res.raise_for_status()
 
         data = res.content
         if data is None:
+            resource.fail_cnt += 1
             raise Exception('Empty response')
 
         js = json.loads(data, object_pairs_hook=OrderedDict)
