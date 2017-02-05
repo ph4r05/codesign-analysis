@@ -403,9 +403,11 @@ class GitHubLoader(Cmd):
             if 'since_id' in self.config:
                 self.since_id = self.config['since_id']
 
-            # Process resources
+            # Process resources - randomized
             if 'res' in self.config:
-                for idx, res in enumerate(self.config['res']):
+                res_tmp = self.config['res']
+                random.shuffle(res_tmp)
+                for idx, res in enumerate(res_tmp):
                     r = AccessResource(usr=res['usr'], token=res['token'], idx=idx)
                     self.resources_list.append(r)
                     self.resources_queue.put(r)
