@@ -735,8 +735,9 @@ class GitHubLoader(Cmd):
                 sleep_sec = resource.reset_time - time.time()
                 sleep_sec += 120  # extra 2 minutes to avoid problems with resources
 
-                logger.info('Rate limit exceeded on resource %s, sleeping till: %d, it is %d seconds, %d minutes'
-                            % (resource.usr, resource.reset_time, sleep_sec, sleep_sec / 60.0))
+                logger.info('Rate limit exceeded on resource %s, remaining: %d, sleeping till: %d, it is %d seconds, '
+                            '%d minutes'
+                            % (resource.usr, resource.remaining, resource.reset_time, sleep_sec, sleep_sec / 60.0))
                 self.sleep_interruptible(sleep_sec)
                 logger.info('Resource sleep finished %s' % resource.usr)
 
