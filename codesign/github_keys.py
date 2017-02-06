@@ -24,10 +24,8 @@ import traceback
 import json
 import argparse
 import re
-import urllib
 import math
 import random
-import hashlib
 import time
 import shutil
 import multiprocessing
@@ -48,7 +46,6 @@ from database import Base as DB_Base
 from sqlalchemy.orm import scoped_session
 
 
-from lxml import html
 from collections import OrderedDict, namedtuple
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
@@ -350,7 +347,6 @@ class GitHubLoader(Cmd):
 
         self.resources_list = []
         self.resources_queue = Queue.PriorityQueue()
-        self.resources_queue_lock = Lock()
         self.local_data = threading.local()
 
         self.new_users_events = EvtDequeue()
@@ -566,6 +562,13 @@ class GitHubLoader(Cmd):
 
                 traceback.print_exc()
                 self.on_job_failed(job)
+            finally:
+                self.local_data.resource = None
+                self.local_data.job = None
+                self.local_data.last_usr = None
+                self.local_data.last_remaining = None
+                resource = None
+                job = None
 
         pass
         logger.info('Terminating worker thread %d' % idx)
