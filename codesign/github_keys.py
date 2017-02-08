@@ -725,6 +725,9 @@ class GitHubLoader(Cmd):
             s = self.session()
             self.store_user(job.user, s)
             s.commit()
+            s.flush()        # writes changes to DB
+            s.expunge_all()  # removes objects from session
+
         except Exception as e:
             logger.warning('Exception in storing user %s' % e)
         finally:
@@ -739,6 +742,8 @@ class GitHubLoader(Cmd):
                 s = self.session()
                 self.store_key(job.user, key, s)
                 s.commit()
+                s.flush()        # writes changes to DB
+                s.expunge_all()  # removes objects from session
             except Exception as e:
                 logger.warning('Exception in storing key %s' % e)
             finally:
