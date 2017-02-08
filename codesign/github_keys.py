@@ -45,7 +45,9 @@ from database import GitHubKey, GitHubUser as GitHubUserDb
 from database import Base as DB_Base
 from sqlalchemy.orm import scoped_session
 
-
+import gc
+import mem_top
+from pympler.tracker import SummaryTracker
 from collections import OrderedDict, namedtuple
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
@@ -356,6 +358,8 @@ class GitHubLoader(Cmd):
         self.engine = None
         self.session = None
 
+        self.mem_tracker = None
+
     def signal_handler(self, signal, frame):
         """
         Signal handler - terminate gracefully
@@ -381,6 +385,21 @@ class GitHubLoader(Cmd):
         time.sleep(1)
         logger.info('Quitting')
         return Cmd.do_quit(self, arg)
+
+    def do_gc(self, line):
+        gc.collect()
+
+    def do_mem_top(self, line):
+        print(mem_top.mem_top())
+
+    def do_mem_track_init(self, line):
+        self.mem_tracker = SummaryTracker()
+
+    def do_mem_track_diff(self, line):
+        print(self.mem_tracker.print_diff())
+
+    def do_mem_track_deinit(self, line):
+        self.mem_tracker = None
 
     def init_config(self):
         """
