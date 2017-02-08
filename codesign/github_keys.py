@@ -588,6 +588,8 @@ class GitHubLoader(Cmd):
                 self.local_data.last_remaining = None
                 resource = None
                 job = None
+                headers = None
+                raw_response = None
 
         pass
         logger.info('Terminating worker thread %d' % idx)
