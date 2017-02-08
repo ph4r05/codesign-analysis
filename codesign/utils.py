@@ -27,6 +27,7 @@ import subprocess
 import shutil
 import pwd
 import grp
+import types
 import binascii
 from datetime import datetime
 import time
