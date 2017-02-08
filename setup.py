@@ -28,7 +28,8 @@ install_requires = [
     'pyx509_ph4',
     'BeautifulSoup',
     'lxml',
-    'SQLAlchemy'
+    'SQLAlchemy',
+    'mem_top'
 ]
 
 dev_extras = [
