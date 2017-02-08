@@ -589,6 +589,20 @@ def silent_close(c):
         pass
 
 
+def strip(x):
+    """
+    Strips string x (if non empty) or each string in x if it is a list
+    :param x:
+    :return:
+    """
+    if x is None:
+        return None
+    if isinstance(x, types.ListType):
+        return [y.strip() if y is not None else y for y in x]
+    else:
+        return x.strip()
+
+
 def defval(val, default=None):
     """
     Returns val if is not None, default instead

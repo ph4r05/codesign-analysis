@@ -889,7 +889,7 @@ class GitHubLoader(Cmd):
             key_id = long(key['id'])
             key_raw = key['key']
 
-            key_type, key_val = key_raw.split(' ', 1)
+            key_type, key_val = [utils.strip(x) for x in key_raw.split(' ', 1)]
 
             db_key = GitHubKey()
             db_key.id = key_id
@@ -899,15 +899,16 @@ class GitHubLoader(Cmd):
             db_key.key_user_id_found = user.user_id
             db_key.text_raw = key_raw
 
-            try:
-                key_obj = utils.load_ssh_pubkey(key_raw)
-                if isinstance(key_obj, RSAPublicKey):
-                    db_key.key_size = key_obj.key_size
-                    numbers = key_obj.public_numbers()
-                    db_key.key_modulus_hex = '%x' % numbers.n
-                    db_key.key_exponent = numbers.e
-            except Exception as e:
-                logger.info('Exception during processing the key[%s]: %s' % (key_type, e))
+            if key_type == 'ssh-rsa':
+                try:
+                    key_obj = utils.load_ssh_pubkey(key_raw)
+                    if isinstance(key_obj, RSAPublicKey):
+                        db_key.key_size = key_obj.key_size
+                        numbers = key_obj.public_numbers()
+                        db_key.key_modulus_hex = '%x' % numbers.n
+                        db_key.key_exponent = numbers.e
+                except Exception as e:
+                    logger.info('Exception during processing the key[%s]: %s' % (key_type, e))
 
             s.add(db_key)
             return 0
