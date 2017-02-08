@@ -195,7 +195,7 @@ class EvtDequeue(object):
         :return:
         """
         if cur_time is None:
-            cur_time = time.time()
+            cur_time = int(time.time())
         self.dequeue.append(cur_time)
 
     def under_limit(self, timeout):
