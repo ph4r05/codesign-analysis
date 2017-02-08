@@ -191,8 +191,12 @@ class EvtDequeue(object):
             return
 
         # Remove oldest elements. Oldest are on the left side of the queue.
-        while self.dequeue[0] < thr:
-            self.dequeue.popleft()
+        try:
+            while len(self.dequeue) > 0 and self.dequeue[0] < thr:
+                self.dequeue.popleft()
+        except Exception as e:
+            logger.error('Queue flush exception %s' % e)
+            logger.debug(traceback.format_exc())
 
     def insert(self, cur_time=None):
         """
