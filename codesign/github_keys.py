@@ -9,6 +9,7 @@ We use this for academic research on SSH keys entropy.
 import os
 import sys
 import inspect
+import resource
 
 from requests.auth import HTTPBasicAuth
 
@@ -704,10 +705,11 @@ class GitHubLoader(Cmd):
             self.since_id = max_id
 
         logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. ResQSize: %d, '
-                    'LQSize: %d, fill-up: %0.4f, priority: %s, New users: [%s]'
+                    'LQSize: %d, fill-up: %0.4f, priority: %s, ram: %s kB, New users: [%s]'
                     % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
                        len(github_users)+1, max_id, self.resources_queue.qsize(),
                        queue_size, fill_up_ratio, priority,
+                       resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
                        ', '.join([str(x.user_name) for x in github_users])))
 
     def process_keys_data(self, job, js, headers, raw_response):
