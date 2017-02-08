@@ -70,6 +70,7 @@ class AccessResource(object):
     """
     Represents one access token
     """
+    __slots__ = ['idx', 'usr', 'token', '_remaining', 'reset_time', 'last_used', 'used_cnt', 'fail_cnt']
 
     def __init__(self, usr=None, token=None, remaining=None, reset_time=None, idx=0, *args, **kwargs):
         self.idx = idx
@@ -135,6 +136,8 @@ class EvtDequeue(object):
     Protected by the lock.
     """
     LIMIT = 5*60.0
+
+    __slots__ = ['dequeue', 'disabled']
 
     def __init__(self, *args, **kwargs):
         self.dequeue = collections.deque()
@@ -248,6 +251,8 @@ class DownloadJob(object):
 
     TYPE_USERS = 1
     TYPE_KEYS = 2
+
+    __slots__ = ['url', 'type', 'user', 'fail_cnt', 'last_fail', 'priority', 'time_added']
 
     def __init__(self, url=None, jtype=TYPE_USERS, user=None, priority=0, time_added=None, *args, **kwargs):
         self.url = url
