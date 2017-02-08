@@ -138,6 +138,7 @@ class EvtDequeue(object):
 
     def __init__(self, *args, **kwargs):
         self.dequeue = collections.deque()
+        self.disabled = False
 
     def len(self):
         return len(self.dequeue)
@@ -159,9 +160,13 @@ class EvtDequeue(object):
         return list(self.dequeue)
 
     def append(self, x):
+        if self.disabled:
+            return
         self.dequeue.append(x)
 
     def extend(self, lst):
+        if self.disabled:
+            return
         for x in lst:
             self.dequeue.append(x)
 
@@ -194,6 +199,9 @@ class EvtDequeue(object):
         Inserts new event to the dequeue
         :return:
         """
+        if self.disabled:
+            return
+
         if cur_time is None:
             cur_time = int(time.time())
         self.dequeue.append(cur_time)
@@ -401,6 +409,28 @@ class GitHubLoader(Cmd):
 
     def do_mem_track_deinit(self, line):
         self.mem_tracker = None
+
+    def do_mem(self, line):
+        print('Memory usage: %s kB' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
+    def do_state(self, line):
+        js = self.state_gen()
+
+        if line is None or len(line) == 0:
+            del js['link_queue']
+            del js['resource_stats']
+        elif line == '1':
+            del js['link_queue']
+
+        print(json.dumps(js, indent=2))
+
+    def do_deq_enable(self, line):
+        self.new_keys_events.disabled = False
+        self.new_users_events.disabled = False
+
+    def do_deq_disable(self, line):
+        self.new_keys_events.disabled = True
+        self.new_users_events.disabled = True
 
     def init_config(self):
         """
@@ -959,9 +989,9 @@ class GitHubLoader(Cmd):
 
         logger.info('State loop terminated')
 
-    def state_save(self):
+    def state_gen(self):
         """
-        saves the state
+        Dumps state
         :return:
         """
         try:
@@ -969,6 +999,7 @@ class GitHubLoader(Cmd):
             js_q['gen'] = time.time()
             js_q['link_size'] = self.link_queue.qsize()
             js_q['since_id'] = self.since_id
+            js_q['memory'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
             # Dequeues
             self.new_users_events.maintain()
@@ -993,8 +1024,20 @@ class GitHubLoader(Cmd):
             js_q['resource_stats'] = [x.to_json() for x in list(self.resources_list)]
 
             # Finally - the queue
-
             js_q['link_queue'] = [x.to_json() for x in qdata]
+            return js_q
+
+        except Exception as e:
+            traceback.print_exc()
+            logger.error('Exception in state: %s', e)
+
+    def state_save(self):
+        """
+        saves the state
+        :return:
+        """
+        try:
+            js_q = self.state_gen()
             utils.flush_json(js_q, self.state_file_path)
 
         except Exception as e:
