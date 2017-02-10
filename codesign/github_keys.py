@@ -842,7 +842,7 @@ class GitHubLoader(Cmd):
                 logger.info('Rate limit exceeded on resource %s, remaining: %d, sleeping till: %d, it is %d seconds, '
                             '%d minutes'
                             % (resource.usr, resource.remaining, resource.reset_time, sleep_sec, sleep_sec / 60.0))
-                self.sleep_interruptible(sleep_sec)
+                self.sleep_interruptible(time.time() + sleep_sec)
                 logger.info('Resource sleep finished %s' % resource.usr)
 
                 # Reset estimations, needs to be refreshed
@@ -864,7 +864,7 @@ class GitHubLoader(Cmd):
 
     def sleep_interruptible(self, until_time):
         """
-        Interruptible sleep
+        Interruptible sleep - sleep until given time.
         :param until_time:
         :return:
         """
