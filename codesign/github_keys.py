@@ -696,7 +696,7 @@ class GitHubLoader(Cmd):
 
         job = self.local_data.job
 
-        res = requests.get(job.url, timeout=10, auth=auth)
+        res = requests.get(job.url, timeout=60, auth=auth)
         headers = res.headers
 
         resource.reset_time = float(headers.get('X-RateLimit-Reset'))
