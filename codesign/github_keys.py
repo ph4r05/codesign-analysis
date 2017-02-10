@@ -676,7 +676,7 @@ class GitHubLoader(Cmd):
         job.last_fail = time.time()
 
         # if failed too many times - log and discard.
-        if job.fail_cnt > 10:
+        if job.fail_cnt > 35:
             logger.warning('Job failed too many times %s' % job.url)
             self.audit_log('too-many-fails', job.url, jtype=job.type, job=job)
             self.flush_audit()
@@ -696,7 +696,7 @@ class GitHubLoader(Cmd):
 
         job = self.local_data.job
 
-        res = requests.get(job.url, timeout=60, auth=auth)
+        res = requests.get(job.url, timeout=10, auth=auth)
         headers = res.headers
 
         resource.reset_time = float(headers.get('X-RateLimit-Reset'))
