@@ -335,7 +335,9 @@ class GitHubLoader(Cmd):
     USERS_URL = 'https://api.github.com/users?since=%s'
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
-    def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None, *args, **kwargs):
+    def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
+                 max_mem=None, *args, **kwargs):
+
         Cmd.__init__(self, *args, **kwargs)
         self.t = Terminal()
 
@@ -345,6 +347,7 @@ class GitHubLoader(Cmd):
         self.since_id = 0
         self.last_users_count = None
 
+        self.max_mem = max_mem
         self.state = state
         self.state_file_path = state_file
         self.rate_limit_reset = None
@@ -505,6 +508,15 @@ class GitHubLoader(Cmd):
 
         logger.info('Worker threads started')
 
+    def cli(self):
+        """
+        CLI thread
+        :return:
+        """
+        logger.info('CLI thread started')
+        self.cmdloop()
+        logger.info('Terminating CLI thread')
+
     def work(self):
         """
         Main thread work method
@@ -533,20 +545,37 @@ class GitHubLoader(Cmd):
         self.init_workers()
 
         logger.info('Main thread started %s %s %s' % (os.getpid(), os.getppid(), threading.current_thread()))
-        self.cmdloop()
 
+        # CLI thread
+        cli_thread = threading.Thread(target=self.cli, args=())
+        cli_thread.setDaemon(True)
+        cli_thread.start()
+
+        # Join on workers
+        self.after_loop()
+        logger.info('Terminating main thread')
+        return None
+
+    def after_loop(self, wait_for_state=True):
+        """
+        After work loop finishes
+        :return:
+        """
         logger.info('Waiting termination of slave threads')
 
         # Wait here for termination of all workers and monitors.
-        self.state_thread.join()
-        for t in self.worker_threads:
-            t.join()
+        try:
+            for t in self.worker_threads:
+                t.join()
+
+            if wait_for_state:
+                self.state_thread.join()
+        except:
+            logger.error('Exception during thread join')
+            logger.error(traceback.format_exc())
 
         logger.info('All threads terminates, last state save')
         self.state_save()
-
-        logger.info('Terminating main thread')
-        return None
 
     def work_thread_main(self, idx):
         """
@@ -990,6 +1019,9 @@ class GitHubLoader(Cmd):
                 self.interruptible_sleep_delta(2)
                 self.state_save()
 
+                # Check memory conditions
+                self.state_ram_check()
+
         except Exception as e:
             traceback.print_exc()
             logger.error('Exception in state: %s' % e)
@@ -998,6 +1030,23 @@ class GitHubLoader(Cmd):
             pass
 
         logger.info('State loop terminated')
+
+    def state_ram_check(self):
+        """
+        Checks memory terminating conditions
+        :return:
+        """
+
+        if self.max_mem is None:
+            return
+
+        cur_ram = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if cur_ram <= self.max_mem:
+            return
+
+        logger.warning('Maximum memory threshold reached: %s kB = %s MB, threshold = %s kB'
+                       % (cur_ram, cur_ram / 1024.0, self.max_mem))
+        self.trigger_stop()
 
     def state_gen(self):
         """
@@ -1085,6 +1134,8 @@ def main():
     parser.add_argument('-c', dest='config', default=None, help='JSON config file')
     parser.add_argument('-s', dest='status', default=None, help='JSON status file')
     parser.add_argument('-t', dest='threads', default=1, help='Number of download threads to use')
+    parser.add_argument('--max-mem', dest='max_mem', default=None, type=int,
+                        help='Maximal memory threshold in kB when program terminates itself')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
@@ -1095,7 +1146,9 @@ def main():
         utils.file_backup(state_file, backup_dir='.')
 
     sys.argv = [args_src[0]]
-    l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file, threads=args.threads)
+    logger.info('GitHub loader started')
+    l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file, threads=args.threads,
+                     max_mem=args.max_mem)
     l.work()
     sys.argv = args_src
 

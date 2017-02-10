@@ -29,7 +29,8 @@ install_requires = [
     'BeautifulSoup',
     'lxml',
     'SQLAlchemy',
-    'mem_top'
+    'mem_top',
+    'pexpect'
 ]
 
 dev_extras = [
