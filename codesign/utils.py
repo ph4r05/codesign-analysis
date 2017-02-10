@@ -20,8 +20,6 @@ from cryptography.x509.oid import NameOID
 from pyx509.models import PKCS7, PKCS7_SignedData
 import errno
 import logging
-import os
-import re
 import stat
 import subprocess
 import shutil
@@ -629,4 +627,27 @@ def defvalkey(js, key, default=None, take_none=True):
         return default
     return js[key]
 
+
+def touch(fname, times=None):
+    """
+    Touches the file
+    :param fname:
+    :param times:
+    :return:
+    """
+    with open(fname, 'a') as fhandle:
+        os.utime(fname, times)
+
+
+def try_touch(fname, times=None):
+    """
+    Touches the file, supress exception
+    :param fname:
+    :param times:
+    :return:
+    """
+    try:
+        touch(fname, times=times)
+    except:
+        pass
 

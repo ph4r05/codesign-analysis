@@ -403,6 +403,8 @@ class GitHubLoader(Cmd):
         self.trigger_stop()
         logger.info('Waiting for thread termination')
 
+        utils.try_touch('.github-quit')
+
         time.sleep(1)
         logger.info('Quitting')
         return Cmd.do_quit(self, arg)
@@ -1147,6 +1149,9 @@ def main():
     state_file = args.status if args.status is not None else os.path.join(os.getcwd(), 'state.json')
     if os.path.exists(state_file):
         utils.file_backup(state_file, backup_dir='.')
+
+    if os.path.exists('.github-quit'):
+        os.remove('.github-quit')
 
     sys.argv = [args_src[0]]
     logger.info('GitHub loader started')
