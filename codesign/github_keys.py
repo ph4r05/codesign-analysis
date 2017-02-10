@@ -407,6 +407,9 @@ class GitHubLoader(Cmd):
         logger.info('Quitting')
         return Cmd.do_quit(self, arg)
 
+    def do_reset(self, line):
+        print('\033c')
+
     def do_gc(self, line):
         gc.collect()
 
