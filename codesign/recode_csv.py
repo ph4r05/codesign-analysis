@@ -6,6 +6,7 @@ import sys
 import argparse
 import logging
 import coloredlogs
+from builtins import int
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.INFO)
@@ -36,11 +37,7 @@ def main():
                 n, e, d, p, q = parts
 
                 # id;n;e;p;q;d;t
-                print('%d;%x;%x;%x;%x;%x;0' % (idx + args.idx, long(n), long(e), long(p), long(q), long(d)))
-
-
-
-
+                print('%d;%x;%x;%x;%x;%x;0' % (idx + args.idx, int(n), int(e), int(p), int(q), int(d)))
 
 
 # Launcher
