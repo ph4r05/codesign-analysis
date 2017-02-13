@@ -348,6 +348,8 @@ class GitHubLoader(Cmd):
         self.since_id = 0
         self.last_users_count = None
         self.user_lock = Lock()
+        self.processed_user_set = set()
+        self.processed_user_set_lock = Lock()
 
         self.max_mem = max_mem
         self.users_only = users_only
@@ -836,9 +838,29 @@ class GitHubLoader(Cmd):
         :param users
         :return:
         """
+        # Handling gaps in the user space ID. With user-only optimization it causes
+        # overlaps.
+        reduced_by = 0
+        with self.processed_user_set_lock:
+            ids = [user.user_id for user in users]
+            ids_ok = []
+            for id in ids:
+                if id in self.processed_user_set:
+                    reduced_by += 1
+                    continue
+                self.processed_user_set.add(id)
+                ids_ok.append(id)
+            users = [user for user in users if user.user_id in ids_ok]
+
+        # Bulk user load
         s = self.session()
-        db_users = s.query(GitHubUserDb).filter(GitHubUserDb.id.in_([user.user_id for user in users])).all()
+        id_list = sorted([user.user_id for user in users])
+        db_users = s.query(GitHubUserDb).filter(GitHubUserDb.id.in_(id_list)).all()
         db_user_map = {user.id: user for user in db_users}
+
+        if len(db_user_map) > 0:
+            logger.info('[%02d] DBUSERMAP: %s' % (self.local_data.idx, db_user_map))
+            logger.info('[%02d] idlist (reduced=%s): %s' % (self.local_data.idx, reduced_by, id_list))
 
         for user in users:
             self.new_users_events.insert()
@@ -849,14 +871,22 @@ class GitHubLoader(Cmd):
                 self.store_user(user, s, db_user=db_user, db_user_loaded=True)
 
             except Exception as e:
-                logger.warning('Exception in storing user %s' % e)
+                logger.warning('[%02d] Exception in storing user %s' % (self.local_data.idx, e))
                 logger.warning(traceback.format_exc())
-                self.trigger_stop()
+                logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
+                self.trigger_quit()
+                break
 
-            finally:
-                utils.silent_close(s)
-
-        s.commit()
+        try:
+            s.commit()
+            logger.info('[%02d] Commited, reduced by: %s' % (self.local_data.idx, reduced_by))
+        except Exception as e:
+            logger.warning('[%02d] Exception in storing bulk users' % self.local_data.idx)
+            logger.warning(traceback.format_exc())
+            logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
+            self.trigger_quit()
+        finally:
+            utils.silent_close(s)
 
     def process_keys_data(self, job, js, headers, raw_response):
         """
@@ -985,7 +1015,9 @@ class GitHubLoader(Cmd):
 
         except Exception as e:
             traceback.print_exc()
-            logger.warning('Exception during user store: %s' % e)
+            logger.warning('[%02d] Exception during user store: %s' % (self.local_data.idx, e))
+            if db_user_loaded:
+                raise
             return 1
 
     def store_key(self, user, key, s):
