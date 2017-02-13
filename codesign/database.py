@@ -24,7 +24,8 @@ class MavenSignature(Base):
     artifact_id = Column(String(255), nullable=True)
     version_id = Column(String(255))
 
-    date_last_check = Column(DateTime)
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
     sig_file = Column(BLOB, nullable=True)
 
     sig_hash = Column(String(64), nullable=True)
@@ -82,7 +83,9 @@ class GitHubKey(Base):
     id = Column(BigInteger, primary_key=True)
     text_raw = Column(Text)
 
+    date_discovered = Column(DateTime, default=func.now())
     date_last_check = Column(DateTime, default=func.now())
+
     key_id = Column(BigInteger, nullable=True)
     key_type = Column(String(32), nullable=True)
     key_modulus_hex = Column(Text, nullable=True)
@@ -100,6 +103,7 @@ class GitHubUser(Base):
     __tablename__ = 'github_user'
     id = Column(BigInteger, primary_key=True)
     username = Column(String(255), nullable=False)
+    date_discovered = Column(DateTime, default=func.now())
     date_last_check = Column(DateTime, default=func.now())
 
 
