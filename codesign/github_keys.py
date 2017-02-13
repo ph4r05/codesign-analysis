@@ -404,11 +404,17 @@ class GitHubLoader(Cmd):
         self.terminate = True
         self.stop_event.set()
 
-    def do_quit(self, arg):
+    def trigger_quit(self):
+        """
+        Terminal condition & file change
+        :return:
+        """
         self.trigger_stop()
-        logger.info('Waiting for thread termination')
-
         utils.try_touch('.github-quit')
+
+    def do_quit(self, arg):
+        self.trigger_quit()
+        logger.info('Waiting for thread termination')
 
         time.sleep(1)
         logger.info('Quitting')
