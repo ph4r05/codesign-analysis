@@ -789,7 +789,7 @@ class GitHubLoader(Cmd):
         new_job.priority = priority
         lucky_one = False
         with self.user_lock:
-            if self.since_id <= max_id:
+            if self.since_id < max_id:
                 self.since_id = max_id
                 self.link_queue.put(new_job)
                 lucky_one = True
