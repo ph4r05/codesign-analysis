@@ -45,6 +45,7 @@ from cmd2 import Cmd
 from database import GitHubKey, GitHubUser as GitHubUserDb
 from database import Base as DB_Base
 from sqlalchemy.orm import scoped_session
+import sqlalchemy as salch
 
 import gc
 import mem_top
@@ -903,6 +904,18 @@ class GitHubLoader(Cmd):
         :param user:
         :return:
         """
+        try:
+            db_user = s.query(GitHubUserDb).filter(GitHubUserDb.id == user.user_id).one_or_none()
+            if db_user is not None:
+                db_user.date_last_check = salch.func.now()
+                s.merge(db_user)
+                return 0
+
+        except Exception as e:
+            traceback.print_exc()
+            logger.warning('User query problem: %s' % e)
+
+        # Store a new user here
         try:
             db_user = GitHubUserDb()
             db_user.id = user.user_id
