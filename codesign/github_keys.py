@@ -336,7 +336,7 @@ class GitHubLoader(Cmd):
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
-                 max_mem=None, *args, **kwargs):
+                 max_mem=None, users_only=False, *args, **kwargs):
 
         Cmd.__init__(self, *args, **kwargs)
         self.t = Terminal()
@@ -348,6 +348,7 @@ class GitHubLoader(Cmd):
         self.last_users_count = None
 
         self.max_mem = max_mem
+        self.users_only = users_only
         self.state = state
         self.state_file_path = state_file
         self.rate_limit_reset = None
@@ -747,13 +748,16 @@ class GitHubLoader(Cmd):
             github_user = GitHubUser(user_id=long(user['id']), user_name=user['login'], user_type=user['type'], user_url=user['url'])
             github_users.append(github_user)
 
+            if github_user.user_id > max_id:
+                max_id = github_user.user_id
+
+            if self.users_only:
+                continue
+
             key_url = '%s/keys' % github_user.user_url
             new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,
                                   priority=random.randint(0, 1000), time_added=cur_time)
             self.link_queue.put(new_job)
-
-            if github_user.user_id > max_id:
-                max_id = github_user.user_id
 
         # Link with the maximal user id
         users_url = self.USERS_URL % max_id
@@ -1141,6 +1145,10 @@ def main():
     parser.add_argument('-t', dest='threads', default=1, help='Number of download threads to use')
     parser.add_argument('--max-mem', dest='max_mem', default=None, type=int,
                         help='Maximal memory threshold in kB when program terminates itself')
+    parser.add_argument('--users-only', dest='users_only', default=False, action='store_const', const=True,
+                        help='Load only users list')
+    parser.add_argument('--merge', dest='merge', default=False, action='store_const', const=True,
+                        help='Merge DB operation - merge instead of add. slower, updates if exists')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
@@ -1154,9 +1162,9 @@ def main():
         os.remove('.github-quit')
 
     sys.argv = [args_src[0]]
-    logger.info('GitHub loader started')
+    logger.info('GitHub loader started, args: %s' % args)
     l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file, threads=args.threads,
-                     max_mem=args.max_mem)
+                     max_mem=args.max_mem, users_only=args.users_only)
     l.work()
     sys.argv = args_src
 
