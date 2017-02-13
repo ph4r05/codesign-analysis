@@ -858,10 +858,6 @@ class GitHubLoader(Cmd):
         db_users = s.query(GitHubUserDb).filter(GitHubUserDb.id.in_(id_list)).all()
         db_user_map = {user.id: user for user in db_users}
 
-        if len(db_user_map) > 0:
-            logger.info('[%02d] DBUSERMAP: %s' % (self.local_data.idx, db_user_map))
-            logger.info('[%02d] idlist (reduced=%s): %s' % (self.local_data.idx, reduced_by, id_list))
-
         for user in users:
             self.new_users_events.insert()
 
@@ -879,7 +875,7 @@ class GitHubLoader(Cmd):
 
         try:
             s.commit()
-            logger.info('[%02d] Commited, reduced by: %s' % (self.local_data.idx, reduced_by))
+            # logger.info('[%02d] Commited, reduced by: %s' % (self.local_data.idx, reduced_by))
         except Exception as e:
             logger.warning('[%02d] Exception in storing bulk users' % self.local_data.idx)
             logger.warning(traceback.format_exc())
