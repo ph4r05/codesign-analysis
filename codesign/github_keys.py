@@ -347,9 +347,12 @@ class GitHubLoader(Cmd):
         self.terminate = False
         self.since_id = 0
         self.last_users_count = None
+        self.user_lock = Lock()
 
         self.max_mem = max_mem
         self.users_only = users_only
+        self.users_per_page = 30
+        self.users_bulk_load_pages = 500
         self.state = state
         self.state_file_path = state_file
         self.rate_limit_reset = None
@@ -776,19 +779,72 @@ class GitHubLoader(Cmd):
             priority = int((1 - fill_up_ratio) * 5000) + 500
         if queue_size > 3*queue_size_max:
             priority = 0
+
         new_job.priority = priority
-        self.link_queue.put(new_job)
+        lucky_one = False
+        with self.user_lock:
+            if self.since_id <= max_id:
+                self.since_id = max_id
+                self.link_queue.put(new_job)
+                lucky_one = True
 
-        if self.since_id < max_id:
-            self.since_id = max_id
+                # Bulk user optimisation - add more users at once, multithreading
+                if self.users_only:
+                    self.bulk_user_only_load(max_id=max_id, cur_time=cur_time, priority=priority)
 
-        logger.info('[%02d, usr=%s, remaining=%s] Processed users link %s, Next since: %s. ResQSize: %d, '
-                    'LQSize: %d, fill-up: %0.4f, priority: %s, ram: %s kB, New users: [%s]'
+        logger.info('[%02d, usr=%20s, remaining=%5s] Processed users link %s, Next since: %3s. ResQSize: %4d, '
+                    'LQSize: %4d, fill-up: %0.4f, priority: %4s, ram: %s kB, new=%s, New users: [%s]'
                     % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
                        len(github_users)+1, max_id, self.resources_queue.qsize(),
                        queue_size, fill_up_ratio, priority,
-                       resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                       resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, lucky_one,
                        ', '.join([str(x.user_name) for x in github_users])))
+
+        # Store all users.
+        self.store_users_list(github_users)
+
+    def bulk_user_only_load(self, max_id, cur_time, priority):
+        """
+        Fills the queue with multiple user links
+        :param max_id:
+        :param cur_time:
+        :param priority:
+        :return:
+        """
+        new_jobs = []
+        for page_idx in range(1, self.users_bulk_load_pages + 1):
+            users_url = self.USERS_URL % (max_id + self.users_per_page * page_idx)
+            new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS,
+                                  time_added=cur_time, priority=priority - page_idx)
+            new_jobs.append(new_job)
+
+        self.since_id = max_id + self.users_per_page * self.users_bulk_load_pages
+        logger.info('[%02d] Bulk load, new max=%s' % (self.local_data.idx, self.since_id))
+
+        for job in new_jobs:
+            self.link_queue.put(job)
+
+    def store_users_list(self, users):
+        """
+        Stores all user in the list
+        :param users
+        :return:
+        """
+        for user in users:
+            self.new_users_events.insert()
+
+            # Store user to the DB
+            s = None
+            try:
+                s = self.session()
+                self.store_user(user, s)
+                s.commit()
+
+            except Exception as e:
+                logger.warning('Exception in storing user %s' % e)
+            finally:
+                utils.silent_close(s)
+                s = None
 
     def process_keys_data(self, job, js, headers, raw_response):
         """
@@ -799,23 +855,6 @@ class GitHubLoader(Cmd):
         :param raw_response:
         :return:
         """
-        self.new_users_events.insert()
-
-        # Store user to the DB
-        s = None
-        try:
-            s = self.session()
-            self.store_user(job.user, s)
-            s.commit()
-            s.flush()        # writes changes to DB
-            s.expunge_all()  # removes objects from session
-
-        except Exception as e:
-            logger.warning('Exception in storing user %s' % e)
-        finally:
-            utils.silent_close(s)
-            s = None
-
         # Store each key.
         for key in js:
             self.new_keys_events.insert()
@@ -904,10 +943,17 @@ class GitHubLoader(Cmd):
         :param user:
         :return:
         """
+        type_id = 0
+        if user.user_type == 'User':
+            type_id = 1
+        elif user.user_type == 'Organization':
+            type_id = 2
+
         try:
             db_user = s.query(GitHubUserDb).filter(GitHubUserDb.id == user.user_id).one_or_none()
             if db_user is not None:
                 db_user.date_last_check = salch.func.now()
+                db_user.usr_type = type_id
                 s.merge(db_user)
                 return 0
 
@@ -920,6 +966,7 @@ class GitHubLoader(Cmd):
             db_user = GitHubUserDb()
             db_user.id = user.user_id
             db_user.username = user.user_name
+            db_user.usr_type = type_id
             s.add(db_user)
             return 0
 
