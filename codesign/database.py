@@ -105,5 +105,6 @@ class GitHubUser(Base):
     username = Column(String(255), nullable=False)
     date_discovered = Column(DateTime, default=func.now())
     date_last_check = Column(DateTime, default=func.now())
+    usr_type = Column(Integer, nullable=True)
 
 
