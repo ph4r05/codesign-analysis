@@ -830,21 +830,27 @@ class GitHubLoader(Cmd):
         :param users
         :return:
         """
+        s = self.session()
+        db_users = s.query(GitHubUserDb).filter(GitHubUserDb.id.in_([user.user_id for user in users])).all()
+        db_user_map = {user.id: user for user in db_users}
+
         for user in users:
             self.new_users_events.insert()
 
             # Store user to the DB
-            s = None
             try:
-                s = self.session()
-                self.store_user(user, s)
-                s.commit()
+                db_user = utils.defvalkey(db_user_map, key=user.user_id)
+                self.store_user(user, s, db_user=db_user, db_user_loaded=True)
 
             except Exception as e:
                 logger.warning('Exception in storing user %s' % e)
+                logger.warning(traceback.format_exc())
+                self.trigger_stop()
+
             finally:
                 utils.silent_close(s)
-                s = None
+
+        s.commit()
 
     def process_keys_data(self, job, js, headers, raw_response):
         """
@@ -937,7 +943,7 @@ class GitHubLoader(Cmd):
             if time.time() - sleep_start >= sleep_time:
                 return
 
-    def store_user(self, user, s):
+    def store_user(self, user, s, db_user=None, db_user_loaded=False):
         """
         Stores username to the database.
         :param user:
@@ -950,7 +956,8 @@ class GitHubLoader(Cmd):
             type_id = 2
 
         try:
-            db_user = s.query(GitHubUserDb).filter(GitHubUserDb.id == user.user_id).one_or_none()
+            if not db_user_loaded:
+                db_user = s.query(GitHubUserDb).filter(GitHubUserDb.id == user.user_id).one_or_none()
             if db_user is not None:
                 db_user.date_last_check = salch.func.now()
                 db_user.usr_type = type_id
