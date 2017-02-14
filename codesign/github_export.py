@@ -59,7 +59,7 @@ class GitHubExporter(object):
     GitHub Exporter
     """
 
-    def __init__(self, config_file=None, sqlite=None, use_json=False, *args, **kwargs):
+    def __init__(self, config_file=None, sqlite=None, sqlite_data=False, use_json=False, *args, **kwargs):
         self.t = Terminal()
 
         self.terminate = False
@@ -67,6 +67,7 @@ class GitHubExporter(object):
         self.config = None
         self.config_file = config_file
         self.sqlite_file = sqlite
+        self.sqlite_data = sqlite_data
         self.use_json = use_json
 
         self.stop_event = threading.Event()
@@ -166,6 +167,8 @@ class GitHubExporter(object):
             return
         if self.sqlite_file is None:
             return
+        if not self.sqlite_data:
+            return
 
         s = self.sqlite_session()
         for elem in buff:
@@ -184,6 +187,8 @@ def main():
     parser.add_argument('-s', dest='sqlite', default=None, help='SQlite file')
     parser.add_argument('--json', dest='use_json', default=False, action='store_const', const=True,
                         help='Load only users list')
+    parser.add_argument('--sqlite_data', dest='sqlite_data', default=False, action='store_const', const=True,
+                        help='To dump also SQLite data')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
@@ -194,7 +199,8 @@ def main():
 
     sys.argv = [args_src[0]]
     logger.info('GitHub loader started, args: %s' % args)
-    l = GitHubExporter(config_file=config_file, sqlite=args.sqlite, use_json=args.use_json)
+    l = GitHubExporter(config_file=config_file, sqlite=args.sqlite, sqlite_data=args.sqlite_data,
+                       use_json=args.use_json)
     l.work()
     sys.argv = args_src
 
