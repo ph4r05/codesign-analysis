@@ -3,6 +3,9 @@
 
 """
 GitHub data exporter.
+For mysql 2 sqlite: create schema, then import data:
+
+mysqldump --skip-extended-insert --compact --no-create-db --no-create-info -u root -p codesign
 """
 
 import os
