@@ -398,7 +398,7 @@ def file_backup(path, chmod=0o644, backup_dir=None):
             backup_path = os.path.join(backup_dir, otail)
 
         if chmod is None:
-            chmod = os.stat(path).st_mode & 0777
+            chmod = os.stat(path).st_mode & 0o777
 
         with open(path, 'r') as src:
             fhnd, fname = unique_file(backup_path, chmod)
@@ -424,7 +424,7 @@ def dir_backup(path, chmod=0o644, backup_dir=None):
             backup_path = os.path.join(backup_dir, otail)
 
         if chmod is None:
-            chmod = os.stat(path).st_mode & 0777
+            chmod = os.stat(path).st_mode & 0o777
 
         backup_path = safe_new_dir(backup_path, mode=chmod)
         os.rmdir(backup_path)
