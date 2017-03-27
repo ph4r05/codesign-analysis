@@ -30,7 +30,9 @@ install_requires = [
     'lxml',
     'SQLAlchemy',
     'mem_top',
-    'pexpect'
+    'pexpect',
+    'dpkt',
+    'py-lz4framed'
 ]
 
 dev_extras = [
