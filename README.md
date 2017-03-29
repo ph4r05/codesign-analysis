@@ -1,5 +1,11 @@
 # Codesign analysis
 
+## Local install
+
+```
+pip install --upgrade --find-links=. .
+```
+
 ## Dependencies
 
 ```
@@ -58,4 +64,5 @@ exec $SHELL
 pyenv install 2.7.13
 pyenv local 2.7.13
 ```
+
 
