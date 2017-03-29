@@ -387,6 +387,9 @@ class CensysTls(object):
         parser.add_argument('--data', dest='data_dir', default='.',
                             help='Data directory output')
 
+        parser.add_argument('--scratch', dest='scratch_dir', default='.',
+                            help='Scratch directory output')
+
         parser.add_argument('-t', dest='threads', default=1,
                             help='Number of download threads to use')
 

@@ -1,5 +1,21 @@
 # Codesign analysis
 
+# Experiments
+
+## Generate TLS fetch
+
+```
+export DATADIR="/storage/praha1/home/$LOGNAME/results"
+mkdir -p $DATADIR
+
+export HOMEDIR="/storage/praha1/home/$LOGNAME"
+cd $HOMEDIR
+mkdir jobs
+cd jobs
+
+python ../cas/codesign/censys_gen_jobs.py --home=$HOMEDIR --data=$DATADIR --wrapper ${HOMEDIR}/cas/censys_tls_wrapper.sh ${HOMEDIR}/cas/tls_ipv4_history.json
+```
+
 ## Local install
 
 ```
@@ -64,5 +80,4 @@ exec $SHELL
 pyenv install 2.7.13
 pyenv local 2.7.13
 ```
-
 
