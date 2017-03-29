@@ -169,7 +169,6 @@ class CensysTls(object):
                 handle = lz4framed.Decompressor(handle)
 
             for idx, record in self.processor.process(handle):
-                logger.info('idx: %s, data: %s' % (idx, json.dumps(record, indent=2)))
                 try:
                     self.process_record(idx, record)
                 except Exception as e:
@@ -177,10 +176,14 @@ class CensysTls(object):
                     logger.debug(traceback.format_exc())
 
                 self.ctr += 1
-                if self.ctr > 100:
-                    sys.exit(1)
 
             logger.info('Total: %d' % self.ctr)
+            logger.info('Total_chain: %d' % self.chain_ctr)
+            logger.info('Not tls: %d' % self.not_tls)
+            logger.info('Not cert ok: %d' % self.not_cert_ok)
+            logger.info('Not chain ok: %d' % self.not_chain_ok)
+            logger.info('Not parsed: %d' % self.not_parsed)
+            logger.info('Not rsa: %d' % self.not_rsa)
 
         logger.info('Processed: %s' % iobj)
         self.file_leafs_fh.close()
