@@ -3,7 +3,7 @@
 HOMEDIR="/storage/praha1/home/$LOGNAME"
 cd $HOMEDIR
 
-export PYENV_ROOT="$HOME/.pyenv"
+export PYENV_ROOT="$HOMEDIR/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 pyenv local 2.7.13
