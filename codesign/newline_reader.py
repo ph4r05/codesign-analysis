@@ -41,8 +41,6 @@ class NewlineReader(object):
         self.digest = hashlib.sha256()
 
         for idx, chunk in enumerate(file_like):
-            logger.info('chunk: %d' % idx)
-
             self.chunk_idx = idx
             for x in self.process_chunk(self.chunk_idx, chunk):
                 yield x
