@@ -67,9 +67,10 @@ class FileInputObject(InputObject):
     """
     File input object - reading from the file
     """
-    def __init__(self, fname, *args, **kwargs):
+    def __init__(self, fname, rec=None, *args, **kwargs):
         super(FileInputObject, self).__init__(*args, **kwargs)
         self.fname = fname
+        self.rec = rec
         self.fh = None
 
     def __enter__(self):
@@ -110,12 +111,13 @@ class LinkInputObject(InputObject):
     """
     Input object using link - remote load
     """
-    def __init__(self, url, headers=None, auth=None, *args, **kwargs):
+    def __init__(self, url, headers=None, auth=None, rec=None, *args, **kwargs):
         super(LinkInputObject, self).__init__(*args, **kwargs)
         self.url = url
         self.headers = headers
         self.auth = auth
         self.r = None
+        self.rec = None
 
     def __enter__(self):
         super(LinkInputObject, self).__enter__()
