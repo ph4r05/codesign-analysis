@@ -17,6 +17,9 @@ from cryptography.x509.base import load_pem_x509_certificate
 from cryptography.hazmat.primitives.serialization import load_ssh_public_key
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import ExtensionOID
+from cryptography import x509 as x509_c
+
 from pyx509.models import PKCS7, PKCS7_SignedData
 import errno
 import logging
@@ -28,6 +31,7 @@ import grp
 import types
 import binascii
 from datetime import datetime
+import dateutil.parser
 import time
 
 
@@ -63,7 +67,7 @@ def unix_time_millis(dt):
 def unix_time(dt):
     if dt is None:
         return None
-    return (dt - datetime.utcfromtimestamp(0)).total_seconds()
+    return (dt - datetime.utcfromtimestamp(0).replace(tzinfo=dt.tzinfo)).total_seconds()
 
 
 def fmt_time(dt):
@@ -634,6 +638,25 @@ def defvalkey(js, key, default=None, take_none=True):
     return js[key]
 
 
+def defvalkeys(js, key, default=None):
+    """
+    Returns js[key] if set, otherwise default. Note js[key] can be None.
+    :param js:
+    :param key:
+    :param default:
+    :param take_none:
+    :return:
+    """
+    try:
+        cur = js
+        for ckey in key:
+            cur = cur[ckey]
+        return cur
+    except:
+        pass
+    return default
+
+
 def touch(fname, times=None):
     """
     Touches the file
@@ -656,4 +679,48 @@ def try_touch(fname, times=None):
         touch(fname, times=times)
     except:
         pass
+
+
+def try_get_san(cert):
+    """
+    Tries to load SAN from the certificate
+    :param cert: 
+    :return: 
+    """
+    try:
+        ext = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+        if ext is not None:
+            values = list(ext.value.get_values_for_type(x509_c.DNSName))
+            return values
+    except:
+        pass
+
+    return []
+
+
+def try_get_cname(cert):
+    """
+    Cname
+    :param cert: 
+    :return: 
+    """
+    try:
+        return get_dn_part(cert.subject, NameOID.COMMON_NAME)
+    except:
+        pass
+    return None
+
+
+def try_parse_timestamp(x):
+    """
+    Tries to parse timestamp
+    :param str: 
+    :return: 
+    """
+    try:
+        return dateutil.parser.parse(x)
+    except:
+        pass
+    return None
+
 
