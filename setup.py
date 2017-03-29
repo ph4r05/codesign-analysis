@@ -20,8 +20,7 @@ install_requires = [
     'coloredlogs',
     'scipy',
     'numpy',
-    'bitstring',
-    'bitarray',
+    'bitarray_ph4',
     'ufx',
     'pgpdump',
     'apk_parse_ph4>=0.1.7',
@@ -32,7 +31,8 @@ install_requires = [
     'mem_top',
     'pexpect',
     'dpkt',
-    'py-lz4framed'
+    'py-lz4framed',
+    'dateutil'
 ]
 
 dev_extras = [
