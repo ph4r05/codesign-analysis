@@ -50,6 +50,8 @@ class Link(object):
 def main():
     """
     Processing censys link page to the json
+    https://censys.io/data/443-https-tls-alexa_top1mil/historical
+    https://censys.io/data/443-https-tls-full_ipv4/historical
     :return:
     """
     parser = argparse.ArgumentParser(description='Processes Censys links from the page, generates json')
@@ -64,7 +66,7 @@ def main():
         print('Error; no input given')
         sys.exit(1)
 
-    dataset_idx = 0
+    dataset_idx = 10
     datasets = []
 
     for file_name in args.file:
@@ -93,7 +95,7 @@ def main():
                 dataset['id'] = dataset_idx
                 dataset['date'] = header
                 dataset['date_utc'] = utils.unix_time(datetime.strptime(header, '%Y-%m-%d %H:%M:%S'))
-                dataset['files'] = {}
+                dataset['files'] = collections.OrderedDict()
                 for row_idx, row in enumerate(rows):
                     if row_idx == 0 or row[0].tag != 'td':
                         continue
@@ -109,6 +111,10 @@ def main():
 
                     link = Link(file_name, file_code, file_href, file_size, file_type, file_hash)
                     dataset['files'][file_name] = link.to_json()
+
+                if 'zgrab-results.json.lz4' not in dataset['files']:
+                    logger.warning('Zgrab result file not found in %d' % dataset_idx)
+                    logger.info('H: %s, files: %s' % (header, ' '.join([x for x in dataset['files']])))
 
                 datasets.append(dataset)
                 dataset_idx += 1
