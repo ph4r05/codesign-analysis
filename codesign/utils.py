@@ -60,6 +60,12 @@ def unix_time_millis(dt):
     return (dt - datetime.datetime.utcfromtimestamp(0)).total_seconds()
 
 
+def unix_time(dt):
+    if dt is None:
+        return None
+    return (dt - datetime.utcfromtimestamp(0)).total_seconds()
+
+
 def fmt_time(dt):
     if dt is None:
         return None
