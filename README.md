@@ -2,7 +2,7 @@
 
 # Experiments
 
-## Generate TLS fetch
+## Generate TLS fetch jobs
 
 ```
 export DATADIR="/storage/praha1/home/$LOGNAME/results"
@@ -14,6 +14,26 @@ mkdir jobs
 cd jobs
 
 python ../cas/codesign/censys_gen_jobs.py --home=$HOMEDIR --data=$DATADIR --wrapper ${HOMEDIR}/cas/censys_tls_wrapper.sh ${HOMEDIR}/cas/tls_ipv4_history.json
+```
+
+## Interactive job
+
+E.g., for debugging the script / env prepare. Frontends are quite slow.
+
+```
+qsub -l select=1:ncpus=1:mem=1gb:scratch_local=1gb -l walltime=48:00:00 -I
+```
+
+## Inspect Censys data
+
+```
+curl -s https://scans.io/zsearch/data.json.lz4 2>&1 | lz4cat | head -n 1
+```
+
+For that you may need to install lz4:
+
+```
+sudo apt-get install liblz4-tool
 ```
 
 ## Local install
