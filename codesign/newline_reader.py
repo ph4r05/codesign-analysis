@@ -82,7 +82,7 @@ class NewlineReader(object):
                     logger.info('Chunk %d without newline, len: %d' % (idx, ln))
 
                 # Wait for next chunk
-                if not finalize:
+                if not finalize or ln == 0:
                     return
                 else:
                     pos = ln
