@@ -111,17 +111,21 @@ class LinkInputObject(InputObject):
     """
     Input object using link - remote load
     """
-    def __init__(self, url, headers=None, auth=None, rec=None, *args, **kwargs):
+    def __init__(self, url, rec=None, headers=None, auth=None, timeout=None, *args, **kwargs):
         super(LinkInputObject, self).__init__(*args, **kwargs)
         self.url = url
         self.headers = headers
         self.auth = auth
         self.r = None
         self.rec = None
+        self.timeout = timeout
+        self.kwargs = kwargs
 
     def __enter__(self):
         super(LinkInputObject, self).__enter__()
-        self.r = requests.get(self.url, stream=True, allow_redirects=True, headers=self.headers, auth=self.auth)
+        self.r = requests.get(self.url, stream=True, allow_redirects=True, headers=self.headers, auth=self.auth,
+                              timeout=self.timeout,
+                              **self.kwargs)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(LinkInputObject, self).__exit__(exc_type, exc_val, exc_tb)
