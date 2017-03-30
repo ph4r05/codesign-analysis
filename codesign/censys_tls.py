@@ -373,7 +373,8 @@ class CensysTls(object):
                 if link_indices is not None and did not in link_indices:
                     continue
 
-                iobj = input_obj.LinkInputObject(dataset['files']['zgrab-results.json.lz4']['href'], rec=dataset)
+                iobj = input_obj.LinkInputObject(dataset['files']['zgrab-results.json.lz4']['href'], rec=dataset,
+                                                 timeout=60*10)
                 self.input_objects.append(iobj)
 
         # Process all input objects
