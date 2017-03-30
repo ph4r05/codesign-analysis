@@ -274,15 +274,16 @@ class CensysTls(object):
 
             ret['id'] = self.ctr
             ret['ip'] = ip
-            ret['dom'] = domain
             ret['count'] = 1
+            utils.set_nonempty(ret, 'dom', domain)
 
             tstamp = utils.try_parse_timestamp(timestamp_fmt)
             ret['timestamp'] = utils.unix_time(tstamp)
-            ret['trust'] = trusted
-            ret['match'] = matches
-            ret['valid'] = utils.defvalkeys(parsed, ['signature', 'valid'])
-            ret['ssign'] = utils.defvalkeys(parsed, ['signature', 'self_signed'])
+            utils.set_nonempty(ret, 'trust', trusted)
+            utils.set_nonempty(ret, 'match', matches)
+            utils.set_nonempty(ret, 'valid', utils.defvalkeys(parsed, ['signature', 'valid']))
+            utils.set_nonempty(ret, 'ssign', utils.defvalkeys(parsed, ['signature', 'self_signed']))
+
             self.fill_cn_src(ret, parsed)
             self.fill_rsa_ne(ret, parsed)
             ret['chains'] = self.process_roots(idx, record, server_cert)

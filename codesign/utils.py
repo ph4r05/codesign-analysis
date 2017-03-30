@@ -641,6 +641,8 @@ def defvalkey(js, key, default=None, take_none=True):
 def defvalkeys(js, key, default=None):
     """
     Returns js[key] if set, otherwise default. Note js[key] can be None.
+    Key is array of keys. js[k1][k2][k3]...
+     
     :param js:
     :param key:
     :param default:
@@ -722,5 +724,18 @@ def try_parse_timestamp(x):
     except:
         pass
     return None
+
+
+def set_nonempty(dest, key, val):
+    """
+    Sets dest[key] = val if val is not none
+    :param dest: 
+    :param key: 
+    :param val: 
+    :return: 
+    """
+    if val is None:
+        return
+    dest[key] = val
 
 
