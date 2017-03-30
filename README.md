@@ -36,6 +36,18 @@ For that you may need to install lz4:
 sudo apt-get install liblz4-tool
 ```
 
+## Metacentrum docs
+
+* https://wiki.metacentrum.cz/wiki/How_to_install_an_application#Python_packages
+* https://wiki.metacentrum.cz/wiki/How_to_compute/Interactive_jobs
+* https://wiki.metacentrum.cz/wiki/How_to_compute
+* https://wiki.metacentrum.cz/wiki/Working_with_data/Working_with_data_in_a_job
+* https://wiki.metacentrum.cz/wiki/Frontend
+* https://wiki.metacentrum.cz/wiki/How_to_compute/Quick_start
+* https://metavo.metacentrum.cz/pbsmon2/user/user-here
+
+# Installation
+
 ## Local install
 
 ```
