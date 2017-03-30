@@ -91,6 +91,7 @@ class CensysTls(object):
                 self.process_iobj(iobj)
             except Exception as e:
                 logger.error('Exception when processing IOBJ: %s, %s' % (iobj, e))
+                logger.info('Progress: %s' % self.ctr)
                 logger.debug(traceback.format_exc())
 
     def iobj_name(self, iobj):
