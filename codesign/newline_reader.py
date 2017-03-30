@@ -88,7 +88,7 @@ class NewlineReader(object):
                     pos = ln
 
             part = (self.buffer[0:pos]).strip()
-            self.buffer = (self.buffer[pos+1:]).strip()
+            self.buffer = (self.buffer[pos+1:])
 
             self.ctr += 1
             try:
