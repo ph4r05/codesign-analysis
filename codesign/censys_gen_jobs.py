@@ -62,15 +62,20 @@ def main():
         if 'alexa' in file_name:
             code = 'alexa'
 
+        logdir = os.path.join(args.home, 'logs')
+        if not os.path.exists(logdir):
+            os.makedirs(logdir, 0o775)
+
         with open(file_name, 'r') as fh:
             js = json.load(fh)
             for dataset in js['data']:
                 id = dataset['id']
+                log_file = os.path.join(logdir, '%s_%3d.log' % (os.getpid(), int(id)))
 
                 job = '#!/bin/bash\n'
                 job += 'cd %s\n' % args.home
-                job += '%s --debug --link-file %s --link-idx %d --data %s --continue \n' \
-                       % (args.wrapper, file_name, id, args.data)
+                job += 'stdbuf -eL %s --debug --link-file %s --link-idx %d --data %s --continue 2> %s \n' \
+                       % (args.wrapper, file_name, id, args.data, log_file)
 
                 with open('%s-%05d.sh' % (code, id), 'w') as jh:
                     jh.write(job)
