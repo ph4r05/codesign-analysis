@@ -631,6 +631,8 @@ def defvalkey(js, key, default=None, take_none=True):
     :param take_none:
     :return:
     """
+    if js is None:
+        return default
     if key not in js:
         return default
     if js[key] is None and not take_none:
@@ -649,6 +651,8 @@ def defvalkeys(js, key, default=None):
     :param take_none:
     :return:
     """
+    if js is None:
+        return default
     try:
         cur = js
         for ckey in key:
