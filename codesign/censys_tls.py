@@ -277,7 +277,7 @@ class CensysTls(object):
             for idx, record in self.processor.process(handle):
                 try:
                     self.read_data += len(record)
-                    if self.read_data - self.last_report > 1024*1024*500:
+                    if self.read_data - self.last_report >= 1024*1024*1024:
                         logger.info('...progress: %s GB' % (self.read_data/1024.0/1024.0/1024.0))
                         self.last_report = self.read_data
 
