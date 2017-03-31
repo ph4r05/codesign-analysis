@@ -270,12 +270,17 @@ class CensysTls(object):
 
             resume_token_found = False
             resume_token = None
+            resume_idx = 0
             if self.last_record_resumed is not None and 'ip' in self.last_record_resumed:
                 resume_token = ('{"ip":"%s",' % self.last_record_resumed['ip']).encode('utf-8')
+                resume_idx = int(self.last_record_resumed['id']) - 100
                 logger.info('Resume token built: %s' % resume_token)
+                logger.info('Resume index: %d, original index: %s' % (resume_idx, self.last_record_resumed['id']))
 
+            record_ctr = -1
             for idx, record in self.processor.process(handle):
                 try:
+                    record_ctr += 1
                     self.read_data += len(record)
                     if self.read_data - self.last_report >= 1024*1024*1024:
                         logger.info('...progress: %s GB, idx: %s, pos: %s'
@@ -283,6 +288,9 @@ class CensysTls(object):
                         self.last_report = self.read_data
 
                     if resume_token is not None and not resume_token_found:
+                        if record_ctr < resume_idx:
+                            continue
+
                         if record.startswith(resume_token):
                             resume_token_found = True
                             logger.info('Resume token found, idx: %s, pos: %s, rec: %s'
