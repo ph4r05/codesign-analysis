@@ -278,7 +278,8 @@ class CensysTls(object):
                 try:
                     self.read_data += len(record)
                     if self.read_data - self.last_report >= 1024*1024*1024:
-                        logger.info('...progress: %s GB' % (self.read_data/1024.0/1024.0/1024.0))
+                        logger.info('...progress: %s GB, idx: %s, pos: %s'
+                                    % (self.read_data/1024.0/1024.0/1024.0, idx, self.read_data))
                         self.last_report = self.read_data
 
                     if resume_token is not None and not resume_token_found:
