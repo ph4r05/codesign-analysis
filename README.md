@@ -10,7 +10,13 @@ mkdir -p $DATADIR
 
 export HOMEDIR="/storage/praha1/home/$LOGNAME"
 cd $HOMEDIR
-mkdir jobs
+
+export PYENV_ROOT="$HOMEDIR/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+pyenv local 2.7.13
+
+mkdir -p jobs
 cd jobs
 
 python ../cas/codesign/censys_gen_jobs.py --home=$HOMEDIR --data=$DATADIR --wrapper ${HOMEDIR}/cas/censys_tls_wrapper.sh ${HOMEDIR}/cas/tls_ipv4_history.json
