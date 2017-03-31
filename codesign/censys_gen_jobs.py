@@ -69,7 +69,7 @@ def main():
 
                 job = '#!/bin/bash\n'
                 job += 'cd %s\n' % args.home
-                job += '%s --debug --link-file %s --link-idx %d --data %s \n' \
+                job += '%s --debug --link-file %s --link-idx %d --data %s --continue \n' \
                        % (args.wrapper, file_name, id, args.data)
 
                 with open('%s-%05d.sh' % (code, id), 'w') as jh:

@@ -64,11 +64,14 @@ class CensysTls(object):
         self.not_parsed = 0
         self.not_rsa = 0
 
+        self.read_data = 0
+        self.last_report = 0
         self.ctr = 0
         self.chain_ctr = 0
         self.processor = None
         self.file_leafs_fh = None
         self.file_roots_fh = None
+        self.last_record_resumed = None
 
     def load_roots(self):
         """
@@ -80,6 +83,13 @@ class CensysTls(object):
         resource_package = __name__
         resource_path = 'data/cacert.pem'
         return pkg_resources.resource_string(resource_package, resource_path)
+
+    def is_dry(self):
+        """
+        Returns true if dry run
+        :return: 
+        """
+        return self.args.dry_run
 
     def process(self):
         """
@@ -140,6 +150,85 @@ class CensysTls(object):
         """
         return os.path.join(self.args.data_dir, name + '.cr.json')
 
+    def continue_roots(self):
+        """
+        Read roots line by line, build chain database.
+        Find the last valid record, remove on that one.
+        :return: 
+        """
+
+        pos = 0
+        invalid_record = False
+
+        for line in self.file_roots_fh:
+            ln = len(line)
+            try:
+                js = json.loads(line)
+                self.chain_cert_db[js['fprint']] = js['id']
+                self.chain_ctr = max(self.chain_ctr, js['id'])
+                pos += ln
+
+            except Exception as e:
+                invalid_record = True
+                break
+
+        logger.info('Operation resumed at chain ctr: %s, total chain records: %s'
+                    % (self.chain_ctr, len(self.chain_cert_db)))
+
+        if invalid_record:
+            logger.info('Roots: Invalid record detected, position: %s' % pos)
+
+            if not self.is_dry():
+                self.file_roots_fh.seek(pos)
+                self.file_roots_fh.truncate()
+                self.file_roots_fh.flush()
+
+    def continue_leafs(self, name):
+        """
+        Continues processing of the leafs.
+        Finds the last record - returns this also.
+        Truncates the rest of the file.
+        :param name: 
+        :return: last record loaded
+        """
+        fsize = os.path.getsize(name)
+        pos = 0
+
+        # If file is too big try to skip 10 MB before end
+        if fsize > 1024*1024*20:
+            pos = fsize - 1024*1024*10
+            logger.info('Leafs file too big: %s, skipping to %s' % (fsize, pos))
+
+            self.file_leafs_fh.seek(pos)
+            x = self.file_leafs_fh.next()  # skip unfinished record
+            pos += len(x)
+
+        invalid_record = False
+        last_record = None
+        for line in self.file_leafs_fh:
+            ln = len(line)
+            try:
+                last_record = json.loads(line)
+                self.ctr = max(self.ctr, last_record['id'])
+                pos += ln
+
+            except Exception as e:
+                invalid_record = True
+                break
+
+        logger.info('Operation resumed at leaf ctr: %s, last ip: %s'
+                    % (self.ctr, utils.defvalkey(last_record, 'ip')))
+
+        if invalid_record:
+            logger.info('Leaf: Invalid record detected, position: %s' % pos)
+
+            if not self.is_dry():
+                self.file_leafs_fh.seek(pos)
+                self.file_leafs_fh.truncate()
+                self.file_leafs_fh.flush()
+
+        return last_record
+
     def process_iobj(self, iobj):
         """
         Processing
@@ -156,12 +245,22 @@ class CensysTls(object):
 
         file_leafs = self.get_classification_leafs(input_name)
         file_roots = self.get_classification_roots(input_name)
-        utils.safely_remove(file_leafs)
-        utils.safely_remove(file_roots)
-        self.file_leafs_fh = utils.safe_open(file_leafs, mode='w', chmod=0o644)
-        self.file_roots_fh = utils.safe_open(file_roots, mode='w', chmod=0o644)
+        self.last_record_resumed = None
 
-        self.processor = newline_reader.NewlineReader(is_json=True)
+        if not self.is_dry() and not self.args.continue1:
+            utils.safely_remove(file_leafs)
+            utils.safely_remove(file_roots)
+            self.file_leafs_fh = utils.safe_open(file_leafs, mode='w', chmod=0o644)
+            self.file_roots_fh = utils.safe_open(file_roots, mode='w', chmod=0o644)
+
+        elif self.args.continue1:
+            logger.info('Continuing with the started files')
+            self.file_leafs_fh = open(file_leafs, mode='r+' if not self.is_dry() else 'r')
+            self.file_roots_fh = open(file_roots, mode='r+' if not self.is_dry() else 'r')
+            self.continue_roots()
+            self.last_record_resumed = self.continue_leafs(file_leafs)
+
+        self.processor = newline_reader.NewlineReader(is_json=False)
         with iobj:
             handle = iobj.handle()
             name = str(iobj)
@@ -169,12 +268,36 @@ class CensysTls(object):
             if name.endswith('lz4'):
                 handle = lz4framed.Decompressor(handle)
 
+            resume_token_found = False
+            resume_token = None
+            if self.last_record_resumed is not None and 'ip' in self.last_record_resumed:
+                resume_token = ('{"ip":"%s",' % self.last_record_resumed['ip']).encode('utf-8')
+                logger.info('Resume token built: %s' % resume_token)
+
             for idx, record in self.processor.process(handle):
                 try:
-                    self.process_record(idx, record)
+                    self.read_data += len(record)
+                    if self.read_data - self.last_report > 1024*1024*500:
+                        logger.info('...progress: %s GB' % (self.read_data/1024.0/1024.0/1024.0))
+                        self.last_report = self.read_data
+
+                    if resume_token is not None and not resume_token_found:
+                        if record.startswith(resume_token):
+                            resume_token_found = True
+                            logger.info('Resume token found, idx: %s, pos: %s, rec: %s'
+                                        % (idx, self.read_data, record))
+                            continue
+
+                        else:
+                            continue
+
+                    js = json.loads(record)
+                    self.process_record(idx, js)
+
                 except Exception as e:
                     logger.error('Exception in processing %d: %s' % (self.ctr, e))
                     logger.debug(traceback.format_exc())
+                    logger.debug(record)
 
                 self.ctr += 1
 
@@ -187,9 +310,10 @@ class CensysTls(object):
             logger.info('Not rsa: %d' % self.not_rsa)
 
         logger.info('Processed: %s' % iobj)
-        self.file_leafs_fh.close()
-        self.file_roots_fh.close()
-        utils.try_touch(finish_file)
+        if not self.is_dry():
+            self.file_leafs_fh.close()
+            self.file_roots_fh.close()
+            utils.try_touch(finish_file)
 
     def is_record_tls(self, record):
         """
@@ -288,7 +412,8 @@ class CensysTls(object):
             self.fill_rsa_ne(ret, parsed)
             ret['chains'] = self.process_roots(idx, record, server_cert)
 
-            self.file_leafs_fh.write(json.dumps(ret) + '\n')
+            if not self.is_dry():
+                self.file_leafs_fh.write(json.dumps(ret) + '\n')
 
         except Exception as e:
             logger.warning('Certificate processing error %s : %s' % (self.ctr, e))
@@ -332,7 +457,10 @@ class CensysTls(object):
                 ret['fprint'] = fprint
                 self.fill_cn_src(ret, parsed)
                 self.fill_rsa_ne(ret, parsed)
-                self.file_roots_fh.write(json.dumps(ret) + '\n')
+
+                if not self.is_dry():
+                    self.file_roots_fh.write(json.dumps(ret) + '\n')
+
                 self.chain_cert_db[fprint] = self.chain_ctr
                 chains_ctr.append(self.chain_ctr)
 
@@ -398,6 +526,15 @@ class CensysTls(object):
 
         parser.add_argument('--debug', dest='debug', default=False, action='store_const', const=True,
                             help='Debugging logging')
+
+        parser.add_argument('--dry-run', dest='dry_run', default=False, action='store_const', const=True,
+                            help='Dry run - no file will be overwritten or deleted')
+
+        parser.add_argument('--continue', dest='continue1', default=False, action='store_const', const=True,
+                            help='Continue from the previous attempt')
+
+        parser.add_argument('--continue-frac', dest='continue_frac', default=None, type=float,
+                            help='Fraction of the file to start reading from')
 
         parser.add_argument('--link-file', dest='link_file', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='JSON file generated by censys_links.py')
