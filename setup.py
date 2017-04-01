@@ -31,7 +31,7 @@ install_requires = [
     'mem_top',
     'pexpect',
     'dpkt',
-    'py-lz4framed',
+    'py-lz4framed_ph4',
     'python-dateutil'
 ]
 
