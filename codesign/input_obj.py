@@ -14,6 +14,7 @@ import requests
 import traceback
 import threading
 import time
+import collections
 
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,15 @@ class InputObject(object):
         """
         raise NotImplementedError('Not implemented - base class')
 
+    def to_state(self):
+        """
+        Returns state dictionary for serialization
+        :return: 
+        """
+        js = collections.OrderedDict()
+        js['data_read'] = self.data_read
+        return js
+
 
 class FileInputObject(InputObject):
     """
@@ -108,6 +118,17 @@ class FileInputObject(InputObject):
 
     def handle(self):
         return self.fh
+
+    def to_state(self):
+        """
+        Returns state dictionary for serialization
+        :return: 
+        """
+        js = collections.OrderedDict()
+        js['type'] = 'FileInputObject'
+        js['fname'] = self.fname
+        js['data_read'] = self.data_read
+        return js
 
 
 class LinkInputObject(InputObject):
@@ -157,6 +178,20 @@ class LinkInputObject(InputObject):
 
     def handle(self):
         return self.r.raw
+
+    def to_state(self):
+        """
+        Returns state dictionary for serialization
+        :return: 
+        """
+        js = collections.OrderedDict()
+        js['type'] = 'LinkInputObject'
+        js['url'] = self.url
+        js['data_read'] = self.data_read
+        js['headers'] = self.headers
+        js['timeout'] = self.timeout
+        js['rec'] = self.rec
+        return js
 
 
 class RequestFailedTooManyTimes(Exception):
@@ -397,5 +432,31 @@ class ReconnectingLinkInputObject(InputObject):
 
     def handle(self):
         return self.r.raw
+
+    def to_state(self):
+        """
+        Returns state dictionary for serialization
+        :return: 
+        """
+        js = collections.OrderedDict()
+        js['type'] = 'ReconnectingLinkInputObject'
+        js['url'] = self.url
+        js['data_read'] = self.data_read
+        js['headers'] = self.headers
+        js['timeout'] = self.timeout
+        js['rec'] = self.rec
+
+        js['max_reconnects'] = self.max_reconnects
+        js['start_offset'] = self.start_offset
+
+        js['total_data_read'] = self.total_data_read
+        js['content_length'] = self.content_length
+        js['total_reconnections'] = self.total_reconnections
+        js['reconnections'] = self.reconnections
+        js['last_reconnection'] = self.last_reconnection
+        js['head_headers'] = self.head_headers
+        js['range_bytes_supported'] = self.range_bytes_supported
+        js['current_content_length'] = self.range_bytes_supported
+        return js
 
 
