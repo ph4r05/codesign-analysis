@@ -317,6 +317,7 @@ class ReconnectingLinkInputObject(InputObject):
                 self._sleep_adaptive(current_attempt)
 
         self.reconnections += 1
+        self.last_reconnection = time.time()
 
         # Load content length
         try:
