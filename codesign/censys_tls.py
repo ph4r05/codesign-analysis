@@ -23,6 +23,7 @@ from cryptography.x509.oid import NameOID
 from cryptography.x509.oid import ExtensionOID
 from cryptography import x509
 import base64
+import time
 
 import input_obj
 import lz4framed
@@ -68,6 +69,8 @@ class CensysTls(object):
         self.last_report = 0
         self.ctr = 0
         self.chain_ctr = 0
+        self.cur_state_file = None
+        self.cur_decompressor = None
         self.processor = None
         self.file_leafs_fh = None
         self.file_roots_fh = None
@@ -133,6 +136,14 @@ class CensysTls(object):
         :return: 
         """
         return os.path.join(self.args.data_dir, name + '.finished')
+
+    def get_state_file(self, name):
+        """
+        Returns path to the state file with progress & resumption data
+        :param name: 
+        :return: 
+        """
+        return os.path.join(self.args.data_dir, name + '.state.json')
 
     def get_classification_leafs(self, name):
         """
@@ -229,6 +240,44 @@ class CensysTls(object):
 
         return last_record
 
+    def store_checkpoint(self, iobj, idx=None, resume_idx=None, resume_token=None):
+        """
+        Stores checkpoint for the current input object
+        :param iobj: 
+        :param idx: 
+        :param resume_idx: 
+        :param resume_token: 
+        :return: 
+        """
+        state_file = self.cur_state_file
+        if self.is_dry():
+            state_file += '.dry'
+
+        input_name = self.iobj_name(iobj)
+
+        js = collections.OrderedDict()
+        js['iobj_name'] = input_name
+        js['time'] = time.time()
+        js['read_raw'] = self.read_data
+        js['block_idx'] = idx
+        js['resume_idx'] = resume_idx
+        js['resume_token'] = resume_token
+
+        # Serialize input object state
+        js['iobj'] = iobj.to_state()
+
+        # Serialize state of the decompressor
+        if self.cur_decompressor is not None:
+            try:
+                decctx = lz4framed.marshal_decompression_context(self.cur_decompressor.ctx)
+                decctx_str = base64.b16encode(decctx)
+                js['dec_ctx'] = decctx_str
+            except Exception as e:
+                logger.error('Exception when storing decompressor state: %s' % e)
+                logger.warning(traceback.format_exc())
+
+        utils.flush_json(js, state_file)
+
     def process_iobj(self, iobj):
         """
         Processing
@@ -243,6 +292,8 @@ class CensysTls(object):
             logger.info('Finish indicator file exists, skipping: %s' % finish_file)
             return
 
+        self.cur_decompressor = None
+        self.cur_state_file = self.get_state_file(input_name)
         file_leafs = self.get_classification_leafs(input_name)
         file_roots = self.get_classification_roots(input_name)
         self.last_record_resumed = None
@@ -266,7 +317,8 @@ class CensysTls(object):
             name = str(iobj)
 
             if name.endswith('lz4'):
-                handle = lz4framed.Decompressor(handle)
+                self.cur_decompressor = lz4framed.Decompressor(handle)
+                handle = self.cur_decompressor
 
             resume_token_found = False
             resume_token = None
@@ -286,6 +338,7 @@ class CensysTls(object):
                         logger.info('...progress: %s GB, idx: %s, pos: %s'
                                     % (self.read_data/1024.0/1024.0/1024.0, idx, self.read_data))
                         self.last_report = self.read_data
+                        self.store_checkpoint(iobj=iobj, idx=idx, resume_idx=resume_idx, resume_token=resume_token)
 
                     if resume_token is not None and not resume_token_found:
                         if record_ctr < resume_idx:
@@ -480,6 +533,15 @@ class CensysTls(object):
 
         return chains_ctr
 
+    def _build_link_object(self, url, rec):
+        """
+        Builds a link object to be processed
+        :param url: 
+        :param rec: 
+        :return: 
+        """
+        return input_obj.ReconnectingLinkInputObject(url, rec=rec, timeout=5*60, max_reconnects=1000)
+
     def work(self):
         """
         Entry point after argument processing.
@@ -492,7 +554,7 @@ class CensysTls(object):
             self.input_objects.append(iobj)
 
         for url in self.args.url:
-            iobj = input_obj.LinkInputObject(url, rec=None)
+            iobj = self._build_link_object(url=url, rec=None)
             self.input_objects.append(iobj)
 
         link_indices = None
@@ -510,8 +572,7 @@ class CensysTls(object):
                 if link_indices is not None and did not in link_indices:
                     continue
 
-                iobj = input_obj.LinkInputObject(dataset['files']['zgrab-results.json.lz4']['href'], rec=dataset,
-                                                 timeout=60*10)
+                iobj = self._build_link_object(url=dataset['files']['zgrab-results.json.lz4']['href'], rec=dataset)
                 self.input_objects.append(iobj)
 
         # Process all input objects
