@@ -402,8 +402,8 @@ class ReconnectingLinkInputObject(InputObject):
 
                 # If we read empty data inspect if it is expected end of stream or not
                 if ln == 0:
-                    logger.info('Empty data read, total so far: %s, content length: %s'
-                                % (self.data_read, self.content_length))
+                    logger.info('Empty data read, total so far: %s, offset: %s, content length: %s'
+                                % (self.data_read, self.start_offset, self.content_length))
 
                     all_data_loaded = self._is_all_data_loaded()
 
