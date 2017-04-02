@@ -314,7 +314,7 @@ class CensysTls(object):
 
         self.processor = newline_reader.NewlineReader(is_json=False)
         with iobj:
-            handle = iobj.handle()
+            handle = iobj
             name = str(iobj)
 
             if name.endswith('lz4'):
