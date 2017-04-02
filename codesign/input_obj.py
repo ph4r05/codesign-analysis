@@ -9,7 +9,6 @@ Input objects taken from polynomial verifiers
 import hashlib
 import logging
 import os
-import sys
 import requests
 import traceback
 import threading
