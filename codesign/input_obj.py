@@ -65,6 +65,13 @@ class InputObject(object):
         """
         raise NotImplementedError('Not implemented - base class')
 
+    def text(self):
+        """
+        Returns text output
+        :return: 
+        """
+        return self.read()
+
     def to_state(self):
         """
         Returns state dictionary for serialization
@@ -171,6 +178,12 @@ class LinkInputObject(InputObject):
 
     def read(self, size=None):
         data = self.r.raw.read(size)
+        self.sha256.update(data)
+        self.data_read += len(data)
+        return data
+
+    def text(self):
+        data = self.r.text
         self.sha256.update(data)
         self.data_read += len(data)
         return data
