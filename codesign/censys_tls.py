@@ -65,6 +65,7 @@ class CensysTls(object):
         self.not_parsed = 0
         self.not_rsa = 0
 
+        self.loaded_checkpoint = None
         self.read_data = 0
         self.last_report = 0
         self.ctr = 0
@@ -265,12 +266,13 @@ class CensysTls(object):
 
         # Serialize input object state
         js['iobj'] = iobj.to_state()
+        js['loaded_checkpoint'] = self.loaded_checkpoint
 
         # Serialize state of the decompressor
         if self.cur_decompressor is not None:
             try:
                 decctx = lz4framed.marshal_decompression_context(self.cur_decompressor.ctx)
-                logger.debug('Decompressor state marshalled, size: %s' % len(decctx))
+                logger.debug('Decompressor state marshalled, size: %s kB' % (len(decctx)/1024.0))
                 decctx_str = base64.b16encode(decctx)
                 js['dec_ctx'] = decctx_str
             except Exception as e:
@@ -278,6 +280,44 @@ class CensysTls(object):
                 logger.warning(traceback.format_exc())
 
         utils.flush_json(js, state_file)
+
+    def restore_checkpoint(self, iobj):
+        """
+        Tries to restore the checkpoint
+        :param iobj: 
+        :return: 
+        """
+        state_file = self.cur_state_file
+        input_name = self.iobj_name(iobj)
+        if not os.path.exists(state_file):
+            logger.info('No checkpoint found for %s' % input_name)
+            return
+
+        logger.info('Trying to restore the checkpoint %s for %s' % (state_file, input_name))
+
+        # backup checkpoint so it is not overwritten by invalid state
+        utils.file_backup(state_file)
+
+        with open(state_file, 'r') as fh:
+            js = json.load(fh)
+            if 'read_raw' not in js or 'iobj' not in js or 'data_read' not in js['iobj']:
+                raise ValueError('State file is invalid')
+
+            offset = js['iobj']['data_read']
+            self.read_data = js['read_raw']
+
+            logger.info('Restoring checkpoint, offset: %s, read_data: %s' % (offset, self.read_data))
+            iobj.start_offset = offset
+
+            self.loaded_checkpoint = js
+            if self.cur_decompressor is not None and 'dec_ctx' in js:
+                logger.info('Restoring decompressor state')
+                decctx_str = base64.b16decode(js['dec_ctx'])
+                decctx = lz4framed.unmarshal_decompression_context(decctx_str)
+                self.cur_decompressor.setctx(decctx)
+                self.loaded_checkpoint['dec_ctx'] = None
+
+        logger.info('Decompressor checkpoint restored for %s' % input_name)
 
     def process_iobj(self, iobj):
         """
@@ -313,14 +353,17 @@ class CensysTls(object):
             self.last_record_resumed = self.continue_leafs(file_leafs)
 
         self.processor = newline_reader.NewlineReader(is_json=False)
+        handle = iobj
+        name = str(iobj)
+
+        if name.endswith('lz4'):
+            self.cur_decompressor = lz4framed.Decompressor(handle)
+            handle = self.cur_decompressor
+
+        if self.args.continue1:
+            self.restore_checkpoint(iobj)
+
         with iobj:
-            handle = iobj
-            name = str(iobj)
-
-            if name.endswith('lz4'):
-                self.cur_decompressor = lz4framed.Decompressor(handle)
-                handle = self.cur_decompressor
-
             resume_token_found = False
             resume_token = None
             resume_idx = 0
@@ -336,8 +379,10 @@ class CensysTls(object):
                     record_ctr += 1
                     self.read_data += len(record)
                     if self.read_data - self.last_report >= 1024*1024*1024:
-                        logger.info('...progress: %s GB, idx: %s, pos: %s'
-                                    % (self.read_data/1024.0/1024.0/1024.0, idx, self.read_data))
+                        logger.info('...progress: %s GB, idx: %s, pos: %s, mem: %04.8f MB'
+                                    % (self.read_data/1024.0/1024.0/1024.0, idx, self.read_data,
+                                       utils.get_mem_usage()/1024.0/1024.0))
+
                         self.last_report = self.read_data
                         self.store_checkpoint(iobj=iobj, idx=idx, resume_idx=resume_idx, resume_token=resume_token)
 

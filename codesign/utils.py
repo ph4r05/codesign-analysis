@@ -30,6 +30,7 @@ import pwd
 import grp
 import types
 import binascii
+import resource
 from datetime import datetime
 import dateutil.parser
 import time
@@ -742,4 +743,11 @@ def set_nonempty(dest, key, val):
         return
     dest[key] = val
 
+
+def get_mem_usage():
+    """
+    Returns current memory usage
+    :return: 
+    """
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
