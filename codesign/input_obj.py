@@ -286,7 +286,7 @@ class ReconnectingLinkInputObject(InputObject):
 
         # Load content length, quite essential
         try:
-            self.content_length = r.headers['Content-Length']
+            self.content_length = int(r.headers['Content-Length'])
         except KeyError:
             logger.error('Link %s does not return content length' % self.url)
 
@@ -359,7 +359,7 @@ class ReconnectingLinkInputObject(InputObject):
 
         # Load content length
         try:
-            self.current_content_length = self.r.headers['Content-Length']
+            self.current_content_length = int(self.r.headers['Content-Length'])
         except KeyError:
             logger.error('Link %s does not return content length' % self.url)
 
