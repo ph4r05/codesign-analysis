@@ -448,7 +448,7 @@ class ReconnectingLinkInputObject(InputObject):
         js['type'] = 'ReconnectingLinkInputObject'
         js['url'] = self.url
         js['data_read'] = self.data_read
-        js['headers'] = self.headers
+        js['headers'] = dict(self.headers) if self.headers is not None else None
         js['timeout'] = self.timeout
         js['rec'] = self.rec
 
@@ -460,7 +460,7 @@ class ReconnectingLinkInputObject(InputObject):
         js['total_reconnections'] = self.total_reconnections
         js['reconnections'] = self.reconnections
         js['last_reconnection'] = self.last_reconnection
-        js['head_headers'] = self.head_headers
+        js['head_headers'] = dict(self.head_headers) if self.head_headers is not None else None
         js['range_bytes_supported'] = self.range_bytes_supported
         js['current_content_length'] = self.range_bytes_supported
         return js
