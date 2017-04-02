@@ -64,6 +64,14 @@ sudo apt-get install liblz4-tool
 
 Message passing interface enables effective parallel computation
 
+Request nodes:
+
+```
+qsub -l select=4:ncpus=1:mem=1gb:scratch_local=1gb -l walltime=1:00:00 -l place=scatter mpi-script.sh
+```
+
+The script can contain something like this:
+
 ```
 mpirun -machinefile $PBS_NODEFILE python script.py
 ```
