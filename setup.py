@@ -32,7 +32,8 @@ install_requires = [
     'pexpect',
     'dpkt',
     'py-lz4framed_ph4',
-    'python-dateutil'
+    'python-dateutil',
+    'mpi4py'
 ]
 
 dev_extras = [
