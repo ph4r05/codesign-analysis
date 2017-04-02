@@ -50,7 +50,7 @@ class InputObject(object):
         """
         return -1
 
-    def read(self, size):
+    def read(self, size=None):
         """
         Reads size of data
         :param size:
@@ -109,7 +109,7 @@ class FileInputObject(InputObject):
     def size(self):
         return os.path.getsize(self.fname)
 
-    def read(self, size):
+    def read(self, size=None):
         data = self.fh.read(size)
         self.sha256.update(data)
         self.data_read += len(data)
@@ -169,7 +169,7 @@ class LinkInputObject(InputObject):
     def size(self):
         return -1
 
-    def read(self, size):
+    def read(self, size=None):
         data = self.r.raw.read(size)
         self.sha256.update(data)
         self.data_read += len(data)
@@ -389,7 +389,7 @@ class ReconnectingLinkInputObject(InputObject):
     def size(self):
         return -1
 
-    def read(self, size):
+    def read(self, size=None):
         """
         Reading a given size of data from the stream. 
         :param size: 
