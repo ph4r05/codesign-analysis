@@ -213,7 +213,7 @@ class ReconnectingLinkInputObject(InputObject):
         self.url = url
         self.headers = headers
         self.auth = auth
-        self.rec = None
+        self.rec = rec
         self.timeout = timeout
         self.max_reconnects = max_reconnects
         self.start_offset = start_offset
