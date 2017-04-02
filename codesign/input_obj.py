@@ -221,7 +221,6 @@ class ReconnectingLinkInputObject(InputObject):
 
         # Overall state
         self.stop_event = threading.Event()
-        self.total_data_read = 0
         self.content_length = None
         self.total_reconnections = 0
         self.reconnections = 0
@@ -303,10 +302,10 @@ class ReconnectingLinkInputObject(InputObject):
         """
         headers = dict(self.headers) if self.headers is not None else {}
 
-        if (self.start_offset is None or self.start_offset == 0) and self.total_data_read == 0:
+        if (self.start_offset is None or self.start_offset == 0) and self.data_read == 0:
             return headers
 
-        headers['Range'] = 'bytes=%s-' % (self.start_offset + self.total_data_read)
+        headers['Range'] = 'bytes=%s-' % (self.start_offset + self.data_read)
         return headers
 
     def _is_all_data_loaded(self):
@@ -318,7 +317,7 @@ class ReconnectingLinkInputObject(InputObject):
             logger.warning('Could not determine if finished...')
             return None
 
-        return self.content_length - self.start_offset - self.total_data_read <= 0
+        return self.content_length - self.start_offset - self.data_read <= 0
 
     def _request(self):
         """
@@ -404,7 +403,7 @@ class ReconnectingLinkInputObject(InputObject):
                 # If we read empty data inspect if it is expected end of stream or not
                 if ln == 0:
                     logger.info('Empty data read, total so far: %s, content length: %s'
-                                % (self.total_data_read, self.content_length))
+                                % (self.data_read, self.content_length))
 
                     all_data_loaded = self._is_all_data_loaded()
 
@@ -418,7 +417,6 @@ class ReconnectingLinkInputObject(InputObject):
                 # Non-null data, all went right -> pass further
                 self.sha256.update(data)
                 self.data_read += ln
-                self.total_data_read += ln
                 return data
 
             except Exception as e:
@@ -446,15 +444,13 @@ class ReconnectingLinkInputObject(InputObject):
         js = collections.OrderedDict()
         js['type'] = 'ReconnectingLinkInputObject'
         js['url'] = self.url
+        js['start_offset'] = self.start_offset
         js['data_read'] = self.data_read
         js['headers'] = dict(self.headers) if self.headers is not None else None
         js['timeout'] = self.timeout
         js['rec'] = self.rec
 
         js['max_reconnects'] = self.max_reconnects
-        js['start_offset'] = self.start_offset
-
-        js['total_data_read'] = self.total_data_read
         js['content_length'] = self.content_length
         js['total_reconnections'] = self.total_reconnections
         js['reconnections'] = self.reconnections
