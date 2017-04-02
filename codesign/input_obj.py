@@ -294,6 +294,9 @@ class ReconnectingLinkInputObject(InputObject):
         if 'Accept-Ranges' in r.headers:
             self.range_bytes_supported = 'bytes' in r.headers['Accept-Ranges']
 
+        logger.debug('URL %s head loaded. Content length: %s, accept range: %s, headers: %s'
+                     % (self.url, self.content_length, self.range_bytes_supported, self.head_headers))
+
     def _get_headers(self):
         """
         Builds headers for the request
@@ -401,6 +404,9 @@ class ReconnectingLinkInputObject(InputObject):
 
                 # If we read empty data inspect if it is expected end of stream or not
                 if ln == 0:
+                    logger.info('Empty data read, total so far: %s, content length: %s'
+                                % (self.total_data_read, self.content_length))
+
                     all_data_loaded = self._is_all_data_loaded()
 
                     # Could not determine if final, end then. End also if read it all
