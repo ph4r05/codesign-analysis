@@ -270,6 +270,7 @@ class CensysTls(object):
         if self.cur_decompressor is not None:
             try:
                 decctx = lz4framed.marshal_decompression_context(self.cur_decompressor.ctx)
+                logger.debug('Decompressor state marshalled, size: %s' % len(decctx))
                 decctx_str = base64.b16encode(decctx)
                 js['dec_ctx'] = decctx_str
             except Exception as e:
