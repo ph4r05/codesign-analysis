@@ -30,6 +30,18 @@ E.g., for debugging the script / env prepare. Frontends are quite slow.
 qsub -l select=1:ncpus=1:mem=1gb:scratch_local=1gb -l walltime=48:00:00 -I
 ```
 
+## Requesting specific node
+
+```
+qsub -l select=1:ncpus=1:mem=1gb:scratch_local=1gb:vnode=tarkil3 -l walltime=48:00:00 -I
+```
+
+## Requesting specific cluster
+
+```
+qsub -l select=1:ncpus=1:mem=1gb:scratch_local=1gb:cl_tarkil=True -l walltime=48:00:00 -I
+```
+
 ## Inspect Censys data
 
 ```
@@ -50,6 +62,7 @@ sudo apt-get install liblz4-tool
 * https://wiki.metacentrum.cz/wiki/Working_with_data/Working_with_data_in_a_job
 * https://wiki.metacentrum.cz/wiki/Frontend
 * https://wiki.metacentrum.cz/wiki/How_to_compute/Quick_start
+* https://wiki.metacentrum.cz/wiki/PBS_Professional
 * https://metavo.metacentrum.cz/pbsmon2/user/user-here
 
 # Installation
