@@ -60,6 +60,17 @@ For that you may need to install lz4:
 sudo apt-get install liblz4-tool
 ```
 
+# MPI
+
+Message passing interface enables effective parallel computation
+
+```
+mpirun -machinefile $PBS_NODEFILE python script.py
+```
+
+The `mpirun` executable will execute the script on each node in the machine file. Examples:
+https://github.com/jbornschein/mpi4py-examples
+
 ## Metacentrum docs
 
 * https://wiki.metacentrum.cz/wiki/How_to_install_an_application#Python_packages
