@@ -42,6 +42,12 @@ qsub -l select=1:ncpus=1:mem=1gb:scratch_local=1gb:vnode=tarkil3 -l walltime=48:
 qsub -l select=1:ncpus=1:mem=1gb:scratch_local=1gb:cl_tarkil=True -l walltime=48:00:00 -I
 ```
 
+## Canceling jobs
+
+```
+qdel 1085540
+```
+
 ## Inspect Censys data
 
 ```
