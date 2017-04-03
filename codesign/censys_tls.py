@@ -489,6 +489,10 @@ class CensysTls(object):
             self.not_cert_ok += 1
             return
 
+        # Process chains anyway as we may be interested in them even though the server is not RSA
+        chains_roots = self.process_roots(idx, record, server_cert)
+
+        # Process server cert
         trusted = utils.defvalkey(server_cert['validation'], 'browser_trusted')
         matches = utils.defvalkey(server_cert['validation'], 'matches_domain')
         cert_obj = server_cert['certificate']
@@ -518,7 +522,7 @@ class CensysTls(object):
 
             self.fill_cn_src(ret, parsed)
             self.fill_rsa_ne(ret, parsed)
-            ret['chains'] = self.process_roots(idx, record, server_cert)
+            ret['chains'] = chains_roots
 
             if not self.is_dry():
                 self.file_leafs_fh.write(json.dumps(ret) + '\n')
