@@ -303,7 +303,7 @@ class CensysTls(object):
             if 'read_raw' not in js or 'iobj' not in js or 'data_read' not in js['iobj']:
                 raise ValueError('State file is invalid')
 
-            offset = js['iobj']['data_read']
+            offset = js['iobj']['data_read'] + utils.intval(js['iobj']['start_offset'])
             self.read_data = js['read_raw']
 
             logger.info('Restoring checkpoint, offset: %s, read_data: %s' % (offset, self.read_data))

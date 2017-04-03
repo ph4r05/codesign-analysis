@@ -751,3 +751,10 @@ def get_mem_usage():
     """
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
+
+def intval(x):
+    if x is None:
+        return 0
+    return int(x)
+
+
