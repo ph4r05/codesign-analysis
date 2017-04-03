@@ -565,6 +565,8 @@ class CensysTls(object):
                 ret['fprint'] = fprint
                 self.fill_cn_src(ret, parsed)
                 self.fill_rsa_ne(ret, parsed)
+                if ret['valid']:
+                    ret['raw'] = fprint
 
                 if not self.is_dry():
                     self.file_roots_fh.write(json.dumps(ret) + '\n')
