@@ -46,6 +46,21 @@ class MyCrt(object):
         pass
 
 
+class DecompressorCheckpoint(object):
+    """
+    Represents simple point in the data stream for random access read.
+    """
+    def __init__(self, pos, crcctx=None, *args, **kwargs):
+        self.pos = pos
+        self.crcctx = crcctx
+
+    def to_json(self):
+        js = collections.OrderedDict()
+        js['pos'] = self.pos
+        js['crcctx'] = base64.b64encode(self.crcctx) if self.crcctx is not None else None
+        return js
+
+
 class CensysTls(object):
     """
     Downloading & processing of the Censys data
@@ -76,6 +91,7 @@ class CensysTls(object):
         self.file_leafs_fh = None
         self.file_roots_fh = None
         self.last_record_resumed = None
+        self.decompressor_checkpoints = {}
 
     def load_roots(self):
         """
@@ -268,6 +284,14 @@ class CensysTls(object):
         js['iobj'] = iobj.to_state()
         js['loaded_checkpoint'] = self.loaded_checkpoint
 
+        # New decompressor checkpoint for random access read
+        if self.cur_decompressor is not None and self.cur_decompressor.last_read_aligned:
+            total_read_dec = self.cur_decompressor.data_read
+            crc_ctx = lz4framed.marshal_decompression_checksum_context(self.cur_decompressor.ctx)
+            self.decompressor_checkpoints[total_read_dec] = DecompressorCheckpoint(total_read_dec, crc_ctx)
+
+        js['dec_checks'] = [x.to_json() for x in self.decompressor_checkpoints.values()]
+
         # Serialize state of the decompressor
         if self.cur_decompressor is not None:
             try:
@@ -310,6 +334,11 @@ class CensysTls(object):
             iobj.start_offset = offset
 
             self.loaded_checkpoint = js
+
+            if 'dec_checks' in js:
+                self.decompressor_checkpoints = {x['pos']: DecompressorCheckpoint(x['pos'], x['crcctx'])
+                                                 for x in js['dec_checks']}
+
             if self.cur_decompressor is not None and 'dec_ctx' in js:
                 logger.info('Restoring decompressor state')
                 decctx_str = base64.b16decode(js['dec_ctx'])
