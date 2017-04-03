@@ -24,6 +24,7 @@ from cryptography.x509.oid import ExtensionOID
 from cryptography import x509
 import base64
 import time
+from mpi4py import MPI
 
 import input_obj
 import lz4framed
@@ -32,6 +33,8 @@ import newline_reader
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.INFO)
+
+tags = utils.enum('READY', 'DONE', 'EXIT', 'START')
 
 
 def get_backend(backend=None):
@@ -111,9 +114,74 @@ class CensysTls(object):
         """
         return self.args.dry_run
 
+    def process_mpi(self):
+        """
+        MPI processing worker / manager.
+        :return: 
+        """
+        comm = MPI.COMM_WORLD  # get MPI communicator object
+        size = comm.size  # total number of processes
+        rank = comm.rank  # rank of this process
+        status = MPI.Status()  # get MPI status object
+        logger.info('MPI, size: %02d, rank: %02d, status: %s' % (size, rank, status))
+
+        # Manager of the pool
+        if rank == 0:
+            task_index = 0
+            num_workers = size - 1
+            closed_workers = 0
+            logger.info('Master starting with %d workers, task set size: %s' % (num_workers, len(self.input_objects)))
+            while closed_workers < num_workers:
+                data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+                source = status.Get_source()
+                tag = status.Get_tag()
+                if tag == tags.READY:
+                    # Worker is ready, so send it a task
+                    if task_index < len(self.input_objects):
+                        comm.send(self.input_objects[task_index], dest=source, tag=tags.START)
+                        logger.info('Sending task %d to worker %d' % (task_index, source))
+                        task_index += 1
+                    else:
+                        comm.send(None, dest=source, tag=tags.EXIT)
+
+                elif tag == tags.DONE:
+                    results = data
+                    logger.info('Got data from worker %d' % source)
+
+                elif tag == tags.EXIT:
+                    logger.info('Worker %d exited.' % source)
+                    closed_workers += 1
+
+            logger.info('Master finishing')
+        else:
+            # Worker processes execute code below
+            name = MPI.Get_processor_name()
+            logger.info('I am a worker with rank %d on %s.' % (rank, name))
+
+            while True:
+                comm.send(None, dest=0, tag=tags.READY)
+                iobj = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+                tag = status.Get_tag()
+
+                # Do the work here
+                if tag == tags.START:
+                    try:
+                        self.process_iobj(iobj)
+                    except Exception as e:
+                        logger.error('Exception when processing IOBJ: %s, %s' % (iobj, e))
+                        logger.info('Progress: %s' % self.ctr)
+                        logger.debug(traceback.format_exc())
+
+                    comm.send(iobj, dest=0, tag=tags.DONE)
+
+                elif tag == tags.EXIT:
+                    break
+
+            comm.send(None, dest=0, tag=tags.EXIT)
+
     def process(self):
         """
-        Process all input objects
+        Process all input objects.
         :return: 
         """
         for iobj in self.input_objects:
@@ -657,7 +725,10 @@ class CensysTls(object):
                 self.input_objects.append(iobj)
 
         # Process all input objects
-        self.process()
+        if self.args.mpi:
+            self.process_mpi()
+        else:
+            self.process()
 
     def main(self):
         """
@@ -698,6 +769,9 @@ class CensysTls(object):
 
         parser.add_argument('--url', dest='url', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='LZ4 URL to process')
+
+        parser.add_argument('--mpi', dest='mpi', default=False, action='store_const', const=True,
+                            help='Use MPI distribution')
 
         self.args = parser.parse_args()
 
