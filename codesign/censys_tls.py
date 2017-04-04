@@ -138,7 +138,7 @@ class CensysTls(object):
                 if tag == tags.READY:
                     # Worker is ready, so send it a task
                     if task_index < len(self.input_objects):
-                        comm.send(self.input_objects[task_index], dest=source, tag=tags.START)
+                        comm.send(task_index, dest=source, tag=tags.START)
                         logger.info('Sending task %d to worker %d' % (task_index, source))
                         task_index += 1
                     else:
@@ -160,19 +160,21 @@ class CensysTls(object):
 
             while True:
                 comm.send(None, dest=0, tag=tags.READY)
-                iobj = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+                iobj_idx = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
                 tag = status.Get_tag()
 
                 # Do the work here
                 if tag == tags.START:
                     try:
+                        iobj = self.input_objects[iobj_idx]
+                        logger.info('Processing idx=%02d, %s ' % (iobj_idx, iobj))
                         self.process_iobj(iobj)
                     except Exception as e:
                         logger.error('Exception when processing IOBJ: %s, %s' % (iobj, e))
                         logger.info('Progress: %s' % self.ctr)
                         logger.debug(traceback.format_exc())
 
-                    comm.send(iobj, dest=0, tag=tags.DONE)
+                    comm.send(iobj_idx, dest=0, tag=tags.DONE)
 
                 elif tag == tags.EXIT:
                     break
@@ -691,12 +693,11 @@ class CensysTls(object):
         """
         return input_obj.ReconnectingLinkInputObject(url, rec=rec, timeout=5*60, max_reconnects=1000)
 
-    def work(self):
+    def generate_workset(self):
         """
-        Entry point after argument processing.
+        Prepares input objects for processing
         :return: 
         """
-
         # Build input objects
         for file_name in self.args.file:
             iobj = input_obj.FileInputObject(file_name, rec=None)
@@ -723,6 +724,13 @@ class CensysTls(object):
 
                 iobj = self._build_link_object(url=dataset['files']['zgrab-results.json.lz4']['href'], rec=dataset)
                 self.input_objects.append(iobj)
+
+    def work(self):
+        """
+        Entry point after argument processing.
+        :return: 
+        """
+        self.generate_workset()
 
         # Process all input objects
         if self.args.mpi:
