@@ -69,7 +69,6 @@ def main():
                 if counter % 10000 == 0:
                     logger.debug(' .. progress %s, fprint %s, memory: %s MB'
                                  % (counter, fprint, utils.get_mem_usage() / 1024.0))
-                    break  # remove me
 
             except Exception as e:
                 logger.error('Error in processing %s' % e)
