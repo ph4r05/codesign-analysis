@@ -81,6 +81,13 @@ class InputObject(object):
         js['data_read'] = self.data_read
         return js
 
+    def tell(self):
+        """
+        Current position
+        :return: 
+        """
+        return self.data_read
+
 
 class FileInputObject(InputObject):
     """
