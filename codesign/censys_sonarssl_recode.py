@@ -143,8 +143,15 @@ def main():
         fprints_progress_unit = fprints_len / 100
         fprints_progress_last = 0
         logger.info('File processed, fprint db size: %d' % fprints_len)
+
+        # Only fingerprints
+        logger.info('Going to sort fprints...')
+        fprints = list(fprints_set)
+        fprints.sort()
+        logger.info('fprints sorted. Storing fingerprints. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
+
         with gzip.open(certfile, 'wb') as outfh:
-            for rec_idx, fprint in enumerate(fprints_set):
+            for rec_idx, fprint in enumerate(fprints):
 
                 if fprints_progress_last + fprints_progress_unit < rec_idx:
                     fprints_progress_last = rec_idx
@@ -160,12 +167,6 @@ def main():
 
         logger.info('Finished with idx %s, file %s, newfile: %s, not found: %s, mem: %s MB'
                     % (test_idx, fname, certfile, not_found, utils.get_mem_usage() / 1024.0))
-
-        # Only fingerprints
-        logger.info('Going to sort fprints...')
-        fprints = list(fprints_set)
-        fprints.sort()
-        logger.info('fprints sorted. Storing fingerprints. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
 
         # Store only fingerprints contained in this set.
         with open(fprintfile, 'w') as outfh:
