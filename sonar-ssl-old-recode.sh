@@ -20,7 +20,7 @@ sleep 1
 
 echo "`hostname` starting..."
 
-exec stdbuf -eL python /storage/praha1/home/ph4r05/cas/codesign/censys_sonarssl.py \
+exec stdbuf -eL python /storage/praha1/home/ph4r05/cas/codesign/censys_sonarssl_recode.py \
     /storage/praha1/home/ph4r05/sonarssl/20131030-20150518_certs.gz \
     --datadir /storage/brno7-cerit/home/ph4r05/sonarssl \
     --json /storage/praha1/home/ph4r05/cas/tls_sonar.ssl.json 2> /storage/praha1/home/ph4r05/logs/recode.log
