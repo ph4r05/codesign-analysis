@@ -122,7 +122,7 @@ def main():
                     for fprint in fprints:
                         fprints_set.add(fprint)
 
-                    if rec_idx % 50000 == 0:
+                    if rec_idx % 100000 == 0:
                         logger.debug(' .. progress %s, ip %s, mem: %s MB'
                                      % (rec_idx, ip, utils.get_mem_usage() / 1024.0))
 
@@ -131,11 +131,15 @@ def main():
                     logger.debug(rec)
                     logger.debug(traceback.format_exc())
 
-        logger.info('File processed, fprint db size: %d' % len(fprints_set))
+        fprints_len = len(fprints_set)
+        fprints_progress_unit = fprints_len / 500
+        fprints_progress_last = 0
+        logger.info('File processed, fprint db size: %d' % fprints_len)
         with gzip.open(certfile, 'wb') as outfh:
             for rec_idx, fprint in enumerate(fprints_set):
 
-                if rec_idx % 50000 == 0:
+                if rec_idx + fprints_progress_unit < fprints_progress_last:
+                    fprints_progress_last = rec_idx
                     outfh.flush()
                     logger.debug(' .. progress %s, mem: %s MB'
                                  % (rec_idx, utils.get_mem_usage() / 1024.0))
