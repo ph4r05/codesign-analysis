@@ -294,11 +294,25 @@ class ReconnectingLinkInputObject(InputObject):
         Performs head request on the url to load info & capabilities
         :return: 
         """
+        r = None
+        current_attempt = 0
+
         # First - determine full length & partial request support
-        r = requests.head(self.url, allow_redirects=True, headers=self.headers, auth=self.auth, timeout=self.timeout)
-        if r.status_code / 100 != 2:
-            logger.error('Link %s does not support head request or link is broken' % self.url)
-            return
+        while not self.stop_event.is_set():
+            try:
+                r = requests.head(self.url, allow_redirects=True, headers=self.headers, auth=self.auth, timeout=self.timeout)
+                if r.status_code / 100 != 2:
+                    logger.error('Link %s does not support head request or link is broken' % self.url)
+                    return
+                r.raise_for_status()
+
+            except Exception as e:
+                logger.warning('Exception in fetching the url: %s' % e)
+                logger.debug(traceback.format_exc())
+                current_attempt += 1
+                if self.max_reconnects is not None and current_attempt >= self.max_reconnects:
+                    raise RequestFailedTooManyTimes()
+                self._sleep_adaptive(current_attempt)
 
         self.head_headers = r.headers
 
