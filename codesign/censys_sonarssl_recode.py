@@ -138,7 +138,7 @@ def main():
         with gzip.open(certfile, 'wb') as outfh:
             for rec_idx, fprint in enumerate(fprints_set):
 
-                if rec_idx + fprints_progress_unit < fprints_progress_last:
+                if fprints_progress_last + fprints_progress_unit < rec_idx:
                     fprints_progress_last = rec_idx
                     outfh.flush()
                     logger.debug(' .. progress %s, mem: %s MB'
