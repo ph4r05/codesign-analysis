@@ -93,6 +93,7 @@ class CensysTls(object):
         self.file_leafs_fh = None
         self.file_roots_fh = None
         self.last_record_resumed = None
+        self.last_record_seen = None
         self.decompressor_checkpoints = {}
 
     def load_roots(self):
@@ -118,6 +119,7 @@ class CensysTls(object):
         MPI processing worker / manager.
         :return: 
         """
+        # noinspection PyUnresolvedReferences
         from mpi4py import MPI
 
         comm = MPI.COMM_WORLD  # get MPI communicator object
@@ -333,6 +335,27 @@ class CensysTls(object):
 
         return last_record
 
+    def try_store_checkpoint(self, iobj, idx=None, resume_idx=None, resume_token=None):
+        """
+        Try-catch store checkpoint to handle situations when files cannot be flushed.
+        In that case checkpoint cannot be stored, otherwise we won't be able to restore it properly.
+        :param iobj: 
+        :param idx: 
+        :param resume_idx: 
+        :param resume_token: 
+        :return: 
+        """
+        attempts = 0
+        while True:
+            try:
+                return self.store_checkpoint(iobj, idx, resume_idx, resume_token)
+
+            except Exception as e:
+                logger.error('Exception in storing a checkpoint %d: %s' % (attempts, e))
+                logger.debug(traceback.format_exc())
+                attempts += 1
+                time.sleep(15)
+
     def store_checkpoint(self, iobj, idx=None, resume_idx=None, resume_token=None):
         """
         Stores checkpoint for the current input object
@@ -347,6 +370,10 @@ class CensysTls(object):
             state_file += '.dry'
 
         input_name = self.iobj_name(iobj)
+
+        # Most importantly, flush data file buffers now so the state is in sync with the checkpoint.
+        self.file_leafs_fh.flush()
+        self.file_roots_fh.flush()
 
         js = collections.OrderedDict()
         js['iobj_name'] = input_name
@@ -367,6 +394,9 @@ class CensysTls(object):
             self.decompressor_checkpoints[total_read_dec] = DecompressorCheckpoint(total_read_dec, crc_ctx)
 
         js['dec_checks'] = [x.to_json() for x in self.decompressor_checkpoints.values()]
+
+        # Last seen record
+        js['last_record_seen'] = self.last_record_seen
 
         # Serialize state of the decompressor
         if self.cur_decompressor is not None:
@@ -486,12 +516,12 @@ class CensysTls(object):
                     record_ctr += 1
                     self.read_data += len(record)
                     if self.read_data - self.last_report >= 1024*1024*1024:
-                        logger.info('...progress: %s GB, idx: %s, pos: %s, mem: %04.8f MB'
+                        logger.info('...progress: %s GB, idx: %s, pos: %s GB, mem: %04.8f MB, readpos: %s (%4.6f GB)'
                                     % (self.read_data/1024.0/1024.0/1024.0, idx, self.read_data,
-                                       utils.get_mem_usage()/1024.0/1024.0))
+                                       utils.get_mem_usage()/1024.0, iobj.tell(), iobj.tell()/1024.0/1024.0/1024.0))
 
                         self.last_report = self.read_data
-                        self.store_checkpoint(iobj=iobj, idx=idx, resume_idx=resume_idx, resume_token=resume_token)
+                        self.try_store_checkpoint(iobj=iobj, idx=idx, resume_idx=resume_idx, resume_token=resume_token)
 
                     if resume_token is not None and not resume_token_found:
                         if record_ctr < resume_idx:
@@ -586,6 +616,7 @@ class CensysTls(object):
         ip = utils.defvalkey(record, 'ip')
         domain = utils.defvalkey(record, 'domain')
         timestamp_fmt = utils.defvalkey(record, 'timestamp')
+        self.last_record_seen = record
 
         if not self.is_record_tls(record):
             self.not_tls += 1
