@@ -305,6 +305,7 @@ class ReconnectingLinkInputObject(InputObject):
                     logger.error('Link %s does not support head request or link is broken' % self.url)
                     return
                 r.raise_for_status()
+                break
 
             except Exception as e:
                 logger.warning('Exception in fetching the url: %s' % e)
