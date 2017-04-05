@@ -51,9 +51,14 @@ def main():
     if len(args.file) == 0:
         return
 
+    # Big in memory hash table fprint -> certificate
     bigdb = {}
     counter = 0
     testrng = range(11, 93)
+
+    # fprints seen
+    fprints_seen_set = set()
+    fprints_previous = set()
 
     with gzip.open(args.file[0], 'rb') as fh:
         for idx, line in enumerate(fh):
@@ -96,6 +101,11 @@ def main():
         datepart = dateparts[0]
 
         certfile = os.path.join(args.datadir, '%s_certs.gz' % datepart)
+        fprintfile = os.path.join(args.datadir, '%s_fprints.csv' % datepart)
+        fprintfile_new = os.path.join(args.datadir, '%s_fprints_new.csv' % datepart)
+        fprintfile_new_p = os.path.join(args.datadir, '%s_fprints_new_p.csv' % datepart)
+        fprintfile_lost_p = os.path.join(args.datadir, '%s_fprints_lost_p.csv' % datepart)
+        fprintfile_same = os.path.join(args.datadir, '%s_fprints_same.csv' % datepart)
         logger.info('Processing test idx %s, file %s, newfile: %s' % (test_idx, fname, certfile))
 
         not_found = 0
@@ -112,7 +122,7 @@ def main():
                     for fprint in fprints:
                         fprints_set.add(fprint)
 
-                    if rec_idx % 10000 == 0:
+                    if rec_idx % 50000 == 0:
                         logger.debug(' .. progress %s, ip %s, mem: %s MB'
                                      % (rec_idx, ip, utils.get_mem_usage() / 1024.0))
 
@@ -125,10 +135,8 @@ def main():
         with gzip.open(certfile, 'wb') as outfh:
             for rec_idx, fprint in enumerate(fprints_set):
 
-                if rec_idx % 1000 == 0:
+                if rec_idx % 50000 == 0:
                     outfh.flush()
-
-                if rec_idx % 10000 == 0:
                     logger.debug(' .. progress %s, mem: %s MB'
                                  % (rec_idx, utils.get_mem_usage() / 1024.0))
 
@@ -138,8 +146,53 @@ def main():
                 else:
                     not_found += 1
 
-        logger.info('Finished with idx %s, file %s, newfile: %s, not found: %s'
-                    % (test_idx, fname, certfile, not_found))
+        logger.info('Finished with idx %s, file %s, newfile: %s, not found: %s, mem: %s MB'
+                    % (test_idx, fname, certfile, not_found, utils.get_mem_usage() / 1024.0))
+
+        # Only fingerprints
+        logger.info('Going to sort fprints...')
+        fprints = list(fprints_set)
+        fprints.sort()
+        logger.info('fprints sorted. Storing fingerprints. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
+
+        # Store only fingerprints contained in this set.
+        with open(fprintfile, 'w') as outfh:
+            for fprint in fprints:
+                outfh.write('%s\n' % fprint)
+
+        # Store only new fingerprints, not seen before
+        logger.info('Storing new fingerprints. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
+        with open(fprintfile_new, 'w') as outfh:
+            for fprint in fprints:
+                if fprint not in fprints_seen_set:
+                    outfh.write('%s\n' % fprint)
+                    fprints_seen_set.add(fprint)
+
+        # Certificates new from previous
+        logger.info('Storing new fingerprints from previous. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
+        with open(fprintfile_new_p, 'w') as outfh:
+            for fprint in fprints:
+                if fprint not in fprints_previous:
+                    outfh.write('%s\n' % fprint)
+
+        # Certificates removed from previous
+        logger.info('Storing lost fingerprints from previous. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
+        fprints_previous_list = list(fprints_previous)
+        fprints_previous_list.sort()
+
+        with open(fprintfile_lost_p, 'w') as outfh:
+            for fprint in fprints_previous_list:
+                if fprint not in fprints_set:
+                    outfh.write('%s\n' % fprint)
+
+        logger.info('Storing same fingerprints as previous. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
+        with open(fprintfile_same, 'w') as outfh:
+            for fprint in fprints:
+                if fprint in fprints_previous:
+                    outfh.write('%s\n' % fprint)
+
+        # Final step - store to previous
+        fprints_previous = set(fprints_set)
 
 
 if __name__ == '__main__':
