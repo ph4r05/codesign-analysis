@@ -51,6 +51,8 @@ def main():
     if len(args.file) == 0:
         return
 
+    main_file = args.file[0]
+
     # Big in memory hash table fprint -> certificate
     bigdb = {}
     counter = 0
@@ -60,7 +62,13 @@ def main():
     fprints_seen_set = set()
     fprints_previous = set()
 
-    with gzip.open(args.file[0], 'rb') as fh:
+    # Open the main file, gziped or not
+    if main_file.endswith('gz'):
+        fh = gzip.open(main_file, 'rb')
+    else:
+        fh = open(main_file, 'rb')
+
+    with fh:
         for idx, line in enumerate(fh):
             try:
                 fprint, cert = line.split(',', 2)
