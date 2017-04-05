@@ -140,7 +140,7 @@ def main():
                     logger.debug(traceback.format_exc())
 
         fprints_len = len(fprints_set)
-        fprints_progress_unit = fprints_len / 500
+        fprints_progress_unit = fprints_len / 100
         fprints_progress_last = 0
         logger.info('File processed, fprint db size: %d' % fprints_len)
         with gzip.open(certfile, 'wb') as outfh:
