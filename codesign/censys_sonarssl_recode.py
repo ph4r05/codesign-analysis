@@ -73,7 +73,7 @@ def main():
                 logger.error('Error in processing %s' % e)
                 logger.debug(traceback.format_exc())
 
-    logger.info('Uff... big DB loaded')
+    logger.info('Uff... big DB loaded, num entries: %s' % len(bigdb))
     jsdb = None
     with open(args.json, 'r') as fh:
         jsdb = json.load(fh)
