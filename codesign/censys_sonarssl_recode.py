@@ -130,7 +130,7 @@ def main():
                     for fprint in fprints:
                         fprints_set.add(fprint)
 
-                    if rec_idx % 100000 == 0:
+                    if rec_idx % 1000000 == 0:
                         logger.debug(' .. progress %s, ip %s, mem: %s MB'
                                      % (rec_idx, ip, utils.get_mem_usage() / 1024.0))
 
