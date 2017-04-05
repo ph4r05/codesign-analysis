@@ -135,6 +135,9 @@ class LinkSpider(CrawlSpider):
         }
     }
 
+    def __init__(self, *a, **kw):
+        super(LinkSpider, self).__init__(*a, **kw)
+
     def shoud_follow_link(self, link, response):
         """
         Simple link filtering.
