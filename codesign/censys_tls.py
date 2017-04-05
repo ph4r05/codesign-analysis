@@ -438,7 +438,9 @@ class CensysTls(object):
         file_roots = self.get_classification_roots(input_name)
         self.last_record_resumed = None
 
-        if not self.is_dry() and not self.args.continue1:
+        if not self.is_dry() and (not self.args.continue1
+                                  or not os.path.exists(file_leafs)
+                                  or not os.path.exists(file_roots)):
             utils.safely_remove(file_leafs)
             utils.safely_remove(file_roots)
             self.file_leafs_fh = utils.safe_open(file_leafs, mode='w', chmod=0o644)
