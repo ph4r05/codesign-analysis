@@ -36,6 +36,22 @@ class MavenSignature(Base):
     sig_expires = Column(DateTime, nullable=True)
 
 
+class MavenArtifact(Base):
+    """
+    Base maven artifact - pom
+    """
+    __tablename__ = 'maven_signature'
+    id = Column(BigInteger, primary_key=True)
+
+    group_id = Column(String(255), nullable=False, )
+    artifact_id = Column(String(255), nullable=True)
+    version_id = Column(String(255))
+
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+    pom_file = Column(BLOB, nullable=True)
+
+
 class PGPKey(Base):
     """
     Entity storing PGP keys
