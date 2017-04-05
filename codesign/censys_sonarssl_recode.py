@@ -20,7 +20,6 @@ import time
 import input_obj
 import gzip
 import gzipinputstream
-from lxml import html
 from datetime import datetime
 
 
@@ -100,28 +99,44 @@ def main():
         logger.info('Processing test idx %s, file %s, newfile: %s' % (test_idx, fname, certfile))
 
         not_found = 0
+        fprints_set = set()
+
+        iobj = input_obj.ReconnectingLinkInputObject(flink, files)
+        with iobj:
+            fh = gzipinputstream.GzipInputStream(fileobj=iobj)
+            for rec_idx, rec in enumerate(fh):
+                try:
+                    linerec = rec.strip().split(',')
+                    ip = linerec[0]
+                    fprints = linerec[1:]
+                    for fprint in fprints:
+                        fprints_set.add(fprint)
+
+                    if rec_idx % 10000 == 0:
+                        logger.debug(' .. progress %s, ip %s, mem: %s MB'
+                                     % (rec_idx, ip, utils.get_mem_usage() / 1024.0))
+
+                except Exception as e:
+                    logger.error('Exception in processing rec %s: %s' % (rec_idx, e))
+                    logger.debug(rec)
+                    logger.debug(traceback.format_exc())
+
+        logger.info('File processed, fprint db size: %d' % len(fprints_set))
         with gzip.open(certfile, 'wb') as outfh:
-            iobj = input_obj.ReconnectingLinkInputObject(flink, files)
-            with iobj:
-                fh = gzipinputstream.GzipInputStream(fileobj=iobj)
-                for rec_idx, rec in enumerate(fh):
-                    try:
-                        linerec = rec.strip().split(',')
-                        ip = linerec[0]
-                        fprints = linerec[1:]
-                        for fprint in fprints:
-                            if fprint in bigdb:
-                                outfh.write('%s,%s\n' % (fprint, base64.b64encode(bigdb[fprint])))
-                            else:
-                                not_found += 1
+            for rec_idx, fprint in enumerate(fprints_set):
 
-                        if rec_idx % 1000 == 0:
-                            outfh.flush()
+                if rec_idx % 1000 == 0:
+                    outfh.flush()
 
-                    except Exception as e:
-                        logger.error('Exception in processing rec %s: %s' % (rec_idx, e))
-                        logger.debug(rec)
-                        logger.debug(traceback.format_exc())
+                if rec_idx % 10000 == 0:
+                    logger.debug(' .. progress %s, mem: %s MB'
+                                 % (rec_idx, utils.get_mem_usage() / 1024.0))
+
+                if fprint in bigdb:
+                    outfh.write('%s,%s\n' % (fprint, base64.b64encode(bigdb[fprint])))
+
+                else:
+                    not_found += 1
 
         logger.info('Finished with idx %s, file %s, newfile: %s, not found: %s'
                     % (test_idx, fname, certfile, not_found))
