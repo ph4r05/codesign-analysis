@@ -499,6 +499,14 @@ class CensysTls(object):
         file_roots = self.get_classification_roots(input_name)
         self.last_record_resumed = None
 
+        self.processor = newline_reader.NewlineReader(is_json=False)
+        handle = iobj
+        name = str(iobj)
+
+        if name.endswith('lz4'):
+            self.cur_decompressor = lz4framed.Decompressor(handle)
+            handle = self.cur_decompressor
+
         if not self.is_dry() and (not self.args.continue1
                                   or not os.path.exists(file_leafs)
                                   or not os.path.exists(file_roots)):
@@ -511,16 +519,6 @@ class CensysTls(object):
             logger.info('Continuing with the started files')
             self.file_leafs_fh = open(file_leafs, mode='r+' if not self.is_dry() else 'r')
             self.file_roots_fh = open(file_roots, mode='r+' if not self.is_dry() else 'r')
-
-        self.processor = newline_reader.NewlineReader(is_json=False)
-        handle = iobj
-        name = str(iobj)
-
-        if name.endswith('lz4'):
-            self.cur_decompressor = lz4framed.Decompressor(handle)
-            handle = self.cur_decompressor
-
-        if self.args.continue1:
             self.restore_checkpoint(iobj)
             self.continue_roots()
             self.continue_leafs(file_leafs)
