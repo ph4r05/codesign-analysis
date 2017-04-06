@@ -71,8 +71,8 @@ class MavenSpider(LinkSpider):
 
     }
 
-    def shoud_follow_link(self, link, response):
-        should_follow = super(MavenSpider, self).shoud_follow_link(link, response)
+    def should_follow_link(self, link, response):
+        should_follow = super(MavenSpider, self).should_follow_link(link, response)
         logger.debug("--link(%s) %s" % (1 if should_follow else 0, link))
         return should_follow
 
@@ -174,7 +174,7 @@ class MavenSpider(LinkSpider):
 
         # Links post processing
         for link in links:
-            if not self.shoud_follow_link(link, response):
+            if not self.should_follow_link(link, response):
                 continue
             links_visit.add(link)
 

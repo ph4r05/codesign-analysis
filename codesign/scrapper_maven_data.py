@@ -83,9 +83,9 @@ class MavenDataSpider(LinkSpider):
         self.link_queue_mode = True
         self.app = None
 
-    def shoud_follow_link(self, link, response):
-        should_follow = super(MavenDataSpider, self).shoud_follow_link(link, response)
         logger.debug("--link(%s) %s" % (1 if should_follow else 0, link))
+    def should_follow_link(self, link, response):
+        should_follow = super(MavenDataSpider, self).should_follow_link(link, response)
         return should_follow
 
     def process_link(self, val):
@@ -186,7 +186,7 @@ class MavenDataSpider(LinkSpider):
 
         # Links post processing
         for link in links:
-            if not self.shoud_follow_link(link, response):
+            if not self.should_follow_link(link, response):
                 continue
             links_visit.add(link)
 

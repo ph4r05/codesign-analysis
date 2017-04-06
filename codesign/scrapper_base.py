@@ -138,7 +138,7 @@ class LinkSpider(CrawlSpider):
     def __init__(self, *a, **kw):
         super(LinkSpider, self).__init__(*a, **kw)
 
-    def shoud_follow_link(self, link, response):
+    def should_follow_link(self, link, response):
         """
         Simple link filtering.
         Works only for manually extracted links from the source.
@@ -178,7 +178,7 @@ class LinkSpider(CrawlSpider):
             links.add(link.url)
 
             # Another filter if desired
-            if self.shoud_follow_link(link.url, response):
+            if self.should_follow_link(link.url, response):
                 links_visit.add(link.url)
 
         for d in list(links):
