@@ -94,7 +94,9 @@ class CensysTls(object):
         self.file_roots_fh = None
         self.last_record_resumed = None
         self.last_record_seen = None
+        self.last_record_flushed = None
         self.decompressor_checkpoints = {}
+        self.state_loaded_ips = set()
 
     def load_roots(self):
         """
@@ -301,8 +303,8 @@ class CensysTls(object):
         pos = 0
 
         # If file is too big try to skip 10 MB before end
-        if fsize > 1024*1024*50:
-            pos = fsize - 1024*1024*40
+        if fsize > 1024*1024*1024*2:
+            pos = fsize - 1024*1024*1024*1.5
             logger.info('Leafs file too big: %s, skipping to %s' % (fsize, pos))
 
             self.file_leafs_fh.seek(pos)
@@ -312,22 +314,20 @@ class CensysTls(object):
         record_from_state_found = False
         terminate_with_record = False
         last_record = None
+        last_id_seen = None
         for line in self.file_leafs_fh:
             ln = len(line)
             try:
                 last_record = json.loads(line)
-
-                if self.last_record_resumed is not None and self.last_record_resumed['id'] == last_record['id']:
-                    record_from_state_found = True
-
-                if self.last_record_resumed is not None and self.last_record_resumed['id'] < last_record['id']:
-                    logger.info('Found record from the state, pos: %d' % pos)
-                    record_from_state_found = True
-                    terminate_with_record = True
-                    break
-
+                last_id_seen = last_record['id']
+                self.state_loaded_ips.add(last_record['ip'])
                 self.ctr = max(self.ctr, last_record['id'])
                 pos += ln
+
+                if self.last_record_flushed is not None and self.last_record_flushed['ip'] == last_record['ip']:
+                    logger.info('Found last record flushed in data file, ip: %s' % last_record['ip'])
+                    record_from_state_found = True
+                    break
 
             except Exception as e:
                 terminate_with_record = True
@@ -336,9 +336,10 @@ class CensysTls(object):
         logger.info('Operation resumed at leaf ctr: %s, last ip: %s'
                     % (self.ctr, utils.defvalkey(last_record, 'ip')))
 
-        if self.last_record_resumed is not None and not record_from_state_found:
+        if self.last_record_flushed is not None and not record_from_state_found:
             logger.warning('Could not find the record from the state in the data file. Some data may be missing.')
-            logger.info('Last record id: %s' % self.last_record_resumed['id'])
+            logger.info('Last record from state id: %s, last record data file id: %s'
+                        % (self.last_record_resumed['id'], last_id_seen))
             raise ValueError('Incomplete data file')
 
         if terminate_with_record:
@@ -396,6 +397,8 @@ class CensysTls(object):
         js['time'] = time.time()
         js['read_raw'] = self.read_data
         js['block_idx'] = idx
+        js['ctr'] = self.ctr
+        js['chain_ctr'] = self.chain_ctr
         js['resume_idx'] = resume_idx
         js['resume_token'] = resume_token
 
@@ -413,6 +416,7 @@ class CensysTls(object):
 
         # Last seen record
         js['last_record_seen'] = self.last_record_seen
+        js['last_record_flushed'] = self.last_record_flushed
 
         # Serialize state of the decompressor
         if self.cur_decompressor is not None:
@@ -462,6 +466,9 @@ class CensysTls(object):
                                                  for x in js['dec_checks']}
             if 'last_record_seen' in js:
                 self.last_record_resumed = js['last_record_seen']
+
+            if 'last_record_flushed' in js:
+                self.last_record_flushed = js['last_record_flushed']
 
             if self.cur_decompressor is not None and 'dec_ctx' in js:
                 logger.info('Restoring decompressor state')
@@ -523,6 +530,8 @@ class CensysTls(object):
             resume_token = None
             resume_idx = 0
             record_ctr = -1
+            already_processed = 0
+            read_start = self.read_data
             for idx, record in self.processor.process(handle):
                 try:
                     record_ctr += 1
@@ -535,7 +544,18 @@ class CensysTls(object):
                         self.last_report = self.read_data
                         self.try_store_checkpoint(iobj=iobj, idx=idx, resume_idx=resume_idx, resume_token=resume_token)
 
+                        # Flush already seen IP database, not needed anymore
+                        # we are too far from the resumed checkpoint
+                        if read_start + 1024*1024*1024*2 > self.read_data:
+                            self.state_loaded_ips = set()
+
                     js = json.loads(record)
+
+                    # If there are more records after the last checkpoint load, skip duplicates
+                    if js['ip'] in self.state_loaded_ips:
+                        already_processed += 1
+                        continue
+
                     self.process_record(idx, js)
 
                 except Exception as e:
@@ -612,6 +632,8 @@ class CensysTls(object):
         :param record: 
         :return: 
         """
+        record['id'] = self.ctr
+
         ip = utils.defvalkey(record, 'ip')
         domain = utils.defvalkey(record, 'domain')
         timestamp_fmt = utils.defvalkey(record, 'timestamp')
@@ -660,6 +682,7 @@ class CensysTls(object):
             self.fill_cn_src(ret, parsed)
             self.fill_rsa_ne(ret, parsed)
             ret['chains'] = chains_roots
+            self.last_record_flushed = record
 
             if not self.is_dry():
                 self.file_leafs_fh.write(json.dumps(ret) + '\n')
