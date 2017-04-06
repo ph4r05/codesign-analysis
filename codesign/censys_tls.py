@@ -301,31 +301,47 @@ class CensysTls(object):
         pos = 0
 
         # If file is too big try to skip 10 MB before end
-        if fsize > 1024*1024*20:
-            pos = fsize - 1024*1024*10
+        if fsize > 1024*1024*50:
+            pos = fsize - 1024*1024*40
             logger.info('Leafs file too big: %s, skipping to %s' % (fsize, pos))
 
             self.file_leafs_fh.seek(pos)
             x = self.file_leafs_fh.next()  # skip unfinished record
             pos += len(x)
 
-        invalid_record = False
+        record_from_state_found = False
+        terminate_with_record = False
         last_record = None
         for line in self.file_leafs_fh:
             ln = len(line)
             try:
                 last_record = json.loads(line)
+
+                if self.last_record_resumed is not None and self.last_record_resumed['id'] == last_record['id']:
+                    record_from_state_found = True
+
+                if self.last_record_resumed is not None and self.last_record_resumed['id'] < last_record['id']:
+                    logger.info('Found record from the state, pos: %d' % pos)
+                    record_from_state_found = True
+                    terminate_with_record = True
+                    break
+
                 self.ctr = max(self.ctr, last_record['id'])
                 pos += ln
 
             except Exception as e:
-                invalid_record = True
+                terminate_with_record = True
                 break
 
         logger.info('Operation resumed at leaf ctr: %s, last ip: %s'
                     % (self.ctr, utils.defvalkey(last_record, 'ip')))
 
-        if invalid_record:
+        if self.last_record_resumed is not None and not record_from_state_found:
+            logger.warning('Could not find the record from the state in the data file. Some data may be missing.')
+            logger.info('Last record id: %s' % self.last_record_resumed['id'])
+            raise ValueError('Incomplete data file')
+
+        if terminate_with_record:
             logger.info('Leaf: Invalid record detected, position: %s' % pos)
 
             if not self.is_dry():
@@ -444,6 +460,8 @@ class CensysTls(object):
             if 'dec_checks' in js:
                 self.decompressor_checkpoints = {x['pos']: DecompressorCheckpoint(x['pos'], x['crcctx'])
                                                  for x in js['dec_checks']}
+            if 'last_record_seen' in js:
+                self.last_record_resumed = js['last_record_seen']
 
             if self.cur_decompressor is not None and 'dec_ctx' in js:
                 logger.info('Restoring decompressor state')
@@ -486,8 +504,6 @@ class CensysTls(object):
             logger.info('Continuing with the started files')
             self.file_leafs_fh = open(file_leafs, mode='r+' if not self.is_dry() else 'r')
             self.file_roots_fh = open(file_roots, mode='r+' if not self.is_dry() else 'r')
-            self.continue_roots()
-            self.last_record_resumed = self.continue_leafs(file_leafs)
 
         self.processor = newline_reader.NewlineReader(is_json=False)
         handle = iobj
@@ -499,17 +515,13 @@ class CensysTls(object):
 
         if self.args.continue1:
             self.restore_checkpoint(iobj)
+            self.continue_roots()
+            self.continue_leafs(file_leafs)
 
         with iobj:
             resume_token_found = False
             resume_token = None
             resume_idx = 0
-            if self.last_record_resumed is not None and 'ip' in self.last_record_resumed:
-                resume_token = ('{"ip":"%s",' % self.last_record_resumed['ip']).encode('utf-8')
-                resume_idx = int(self.last_record_resumed['id']) - 100
-                logger.info('Resume token built: %s' % resume_token)
-                logger.info('Resume index: %d, original index: %s' % (resume_idx, self.last_record_resumed['id']))
-
             record_ctr = -1
             for idx, record in self.processor.process(handle):
                 try:
@@ -522,19 +534,6 @@ class CensysTls(object):
 
                         self.last_report = self.read_data
                         self.try_store_checkpoint(iobj=iobj, idx=idx, resume_idx=resume_idx, resume_token=resume_token)
-
-                    if resume_token is not None and not resume_token_found:
-                        if record_ctr < resume_idx:
-                            continue
-
-                        if record.startswith(resume_token):
-                            resume_token_found = True
-                            logger.info('Resume token found, idx: %s, pos: %s, rec: %s'
-                                        % (idx, self.read_data, record))
-                            continue
-
-                        else:
-                            continue
 
                     js = json.loads(record)
                     self.process_record(idx, js)
