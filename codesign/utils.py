@@ -766,3 +766,36 @@ def enum(*sequential, **named):
     return type('Enum', (), enums)
 
 
+def is_version_folder(last_segment):
+    """
+    Returns True if the given folder is maven artifact version folder.
+    :param last_segment:
+    :return:
+    """
+    if re.match('^([rv]|commit)?([0-9]+)([.\-]|$).*', last_segment, flags=re.IGNORECASE):
+        return True
+    else:
+        return False
+
+
+def strip_leading_slash(x):
+    """
+    Strips leading slash
+    :param x: 
+    :return: 
+    """
+    if x is None:
+        return None
+    return re.sub(r'/\s*$', '', x)
+
+
+def get_last_url_segment(x):
+    """
+    Returns 
+    :param x: 
+    :return: 
+    """
+    x = strip_leading_slash(x)
+    return x.rsplit('/', 1)[1]
+
+
