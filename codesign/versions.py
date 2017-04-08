@@ -9,6 +9,37 @@ import types
 from past.builtins import cmp
 
 
+class Version(object):
+    """
+    Simple object representing version
+    """
+    def __init__(self, version):
+        self.version = str(version)
+
+    def __str__(self):
+        return self.version
+
+    def __repr__(self):
+        return 'Version(%r)' % self.version
+
+    def __hash__(self):
+        return self.version.__hash__()
+
+    def __cmp__(self, other):
+        return version_cmp(self.version, str(other))
+
+    def to_json(self):
+        return self.version
+
+    def trim(self, max_comp=None):
+        self.version = version_trim(self.version, max_comp)
+        return self
+
+    def pad(self, ln):
+        self.version = version_pad(self.version, ln)
+        return self
+
+
 def version_filter(objects, key=lambda x: x, min_version=None, max_version=None, exact_version=None):
     """
     Filters the objects according to the version criteria.
@@ -159,7 +190,7 @@ def int_if_int(x):
     if isinstance(x, types.IntType):
         return x
 
-    if re.match('^[0-9]', x):
+    if re.match('^[0-9]+$', x):
         return int(x)
 
     return x
