@@ -40,7 +40,7 @@ class MavenArtifact(Base):
     """
     Base maven artifact - pom
     """
-    __tablename__ = 'maven_signature'
+    __tablename__ = 'maven_artifact'
     id = Column(BigInteger, primary_key=True)
 
     group_id = Column(String(255), nullable=False, )
