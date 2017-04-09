@@ -705,6 +705,23 @@ def try_get_san(cert):
     return []
 
 
+def try_is_ca(cert):
+    """
+    Tries to load SAN from the certificate
+    :param cert: 
+    :return: 
+    """
+    try:
+        ext = cert.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
+        return ext.value.ca
+
+    except Exception as e:
+        logger.error('Excepion in getting CA rest. %s' % e)
+        logger.debug(traceback.format_exc())
+
+    return False
+
+
 def try_get_cname(cert):
     """
     Cname
