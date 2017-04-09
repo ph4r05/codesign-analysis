@@ -1,10 +1,25 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import scrapy
 import re
+import os
+import json
 import argparse
 import logging
 import coloredlogs
 from urlparse import urlparse
+import traceback
 import scrapy
+import utils
+import versions as vv
+import databaseutils
+from collections import OrderedDict
+from database import MavenArtifact, MavenSignature
+from database import Base as DB_Base
+from scrapper_tools import PomItem, AscItem
+
+from scrapy.settings.default_settings import RETRY_TIMES
 from scrapy.spiders import CrawlSpider, Rule
 from scrapy.linkextractors.lxmlhtml import LxmlLinkExtractor
 from scrapy.linkextractors import LinkExtractor
@@ -21,19 +36,131 @@ from scrapy.settings import Settings
 
 
 logger = logging.getLogger(__name__)
-coloredlogs.install(level=logging.DEBUG)
+coloredlogs.install(level=logging.INFO)
 
 
-class ArtifactItem(scrapy.Item):
+def spider_closing(spider):
     """
-    Basic object for link extraction.
-    Initialized in parse_obj, yielded and saved to the JSON result file.
+    Activates on spider closed signal
     """
-    url = scrapy.Field()
-    versions = scrapy.Field()
-    misc_files = scrapy.Field()
-    artifact_detected = scrapy.Field()
-    confidence = scrapy.Field()
+    logger.info("Spider closed: %s" % spider)
+    if True:
+        reactor.stop()
+
+
+def get_group_id(url):
+    """
+    Extracts group id from the url from metafile
+    :param url: 
+    :return: 
+    """
+    base = 'maven2/'
+    pos = url.find(base)
+    if pos < 0:
+        raise ValueError('Base not found in the URL')
+
+    url2 = url[pos+len(base):]
+    return url2.replace('/', '.')
+
+
+def strkey(item):
+    """
+    Returns the str key for the item
+    :param item: 
+    :return: 
+    """
+    return '%s:%s:%s' % (item['group_id'], item['artifact_id'], item['version'])
+
+
+class DbPipeline(object):
+    """
+    Storing items to the database
+    """
+    def __init__(self, crawler, *args, **kwargs):
+        self.session = None
+        logger.info('New DB pipeline created %s' % crawler)
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        return cls(crawler)
+
+    def open_spider(self, spider):
+        logger.info('Spider opened %s' % spider)
+        logger.info('Spider session: %s' % spider.app.session)
+        self.session = spider.app.session
+
+    def close_spider(self, spider):
+        logger.info('Spider closed %s' % spider)
+
+    def pom_exists(self, pomItem, s):
+        """
+        Returns True if POM already exists
+        :param pomItem: 
+        :return: 
+        """
+        res = s.query(MavenArtifact)\
+            .filter(MavenArtifact.group_id == pomItem['group_id'])\
+            .filter(MavenArtifact.artifact_id == pomItem['artifact_id'])\
+            .filter(MavenArtifact.version_id == pomItem['version'])\
+            .one_or_none()
+        return res is not None
+
+    def asc_exists(self, ascItem, s):
+        """
+        Returns True if POM already exists
+        :param pomItem: 
+        :return: 
+        """
+        res = s.query(MavenSignature)\
+            .filter(MavenSignature.group_id == ascItem['group_id'])\
+            .filter(MavenSignature.artifact_id == ascItem['artifact_id'])\
+            .filter(MavenSignature.version_id == ascItem['version'])\
+            .one_or_none()
+        return res is not None
+
+    def process_item(self, item, spider):
+        try:
+            s = self.session()
+            if isinstance(item, (PomItem, type(PomItem()), type(PomItem))):
+                self.store_pom(item, s)
+            elif isinstance(item, (AscItem, type(AscItem()), type(AscItem))):
+                self.store_asc(item, s)
+            else:
+                logger.warning('Unknown item: %s type %s' % (item, type(item)))
+                return
+
+            s.commit()
+            s.flush()  # writes changes to DB
+            s.expunge_all()  # removes objects from session
+        except Exception as e:
+            logger.warning('Exception in storing key %s' % e)
+
+        finally:
+            utils.silent_close(s)
+            s = None
+        return item
+
+    def store_pom(self, item, s):
+        if self.pom_exists(item, s):
+            logger.debug('POM Already exists %s' % strkey(item))
+            return
+
+        logger.info('Storing pom: %s' % strkey(item))
+
+        rec = MavenArtifact()
+        rec.artifact_id = item['artifact_id']
+        rec.group_id = item['group_id']
+        rec.artifact_id = item['artifact_id']
+        rec.version_id = item['version']
+        rec.pom_file = item['body']
+        s.add(rec)
+
+    def store_asc(self, item, s):
+        if self.asc_exists(item, s):
+            logger.debug('ASC Already exists %s' % strkey(item))
+            return
+
+        logger.info('Storing asc: %s' % strkey(item))
 
 
 class MavenDataSpider(LinkSpider):
@@ -67,7 +194,8 @@ class MavenDataSpider(LinkSpider):
 
         'ITEM_PIPELINES': {
             # Use if want to prevent duplicates, otherwise useful for frequency analysis
-            #'scrapper.DuplicatesPipeline': 10,
+            # 'scrapper.DuplicatesPipeline': 10,
+            'scrapper_maven_data.DbPipeline': 10
         },
 
         'AUTOTHROTTLE_ENABLED': True,
@@ -75,17 +203,20 @@ class MavenDataSpider(LinkSpider):
         'CONCURRENT_REQUESTS_PER_IP': 1,
         'CONCURRENT_REQUESTS_PER_DOMAIN': 1,
         'AUTOTHROTTLE_TARGET_CONCURRENCY': 1,
+        'RETRY_ENABLED': True,
+        'RETRY_TIMES': 5,
 
     }
 
     def __init__(self, *a, **kw):
         super(MavenDataSpider, self).__init__(*a, **kw)
         self.link_queue_mode = True
-        self.app = None
+        self.app = kw.get('app', None)
+        logger.info('App: %s' % self.app)
 
-        logger.debug("--link(%s) %s" % (1 if should_follow else 0, link))
     def should_follow_link(self, link, response):
         should_follow = super(MavenDataSpider, self).should_follow_link(link, response)
+        # logger.debug("--link(%s) %s" % (1 if should_follow else 0, link))
         return should_follow
 
     def process_link(self, val):
@@ -123,91 +254,145 @@ class MavenDataSpider(LinkSpider):
         else:
             return False
 
-    def parse_obj(self, response):
+    def start_requests(self):
         """
-        Base parsing routine - pure link extractor.
-        Extract only links ending in the artifact directory.
-        :param response:
-        :return:
+        Initial requests
+        :return: 
         """
-        links_visit = set()
-        links = set()
-        for link in LxmlLinkExtractor(allow=(), deny=()).extract_links(response):
-            # Add all links except up link.
-            if link.text != '../':
-                links.add(link.url)
+        logger.info('Loading requests')
+        for req in self.app.start_requests():
+            yield req
 
-        # Links extracted from the current page.
-        # Extract links only if landed in the artifact directory.
-        is_artifact = False
-        art_conf = 0
-        if len(links) < 100:
-            art_conf += 3
+    def parse_pom(self, response):
+        """
+        Parses POM requests
+        :param response: 
+        :return: 
+        """
+        item = PomItem()
+        item['url'] = response.url
+        item['version'] = response.meta['max_version']
+        item['artifact_id'] = response.meta['artifact_id']
+        item['group_id'] = response.meta['group_id']
+        item['body'] = response.body
 
-        versions = []
-        misc_files = []
-        for link in links:
-            if link.endswith('/maven-metadata.xml'):
-                is_artifact = True
+        yield item
 
-            last_segment = link
-            last_slash = link[-1] == '/'
+    def parse_asc(self, response):
+        """
+        Parses PGP signature 
+        :param response: 
+        :return: 
+        """
+        item = AscItem()
+        item['url'] = response.url
+        item['version'] = response.meta['max_version']
+        item['artifact_id'] = response.meta['artifact_id']
+        item['group_id'] = response.meta['group_id']
+        item['body'] = response.body
 
-            if last_slash:
-                last_segment = link[0:-1]
-            last_segment = last_segment.rsplit('/', 1)[1]
+        # TODO: parse sig.
 
-            if self.is_version_folder(last_segment):
-                art_conf += 1
-                versions.append({'v': last_segment, 'l': self.remove_prefix(link, response.url)})
-
-            elif link != response.url:
-                misc_files.append(self.remove_prefix(link, response.url))
-
-        # TODO: if non-standard format, download also maven-metadata.xml
-        # Store only artifacts related URLs
-        if is_artifact or art_conf > 5:
-            logger.info('New artifact(%s), confidence(%s): %s' % (is_artifact, art_conf, response.url))
-            item = ArtifactItem()
-            item['url'] = response.url
-            item['versions'] = versions
-            item['misc_files'] = misc_files
-            item['artifact_detected'] = is_artifact
-            item['confidence'] = art_conf
-            yield item
-
-            # Case: maven-metadata is present, but we have also another directories here -> crawl it.
-            # otherwise do not follow any more links from this page.
-            base_url = response.url
-            if base_url[-1] != '/':
-                base_url += '/'
-
-            links = [base_url + x for x in misc_files if x.endswith('/')]
-
-        # Links post processing
-        for link in links:
-            if not self.should_follow_link(link, response):
-                continue
-            links_visit.add(link)
-
-        logger.debug('Extracted %s links from %s' % (len(links_visit), response.url))
-        for link in list(links_visit):
-            yield Request(link, callback=self.parse_obj)
-
-
-def spider_closing(spider):
-    """
-    Activates on spider closed signal
-    """
-    logger.info("Spider closed: %s" % spider)
-    if True:
-        reactor.stop()
+        yield item
 
 
 class MainMavenDataWrapper(object):
     def __init__(self):
         self.args = None
         self.spider = None
+
+        self.db_config = None
+        self.engine = None
+        self.session = None
+        self.config_file = None
+        self.config = None
+
+    def init_config(self):
+        """
+        Loads config & state files
+        :return:
+        """
+        with open(self.config_file, 'r') as fh:
+            self.config = json.load(fh, object_pairs_hook=OrderedDict)
+            logger.info('Config loaded: %s' % os.path.abspath(self.config_file))
+
+    def init_db(self):
+        """
+        Initializes database engine & session.
+        Has to be done on main thread.
+        :return:
+        """
+        self.db_config = databaseutils.process_db_config(self.config['db'])
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker, scoped_session
+        self.engine = create_engine(self.db_config.constr, pool_recycle=3600)
+        self.session = scoped_session(sessionmaker(bind=self.engine))
+
+        # Make sure tables are created
+        DB_Base.metadata.create_all(self.engine)
+
+    def start_requests(self):
+        """
+        Generates start requests from the sitemap.
+        :return: 
+        """
+        # Load sitemap JSON - generate queues
+        if self.args.sitemap_json is None:
+            return
+
+        for req in self.gen_links(self.args.sitemap_json):
+            yield req
+
+    def gen_links(self, sitemap):
+        """
+        Generate link links for files to download
+        :return: 
+        """
+        ctr = 0
+        # links = []
+        with open(sitemap, 'r') as fh:
+            logger.info('Loading sitemap file %s' % sitemap)
+
+            js = json.load(fh)
+            logger.info('Loaded, number of packages: %s' % len(js))
+
+            for rec in js:
+                try:
+                    burl = utils.strip_leading_slash(rec['url'])
+                    artifact_detected = rec['artifact_detected']
+                    if not artifact_detected:
+                        # logger.debug('Not an artifact: %s' % burl)
+                        continue
+
+                    artifact_id = utils.get_last_url_segment(burl)
+                    versions = [x['v'] for x in rec['versions']]
+                    if len(versions) == 0:
+                        # logger.debug('No versions for %s' % artifact_id)
+                        continue
+
+                    group_id = get_group_id(burl)
+                    max_version = sorted(versions, cmp=vv.version_cmp, reverse=True)[0]
+                    url = '%s/%s' % (burl, max_version)
+                    base_name = '%s-%s' % (artifact_id, max_version)
+                    meta = {'burl': burl, 'artifact_id': artifact_id, 'group_id': group_id, 'max_version': max_version}
+
+                    pom_link = '%s/%s.pom' % (url, base_name)
+                    pom_asc_link = '%s/%s.pom.asc' % (url, base_name)
+
+                    yield Request(pom_link, callback=self.spider.parse_pom, meta=dict(meta))
+                    yield Request(pom_asc_link, callback=self.spider.parse_asc, meta=dict(meta))
+                    ctr += 1
+
+                    if ctr > 10:
+                        return
+
+                except Exception as e:
+                    logger.error('Exception in parsing %s' % e)
+                    logger.debug(traceback.format_exc())
+
+        # logger.info('Generated %s links' % len(links))
+        # return links
 
     def kickoff(self):
         """
@@ -217,14 +402,17 @@ class MainMavenDataWrapper(object):
         settings = Settings()
 
         # settings.set("USER_AGENT", "Test")
+        settings.set('JOBDIR', self.args.data_dir)
         self.spider = MavenDataSpider()
-        self.spider.app = self
 
         # Wrap with crawler, configure
         crawler = Crawler(self.spider, settings)
         crawler.signals.connect(spider_closing, signal=signals.spider_closed)
-        crawler.crawl(self.spider)
-        crawler.spider.app = self
+
+        logger.info('Starting crawler')
+        crawler.crawl(self.spider, app=self)
+
+        self.spider.link_queue_mode = False
 
         # Keeping thread working
         reactor.run()
@@ -234,6 +422,10 @@ class MainMavenDataWrapper(object):
         Entry point after argument processing.
         :return: 
         """
+        self.config_file = self.args.config
+        self.init_config()
+        self.init_db()
+
         self.kickoff()
 
     def main(self):
@@ -278,6 +470,12 @@ class MainMavenDataWrapper(object):
 
         parser.add_argument('--mpi', dest='mpi', default=False, action='store_const', const=True,
                             help='Use MPI distribution')
+
+        parser.add_argument('--sitemap-json', dest='sitemap_json', default='.',
+                            help='JSON sitemap')
+
+        parser.add_argument('--config', dest='config', default=None,
+                            help='Config file')
 
         self.args = parser.parse_args()
 
