@@ -23,6 +23,13 @@ class AscItem(scrapy.Item):
     artifact_id = scrapy.Field()
     group_id = scrapy.Field()
     body = scrapy.Field()
+    sig_hash = scrapy.Field()
+    sig_key_id = scrapy.Field()
+    sig_version = scrapy.Field()
+    sig_type = scrapy.Field()
+    sig_pub_alg = scrapy.Field()
+    sig_created = scrapy.Field()
+    sig_expires = scrapy.Field()
 
 
 class PomItem(scrapy.Item):

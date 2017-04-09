@@ -10,6 +10,7 @@ import logging
 import coloredlogs
 from urlparse import urlparse
 import traceback
+import datetime
 import scrapy
 import utils
 import versions as vv
@@ -27,6 +28,9 @@ from scrapy import signals
 from scrapy.http import Request
 from scrapy.utils.httpobj import urlparse_cached
 from scrapper_base import LinkSpider, DuplicatesPipeline, KeywordMiddleware, LinkItem
+
+from pgpdump.data import AsciiData
+from pgpdump.packet import SignaturePacket, PublicKeyPacket, PublicSubkeyPacket, UserIDPacket
 
 # scrapy api imports
 from scrapy import signals
@@ -78,6 +82,7 @@ class DbPipeline(object):
     """
     def __init__(self, crawler, *args, **kwargs):
         self.session = None
+        self.app = None
         logger.info('New DB pipeline created %s' % crawler)
 
     @classmethod
@@ -88,6 +93,7 @@ class DbPipeline(object):
         logger.info('Spider opened %s' % spider)
         logger.info('Spider session: %s' % spider.app.session)
         self.session = spider.app.session
+        self.app = spider.app
 
     def close_spider(self, spider):
         logger.info('Spider closed %s' % spider)
@@ -160,6 +166,21 @@ class DbPipeline(object):
             logger.debug('ASC Already exists %s' % strkey(item))
             return
 
+        rec = MavenSignature()
+        rec.artifact_id = item['artifact_id']
+        rec.group_id = item['group_id']
+        rec.artifact_id = item['artifact_id']
+        rec.version_id = item['version']
+        rec.sig_file = item['body']
+
+        rec.sig_hash = item['sig_hash']
+        rec.sig_key_id = item['sig_key_id']
+        rec.sig_version = item['sig_version']
+        rec.sig_pub_alg = item['sig_pub_alg']
+        rec.sig_created = item['sig_created']
+        rec.sig_expires = item['sig_expires']
+
+        s.add(rec)
         logger.info('Storing asc: %s' % strkey(item))
 
 
@@ -291,7 +312,17 @@ class MavenDataSpider(LinkSpider):
         item['group_id'] = response.meta['group_id']
         item['body'] = response.body
 
-        # TODO: parse sig.
+        # Parse sig.
+        pgp = AsciiData(response.body)
+        packets = list(pgp.packets())
+        sig_packet = packets[0]
+        if isinstance(sig_packet, SignaturePacket):
+            item['sig_hash'] = sig_packet.hash_algorithm
+            item['sig_key_id'] = sig_packet.key_id
+            item['sig_version'] = sig_packet.sig_version
+            item['sig_pub_alg'] = sig_packet.pub_algorithm
+            item['sig_created'] = sig_packet.creation_time
+            item['sig_expires'] = sig_packet.expiration_time
 
         yield item
 
