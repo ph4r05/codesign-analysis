@@ -29,7 +29,10 @@ coloredlogs.install(level=logging.DEBUG)
 
 def main():
     """
-    Processing censys 
+    Processing censys sonar.ssl
+    Recodes one big certificate file to smaller _certs.gz files as published since 2015
+    so we can process it in the same way.
+    
     https://scans.io/study/sonar.ssl
     :return:
     """
