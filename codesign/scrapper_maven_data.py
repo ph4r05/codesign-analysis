@@ -125,6 +125,12 @@ class DbPipeline(object):
         return res is not None
 
     def process_item(self, item, spider):
+        """
+        Process item for persisting
+        :param item: 
+        :param spider: 
+        :return: 
+        """
         try:
             s = self.session()
             if isinstance(item, (PomItem, type(PomItem()), type(PomItem))):
@@ -147,6 +153,12 @@ class DbPipeline(object):
         return item
 
     def store_pom(self, item, s):
+        """
+        Store POM file
+        :param item: 
+        :param s: 
+        :return: 
+        """
         if self.pom_exists(item, s):
             logger.debug('POM Already exists %s' % strkey(item))
             return
@@ -162,6 +174,12 @@ class DbPipeline(object):
         s.add(rec)
 
     def store_asc(self, item, s):
+        """
+        Stores ASC file
+        :param item: 
+        :param s: 
+        :return: 
+        """
         if self.asc_exists(item, s):
             logger.debug('ASC Already exists %s' % strkey(item))
             return
@@ -220,10 +238,10 @@ class MavenDataSpider(LinkSpider):
         },
 
         'AUTOTHROTTLE_ENABLED': True,
-        'DOWNLOAD_DELAY': 5.75,
-        'CONCURRENT_REQUESTS_PER_IP': 1,
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 1,
-        'AUTOTHROTTLE_TARGET_CONCURRENCY': 1,
+        'DOWNLOAD_DELAY': 0.5,
+        'CONCURRENT_REQUESTS_PER_IP': 10,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 10,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 10,
         'RETRY_ENABLED': True,
         'RETRY_TIMES': 5,
 
@@ -298,6 +316,10 @@ class MavenDataSpider(LinkSpider):
         item['body'] = response.body
 
         yield item
+
+        # Generate asc request
+        pom_asc_link = response.url + '.asc'
+        yield Request(pom_asc_link, callback=self.parse_asc, meta=dict(response.meta))
 
     def parse_asc(self, response):
         """
@@ -412,11 +434,8 @@ class MainMavenDataWrapper(object):
                     pom_asc_link = '%s/%s.pom.asc' % (url, base_name)
 
                     yield Request(pom_link, callback=self.spider.parse_pom, meta=dict(meta))
-                    yield Request(pom_asc_link, callback=self.spider.parse_asc, meta=dict(meta))
+                    # yield Request(pom_asc_link, callback=self.spider.parse_asc, meta=dict(meta))
                     ctr += 1
-
-                    if ctr > 10:
-                        return
 
                 except Exception as e:
                     logger.error('Exception in parsing %s' % e)
