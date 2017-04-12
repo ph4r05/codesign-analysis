@@ -31,6 +31,11 @@ class NewlineReader(object):
         self.on_chunk_process = None
         self.on_record_process = None
 
+        # Current state
+        self.step_elements = 0
+        self.step_cur_element = 0
+        self.step_cur_last_element = 0
+
     def process(self, file_like):
         """
         Processes file like object in a streamed manner.
@@ -42,11 +47,16 @@ class NewlineReader(object):
 
         for idx, chunk in enumerate(file_like):
             self.chunk_idx = idx
-            for x in self.process_chunk(self.chunk_idx, chunk):
-                yield x
-
             self.total_len += len(chunk)
             self.digest.update(chunk)
+
+            # Loading all elements in one batch from the buffer, for processing caller may need the length.
+            elements = [x for x in self.process_chunk(self.chunk_idx, chunk)]
+            self.step_elements = len(elements)
+            for eidx, x in enumerate(elements):
+                self.step_cur_element = eidx
+                self.step_cur_last_element = eidx+1 == self.step_elements
+                yield x
 
             if self.abort:
                 logger.info('Abort set, terminating')
