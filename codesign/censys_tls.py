@@ -52,14 +52,28 @@ class DecompressorCheckpoint(object):
     """
     Represents simple point in the data stream for random access read.
     """
-    def __init__(self, pos, crcctx=None, *args, **kwargs):
+
+    def __init__(self, pos, rec_pos=None, plain_pos=None, ctx=None, *args, **kwargs):
+        """
+        New checkpoint    
+        :param pos: position in the compressed stream (on the input) - seekable position for random access.
+        :param rec_pos: position in the decompressed stream, newline separated. record boundary
+        :param plain_pos: position in the decompressed stream, decompressed chunk >= rec_pos
+        :param ctx: decompressor context
+        :param args: 
+        :param kwargs: 
+        """
         self.pos = pos
-        self.crcctx = crcctx
+        self.rec_pos = rec_pos
+        self.plain_pos = plain_pos
+        self.ctx = ctx
 
     def to_json(self):
         js = collections.OrderedDict()
         js['pos'] = self.pos
-        js['crcctx'] = base64.b64encode(self.crcctx) if self.crcctx is not None else None
+        js['rec_pos'] = self.rec_pos
+        js['plain_pos'] = self.plain_pos
+        js['ctx'] = base64.b64encode(self.ctx) if self.ctx is not None else None
         return js
 
 
@@ -408,26 +422,28 @@ class CensysTls(object):
 
         # New decompressor checkpoint for random access read
         if self.cur_decompressor is not None and self.cur_decompressor.last_read_aligned:
-            total_read_dec = self.cur_decompressor.data_read
-            crc_ctx = lz4framed.marshal_decompression_checksum_context(self.cur_decompressor.ctx)
-            self.decompressor_checkpoints[total_read_dec] = DecompressorCheckpoint(total_read_dec, crc_ctx)
+            try:
+                total_read_dec = self.cur_decompressor.data_read
+                decctx = lz4framed.marshal_decompression_context(self.cur_decompressor.ctx)
+                logger.debug('Decompressor state marshalled, size: %s B' % len(decctx))
+
+                checkpoint = DecompressorCheckpoint(pos=total_read_dec, rec_pos=self.read_data,
+                                                    plain_pos=self.processor.total_len, ctx=decctx)
+
+                self.decompressor_checkpoints[total_read_dec] = checkpoint
+
+                decctx_str = base64.b16encode(decctx)
+                js['dec_ctx'] = decctx_str
+
+            except Exception as e:
+                logger.error('Exception when storing decompressor state: %s' % e)
+                logger.warning(traceback.format_exc())
 
         js['dec_checks'] = [x.to_json() for x in self.decompressor_checkpoints.values()]
 
         # Last seen record
         js['last_record_seen'] = self.last_record_seen
         js['last_record_flushed'] = self.last_record_flushed
-
-        # Serialize state of the decompressor
-        if self.cur_decompressor is not None:
-            try:
-                decctx = lz4framed.marshal_decompression_context(self.cur_decompressor.ctx)
-                logger.debug('Decompressor state marshalled, size: %s kB' % (len(decctx)/1024.0))
-                decctx_str = base64.b16encode(decctx)
-                js['dec_ctx'] = decctx_str
-            except Exception as e:
-                logger.error('Exception when storing decompressor state: %s' % e)
-                logger.warning(traceback.format_exc())
 
         utils.flush_json(js, state_file)
 
@@ -462,8 +478,12 @@ class CensysTls(object):
             self.loaded_checkpoint = js
 
             if 'dec_checks' in js:
-                self.decompressor_checkpoints = {x['pos']: DecompressorCheckpoint(x['pos'], x['crcctx'])
-                                                 for x in js['dec_checks']}
+                self.decompressor_checkpoints = {
+                    x['pos']: DecompressorCheckpoint(pos=x['pos'], rec_pos=x['rec_pos'],
+                                                     plain_pos=x['plain_pos'], ctx=x['ctx'])
+                    for x in js['dec_checks']
+                }
+
             if 'last_record_seen' in js:
                 self.last_record_resumed = js['last_record_seen']
 
@@ -534,7 +554,9 @@ class CensysTls(object):
                 try:
                     record_ctr += 1
                     self.read_data += len(record)
-                    if self.read_data - self.last_report >= 1024*1024*1024:
+
+                    # Check the checkpoint distance + boundary - process all newline chunks available
+                    if self.read_data - self.last_report >= 1024*1024*1024 and self.processor.step_cur_last_element:
                         logger.info('...progress: %s GB, idx: %s, pos: %s GB, mem: %04.8f MB, readpos: %s (%4.6f GB)'
                                     % (self.read_data/1024.0/1024.0/1024.0, idx, self.read_data,
                                        utils.get_mem_usage()/1024.0, iobj.tell(), iobj.tell()/1024.0/1024.0/1024.0))
