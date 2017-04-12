@@ -496,3 +496,67 @@ class ReconnectingLinkInputObject(InputObject):
         return js
 
 
+class TeeInputObject(InputObject):
+    """
+    Tee input object - reading underlying data stream, with stream copy to a different file like object 
+    (e.g., a file)
+    """
+    def __init__(self, parent_fh, copy_fh, *args, **kwargs):
+        super(TeeInputObject, self).__init__(*args, **kwargs)
+        self.parent_fh = parent_fh
+        self.copy_fh = copy_fh
+
+    def __enter__(self):
+        super(TeeInputObject, self).__enter__()
+        try:
+            self.parent_fh.__enter__()
+        except Exception as e:
+            logger.debug('Exception when entering to the parent fh %s' % e)
+            logger.debug(traceback.format_exc())
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(TeeInputObject, self).__exit__(exc_type, exc_val, exc_tb)
+        try:
+            self.parent_fh.__exit__(exc_type, exc_val, exc_tb)
+        except Exception as e:
+            logger.debug('Exception when exiting to the parent fh %s' % e)
+            logger.debug(traceback.format_exc())
+
+    def __repr__(self):
+        return 'TeeInputObject(parent_fh=%r, copy_fh=%r)' % (self.parent_fh, self.copy_fh)
+
+    def __str__(self):
+        return str(self.parent_fh)
+
+    def check(self):
+        return self.parent_fh.check()
+
+    def size(self):
+        return self.parent_fh.size()
+
+    def read(self, size=None):
+        data = self.parent_fh.read(size)
+        self.sha256.update(data)
+        self.data_read += len(data)
+
+        cur_ctr = 0
+        while True:
+            try:
+                self.copy_fh.write(data)
+                return data
+
+            except Exception as e:
+                cur_ctr += 1
+                logger.warning('Exception when writing data (%s) to the underlying stream, err %s, %s'
+                               % (len(data), cur_ctr, e))
+
+                logger.debug(traceback.format_exc())
+                time.sleep(10)
+
+    def handle(self):
+        return self.parent_fh.handle()
+
+    def to_state(self):
+        return self.parent_fh.to_state()
+
+
