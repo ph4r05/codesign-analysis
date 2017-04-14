@@ -88,6 +88,20 @@ class InputObject(object):
         """
         return self.data_read
 
+    def close(self):
+        """
+        Closes the file object
+        :return: 
+        """
+        pass
+
+    def flush(self):
+        """
+        FLushes the input object - mostly does nothing
+        :return: 
+        """
+        pass
+
 
 class FileInputObject(InputObject):
     """
@@ -501,10 +515,11 @@ class TeeInputObject(InputObject):
     Tee input object - reading underlying data stream, with stream copy to a different file like object 
     (e.g., a file)
     """
-    def __init__(self, parent_fh, copy_fh, *args, **kwargs):
+    def __init__(self, parent_fh, copy_fh, close_copy_on_exit=False, *args, **kwargs):
         super(TeeInputObject, self).__init__(*args, **kwargs)
         self.parent_fh = parent_fh
         self.copy_fh = copy_fh
+        self.close_copy_on_exit = close_copy_on_exit
 
     def __enter__(self):
         super(TeeInputObject, self).__enter__()
@@ -521,6 +536,13 @@ class TeeInputObject(InputObject):
         except Exception as e:
             logger.debug('Exception when exiting to the parent fh %s' % e)
             logger.debug(traceback.format_exc())
+
+        if self.close_copy_on_exit:
+            try:
+                self.copy_fh.close()
+            except Exception as e:
+                logger.debug('Exception when closing copy fh%s' % e)
+                logger.debug(traceback.format_exc())
 
     def __repr__(self):
         return 'TeeInputObject(parent_fh=%r, copy_fh=%r)' % (self.parent_fh, self.copy_fh)
@@ -559,4 +581,6 @@ class TeeInputObject(InputObject):
     def to_state(self):
         return self.parent_fh.to_state()
 
+    def flush(self):
+        self.copy_fh.flush()
 
