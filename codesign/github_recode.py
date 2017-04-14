@@ -52,7 +52,9 @@ class GitHubRecoder(object):
                         if len(js['mod']) <= 5:
                             continue
 
+                    js['e'] = hex(js['e'])[2:]
                     js['n'] = js['mod']
+                    
                     del js['mod']
                     del js['raw']
                     js['source'] = [js['id']]
