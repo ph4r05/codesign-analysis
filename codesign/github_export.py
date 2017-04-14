@@ -150,10 +150,11 @@ class GitHubExporter(object):
                 js['discovered'] = calendar.timegm(obj.date_discovered.timetuple())
                 js['type'] = obj.key_type
                 js['size'] = obj.key_size
-                js['mod'] = obj.key_modulus_hex
+                js['n'] = obj.key_modulus_hex
                 js['e'] = obj.key_exponent
                 js['user'] = obj.key_user_found
                 js['user_id'] = obj.key_user_id_found
+                js['source'] = [js['id']]
                 js['raw'] = obj.text_raw
                 print(json.dumps(js))
 
