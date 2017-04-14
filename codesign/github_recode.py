@@ -54,6 +54,7 @@ class GitHubRecoder(object):
 
                     js['n'] = js['mod']
                     del js['mod']
+                    del js['raw']
                     js['source'] = [js['id']]
 
                     rec_out = json.dumps(js)
