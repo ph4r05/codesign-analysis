@@ -14,7 +14,7 @@ class Version(object):
     Simple object representing version
     """
     def __init__(self, version):
-        self.version = str(version)
+        self.version = str(version).replace(':', '.')
 
     def __str__(self):
         return self.version
