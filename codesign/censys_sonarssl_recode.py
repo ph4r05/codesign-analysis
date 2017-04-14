@@ -134,7 +134,7 @@ def main():
         if os.path.exists(hostfile):
             iobj = input_obj.FileInputObject(fname=hostfile)
         else:
-            hosth = gzip.open(hostfile, 'wb')
+            hosth = open(hostfile, 'wb')
             iobj = input_obj.ReconnectingLinkInputObject(flink, files)
             iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
 
