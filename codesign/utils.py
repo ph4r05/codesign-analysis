@@ -118,6 +118,22 @@ def get_dn_part(subject, oid=None):
             return sub.value
 
 
+def get_dn_string(subject):
+    """
+    Returns DN as a string
+    :param subject: 
+    :return: 
+    """
+    ret = []
+    for attribute in subject:
+        oid = attribute.oid
+        dot = oid.dotted_string
+        oid_name = oid._name
+        val = attribute.value
+        ret.append('%s: %s' % (oid_name, val))
+    return ', '.join(ret)
+
+
 def extend_with_android_data(rec, apkf, logger=None):
     """
     Android related info (versions, SDKs)
