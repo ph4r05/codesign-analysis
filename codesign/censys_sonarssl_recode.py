@@ -59,7 +59,7 @@ def main():
     # Big in memory hash table fprint -> certificate
     bigdb = {}
     counter = 0
-    testrng = range(11, 93)
+    testrng = range(10, 93)
 
     # fprints seen
     fprints_seen_set = set()
@@ -97,7 +97,12 @@ def main():
     jsdb_ids = {x['id']: x for x in jsdb['data']}
     for test_idx in testrng:
         files = jsdb_ids[test_idx]['files']
-        filerec = files[list(files.keys())[0]]
+        filerec = None
+        for tmprec in files:
+            if '_hosts.gz' in tmprec:
+                filerec = files[tmprec]
+                break
+
         fname = filerec['name']
         flink = filerec['href']
 
@@ -111,6 +116,7 @@ def main():
         dateparts = fname_2.split('_')
         datepart = dateparts[0]
 
+        hostfile = os.path.join(args.datadir, '%s_hosts.gz' % datepart)
         certfile = os.path.join(args.datadir, '%s_certs.gz' % datepart)
         fprintfile = os.path.join(args.datadir, '%s_fprints.csv' % datepart)
         fprintfile_new = os.path.join(args.datadir, '%s_fprints_new.csv' % datepart)
@@ -121,12 +127,22 @@ def main():
 
         not_found = 0
         fprints_set = set()
+        fprints_set_new = set()
+        iobj = None
+        hosth = None
 
-        iobj = input_obj.ReconnectingLinkInputObject(flink, files)
+        if os.path.exists(hostfile):
+            iobj = input_obj.FileInputObject(fname=hostfile)
+        else:
+            hosth = gzip.open(hostfile, 'wb')
+            iobj = input_obj.ReconnectingLinkInputObject(flink, files)
+            iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
+
         with iobj:
             fh = gzipinputstream.GzipInputStream(fileobj=iobj)
             for rec_idx, rec in enumerate(fh):
                 try:
+
                     linerec = rec.strip().split(',')
                     ip = linerec[0]
                     fprints = linerec[1:]
@@ -134,6 +150,7 @@ def main():
                         fprints_set.add(fprint)
 
                     if rec_idx % 1000000 == 0:
+                        iobj.flush()
                         logger.debug(' .. progress %s, ip %s, mem: %s MB'
                                      % (rec_idx, ip, utils.get_mem_usage() / 1024.0))
 
@@ -143,8 +160,6 @@ def main():
                     logger.debug(traceback.format_exc())
 
         fprints_len = len(fprints_set)
-        fprints_progress_unit = fprints_len / 100
-        fprints_progress_last = 0
         logger.info('File processed, fprint db size: %d' % fprints_len)
 
         # Only fingerprints
@@ -153,35 +168,13 @@ def main():
         fprints.sort()
         logger.info('fprints sorted. Storing fingerprints. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
 
-        with gzip.open(certfile, 'wb') as outfh:
-            for rec_idx, fprint in enumerate(fprints):
-
-                if fprints_progress_last + fprints_progress_unit < rec_idx:
-                    fprints_progress_last = rec_idx
-                    outfh.flush()
-                    logger.debug(' .. progress %s, mem: %s MB'
-                                 % (rec_idx, utils.get_mem_usage() / 1024.0))
-
-                if fprint in bigdb:
-                    outfh.write('%s,%s\n' % (fprint, base64.b64encode(bigdb[fprint])))
-
-                else:
-                    not_found += 1
-
-        logger.info('Finished with idx %s, file %s, newfile: %s, not found: %s, mem: %s MB'
-                    % (test_idx, fname, certfile, not_found, utils.get_mem_usage() / 1024.0))
-
-        # Store only fingerprints contained in this set.
-        with open(fprintfile, 'w') as outfh:
-            for fprint in fprints:
-                outfh.write('%s\n' % fprint)
-
         # Store only new fingerprints, not seen before
         logger.info('Storing new fingerprints. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
         with open(fprintfile_new, 'w') as outfh:
             for fprint in fprints:
                 if fprint not in fprints_seen_set:
                     outfh.write('%s\n' % fprint)
+                    fprints_set_new.add(fprint)
                     fprints_seen_set.add(fprint)
 
         # Certificates new from previous
@@ -201,11 +194,44 @@ def main():
                 if fprint not in fprints_set:
                     outfh.write('%s\n' % fprint)
 
+        # Certificates same as in the previous dataset
         logger.info('Storing same fingerprints as previous. Mem: %s MB' % (utils.get_mem_usage() / 1024.0))
         with open(fprintfile_same, 'w') as outfh:
             for fprint in fprints:
                 if fprint in fprints_previous:
                     outfh.write('%s\n' % fprint)
+
+        # Store only fingerprints contained in this set.
+        with open(fprintfile, 'w') as outfh:
+            for fprint in fprints:
+                outfh.write('%s\n' % fprint)
+
+        # Certificates file _certs.gz - only new certificates
+        fprints_new = list(fprints_set_new)
+        fprints_new.sort()
+
+        fprints_len = len(fprints_new)
+        fprints_progress_unit = fprints_len / 100
+        fprints_progress_last = 0
+        logger.info('Dumping only new certificates, fprint db size: %d' % fprints_len)
+
+        with gzip.open(certfile, 'wb') as outfh:
+            for rec_idx, fprint in enumerate(fprints_new):
+
+                if fprints_progress_last + fprints_progress_unit < rec_idx:
+                    fprints_progress_last = rec_idx
+                    outfh.flush()
+                    logger.debug(' .. progress %s, mem: %s MB'
+                                 % (rec_idx, utils.get_mem_usage() / 1024.0))
+
+                if fprint in bigdb:
+                    outfh.write('%s,%s\n' % (fprint, base64.b64encode(bigdb[fprint])))
+
+                else:
+                    not_found += 1
+
+        logger.info('Finished with idx %s, file %s, newfile: %s, not found: %s, mem: %s MB'
+                    % (test_idx, fname, certfile, not_found, utils.get_mem_usage() / 1024.0))
 
         # Final step - store to previous
         fprints_previous = set(fprints_set)

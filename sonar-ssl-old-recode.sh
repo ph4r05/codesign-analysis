@@ -13,15 +13,15 @@ export PATH="${PYENV_ROOT}/bin:${PATH}"
 # module add openmpi
 
 eval "$(pyenv init -)"
-sleep 1
+sleep 3
 
 pyenv local 2.7.13
-sleep 1
+sleep 3
 
 echo "`hostname` starting..."
 
 exec stdbuf -eL python /storage/praha1/home/ph4r05/cas/codesign/censys_sonarssl_recode.py \
-    /storage/praha1/home/ph4r05/sonarssl/20131030-20150518_certs.gz \
-    --datadir /storage/brno7-cerit/home/ph4r05/sonarssl \
+    /storage/brno7-cerit/home/ph4r05/sonarssl/20131030-20150518_certs_sorted \
+    --datadir /storage/brno3-cerit/home/ph4r05/sonarssl \
     --json /storage/praha1/home/ph4r05/cas/tls_sonar.ssl.json 2> /storage/praha1/home/ph4r05/logs/recode.log
 
