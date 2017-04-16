@@ -112,7 +112,7 @@ def main():
                     linerec = line.strip().split(',')
                     fprint = linerec[0]
                     cert_b64 = linerec[1]
-                    cert_bin = base64.b64decode(cert_b64, True)
+                    cert_bin = base64.b64decode(cert_b64)
 
                     cert = utils.load_x509_der(cert_bin)
                     pub = cert.public_key()
@@ -132,6 +132,7 @@ def main():
 
                 except Exception as e:
                     logger.error('Exception in rec processing: %s' % e)
+                    logger.debug(traceback.format_exc())
 
         logger.info('Processed certificate file, size: %d, mem: %s MB' % (len(js_db), utils.get_mem_mb()))
 
