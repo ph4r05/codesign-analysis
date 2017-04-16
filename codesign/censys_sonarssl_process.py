@@ -122,7 +122,7 @@ def main():
                         js['e'] = '%x' % pub.public_numbers().e
                         js['n'] = '%x' % pub.public_numbers().n
                         js['nnum'] = pub.public_numbers().n
-                        js['info'] = {}
+                        js['info'] = {'ip': []}
                         if fprint in fprints_db:
                             js['info']['ip'] = fprints_db[fprint]
 
@@ -143,7 +143,15 @@ def main():
         logger.info('JSON file produced')
 
         # Duplicate removal
-        # TODO: implement
+        with open(jsonufile, 'w') as fh:
+            for k, g in itertools.groupby(js_db, key=lambda x: x['n']):
+                js = g[0]
+                js['count'] = len(g)
+                ips = []
+                for rec in g:
+                    ips += rec['info']['ip']
+                fh.write(json.dumps(js) + '\n')
+
 
 
 
