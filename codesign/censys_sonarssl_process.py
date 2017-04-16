@@ -80,6 +80,7 @@ def main():
         jsonfile = os.path.join(args.datadir, '%s_certs.json' % datepart)
         jsonufile = os.path.join(args.datadir, '%s_certs.uniq.json' % datepart)
 
+        logger.info('Test idx: %d date part: %s, ram: %s MB' % (test_idx, datepart, utils.get_mem_mb()))
         if not os.path.exists(certfile):
             logger.error('Cert file does not exist %s' % certfile)
             continue
@@ -89,6 +90,7 @@ def main():
             continue
 
         # Load host file, ip->fprint associations.
+        logger.info('Building fprint database ram: %s MB' % utils.get_mem_mb())
         fprints_db = collections.defaultdict(list)
         with gzip.open(hostfile) as cf:
             for line in cf:
@@ -99,7 +101,7 @@ def main():
                     lst = fprints_db[fprint]
                     lst.add(ip)
 
-        logger.info('Processed host file, db size: %s' % len(fprints_db))
+        logger.info('Processed host file, db size: %s, ram: %s MB' % (len(fprints_db), utils.get_mem_mb()))
 
         # Process
         js_db = []
@@ -131,7 +133,7 @@ def main():
                 except Exception as e:
                     logger.error('Exception in rec processing: %s' % e)
 
-        logger.info('Processed certificate file, size: %d' % len(js_db))
+        logger.info('Processed certificate file, size: %d, mem: %s MB' % (len(js_db)), utils.get_mem_mb())
 
         # Sort
         js_db.sort(key=lambda x: x['nnum'])
@@ -140,7 +142,7 @@ def main():
                 del rec['nnum']
                 fh.write(json.dumps(rec) + '\n')
 
-        logger.info('JSON file produced')
+        logger.info('JSON file produced, mem: %s MB' % utils.get_mem_mb())
 
         # Duplicate removal
         with open(jsonufile, 'w') as fh:
@@ -151,12 +153,6 @@ def main():
                 for rec in g:
                     ips += rec['info']['ip']
                 fh.write(json.dumps(js) + '\n')
-
-
-
-
-
-        pass
 
 
 if __name__ == '__main__':

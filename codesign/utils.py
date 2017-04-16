@@ -789,6 +789,14 @@ def get_mem_usage():
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
 
+def get_mem_mb():
+    """
+    Memory usage in MB
+    :return: 
+    """
+    return get_mem_usage() / 1024.0
+
+
 def intval(x):
     if x is None:
         return 0
