@@ -13,7 +13,7 @@ import json
 import shutil
 from lxml import html
 from cryptography.hazmat.backends import default_backend
-from cryptography.x509.base import load_pem_x509_certificate
+from cryptography.x509.base import load_pem_x509_certificate, load_der_x509_certificate
 from cryptography.hazmat.primitives.serialization import load_ssh_public_key
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
@@ -57,6 +57,10 @@ def get_backend(backend=None):
 
 def load_x509(data, backend=None):
     return load_pem_x509_certificate(data, get_backend(backend))
+
+
+def load_x509_der(data, backend=None):
+    return load_der_x509_certificate(data, get_backend(backend))
 
 
 def unix_time_millis(dt):
