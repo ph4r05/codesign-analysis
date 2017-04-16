@@ -99,7 +99,7 @@ def main():
                 fprints = linerec[1:]
                 for fprint in fprints:
                     lst = fprints_db[fprint]
-                    lst.add(ip)
+                    lst.append(ip)
 
         logger.info('Processed host file, db size: %s, ram: %s MB' % (len(fprints_db), utils.get_mem_mb()))
 
@@ -133,7 +133,7 @@ def main():
                 except Exception as e:
                     logger.error('Exception in rec processing: %s' % e)
 
-        logger.info('Processed certificate file, size: %d, mem: %s MB' % (len(js_db)), utils.get_mem_mb())
+        logger.info('Processed certificate file, size: %d, mem: %s MB' % (len(js_db), utils.get_mem_mb()))
 
         # Sort
         js_db.sort(key=lambda x: x['nnum'])
