@@ -36,6 +36,8 @@ def main():
     https://scans.io/study/sonar.ssl
     :return:
     """
+    utils.monkey_patch_asn1_time()
+
     parser = argparse.ArgumentParser(description='Processes Censys links from the page, generates json')
 
     parser.add_argument('--url', dest='url', nargs=argparse.ZERO_OR_MORE, default=[],

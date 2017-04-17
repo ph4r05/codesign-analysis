@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.serialization import load_ssh_public_key
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
 from cryptography.x509.oid import ExtensionOID
+from cryptography.hazmat.backends.openssl.backend import Backend as BackendOssl
 from cryptography import x509 as x509_c
 
 from pyx509.models import PKCS7, PKCS7_SignedData
@@ -842,5 +843,23 @@ def get_last_url_segment(x):
     """
     x = strip_leading_slash(x)
     return x.rsplit('/', 1)[1]
+
+
+def monkey_patch_asn1_time():
+    """
+    Monkey-patching of the date time parsing
+    :return: 
+    """
+    def _parse_asn1_generalized_time(self, generalized_time):
+        time = self._asn1_string_to_ascii(
+            self._ffi.cast("ASN1_STRING *", generalized_time)
+        )
+        try:
+            return datetime.datetime.strptime(time, "%Y%m%d%H%M%SZ")
+        except:
+            logger.debug('Parsing ASN.1 date with standard format failed: %s' % time)
+            return dateutil.parser.parse(time)
+
+    BackendOssl._parse_asn1_generalized_time = _parse_asn1_generalized_time
 
 
