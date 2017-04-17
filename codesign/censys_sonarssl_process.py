@@ -151,6 +151,9 @@ def main():
                             last_info_time = time.time()
                             last_info_line = line_ctr
 
+                except ValueError as e:
+                    logger.error('Exception in rec processing (ValueError): %s, line %09d' % (e, line_ctr))
+
                 except Exception as e:
                     logger.error('Exception in rec processing: %s' % e)
                     logger.debug(traceback.format_exc())
