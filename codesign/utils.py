@@ -729,10 +729,11 @@ def try_get_san(cert):
     return []
 
 
-def try_is_ca(cert):
+def try_is_ca(cert, quiet=True):
     """
     Tries to load SAN from the certificate
     :param cert: 
+    :param quiet: 
     :return: 
     """
     try:
@@ -743,8 +744,9 @@ def try_is_ca(cert):
         return False
 
     except Exception as e:
-        logger.error('Exception in getting CA rest. %s' % e)
-        logger.debug(traceback.format_exc())
+        if not quiet:
+            logger.error('Exception in getting CA rest. %s' % e)
+            logger.debug(traceback.format_exc())
 
     return False
 
