@@ -5,14 +5,83 @@ import logging
 import json
 import traceback
 import hashlib
+import string
 
 
 logger = logging.getLogger(__name__)
 
 
+class NewlineIterator(object):
+    """
+    Wraps any object with read() method so it returns line by line on iterating.
+    """
+
+    def __init__(self, fh):
+        self._fh = fh
+        self._data = ''
+        self._offset = 0  # position in unzipped stream
+        self._done = False
+
+    def __fill(self, num_bytes):
+        """
+        Fill the internal buffer with 'num_bytes' of data.
+        @param num_bytes: int, number of bytes to read in (0 = everything)
+        """
+        if self._done:
+            return
+
+        while not num_bytes or len(self._data) < num_bytes:
+            data = self._fh.read(32768)
+            if not data:
+                self._done = True
+                break
+
+            self._data = self._data + data
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        line = self.readline()
+        if not line:
+            raise StopIteration()
+        return line
+
+    def read(self, size=0):
+        self.__fill(size)
+        if size:
+            data = self._data[:size]
+            self._data = self._data[size:]
+        else:
+            data = self._data
+            self._data = ""
+        self._offset = self._offset + len(data)
+        return data
+
+    def readline(self):
+        # make sure we have an entire line
+        while not self._done and "\n" not in self._data:
+            self.__fill(len(self._data) + 512)
+
+        pos = string.find(self._data, "\n") + 1
+        if pos <= 0:
+            return self.read()
+        return self.read(pos)
+
+    def readlines(self):
+        lines = []
+        while True:
+            line = self.readline()
+            if not line:
+                break
+            lines.append(line)
+        return lines
+
+
 class NewlineReader(object):
     """
     Very simple newline separated JSON reader.
+    Optimized for use with lz4 decompressor.
     """
     def __init__(self, is_json=True, *args, **kwargs):
         self.is_json = is_json
