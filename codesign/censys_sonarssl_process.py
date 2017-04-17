@@ -138,6 +138,7 @@ def main():
                         js['source'] = [cname, not_before.strftime('%Y-%m-%d')]
                         js['ca'] = utils.try_is_ca(cert)
                         js['ss'] = utils.try_is_self_signed(cert)
+                        js['fprint'] = fprint
                         js['e'] = '%x' % pub.public_numbers().e
                         js['n'] = '%x' % pub.public_numbers().n
                         js['nnum'] = pub.public_numbers().n
