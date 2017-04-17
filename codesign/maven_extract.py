@@ -56,11 +56,16 @@ class MavenKeyExtract(object):
 
         logger.info('Key list size: %s, key set size: %s' % (len(keylist), len(keyset)))
 
+        no_key_id = 0
         keys_res = OrderedDict()
         with open(self.args.json) as fh:
             for idx, line in enumerate(fh):
                 try:
                     rec = json.loads(line)
+                    if 'key_id' not in rec:
+                        no_key_id += 1
+                        continue
+
                     key_id = rec['key_id']
                     key_id_int = int(key_id, 16)
                     if key_id_int not in keyset:
@@ -77,6 +82,8 @@ class MavenKeyExtract(object):
         json_res_file = os.path.join(self.args.data_dir, 'mvn_keys_dump.json')
         with open(json_res_file, 'w') as fw:
             json.dump(keys_res, fw)
+
+        logger.info('No key id records found: %s' % no_key_id)
 
     def check_mod(self, rec):
         """
