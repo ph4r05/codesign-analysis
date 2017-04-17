@@ -136,6 +136,8 @@ def main():
                         cname = utils.try_get_cname(cert)
 
                         js['source'] = [cname, not_before.strftime('%Y-%m-%d')]
+                        js['ca'] = utils.try_is_ca(cert)
+                        js['ss'] = utils.try_is_self_signed(cert)
                         js['e'] = '%x' % pub.public_numbers().e
                         js['n'] = '%x' % pub.public_numbers().n
                         js['nnum'] = pub.public_numbers().n
@@ -143,6 +145,8 @@ def main():
                         if fprint in fprints_db:
                             js['info']['ip'] = fprints_db[fprint]
 
+                        if js['ca']:
+                            js['raw'] = cert_b64
                         js_db.append(js)
 
                         if line_ctr - last_info_line >= 1000 and time.time() - last_info_time >= 30:
@@ -176,10 +180,7 @@ def main():
             for k, g in itertools.groupby(js_db, key=lambda x: x['n']):
                 grp = [x for x in g]
                 g0 = grp[0]
-                js = collections.OrderedDict()
-                js['source'] = g0['source']
-                js['e'] = g0['e']
-                js['n'] = g0['n']
+                js = collections.OrderedDict(g0)
                 js['count'] = len(grp)
                 ips = []
                 for rec in grp:
