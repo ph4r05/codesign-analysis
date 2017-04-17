@@ -872,6 +872,19 @@ def get_last_url_segment(x):
     return x.rsplit('/', 1)[1]
 
 
+def strip_hex_prefix(x):
+    """
+    Strips possible hex prefixes from the strings
+    :param x: 
+    :return: 
+    """
+    if x.startswith('0x'):
+        return x[2:]
+    if x.startswith('\\x'):
+        return x[2:]
+    return x
+
+
 def monkey_patch_asn1_time():
     """
     Monkey-patching of the date time parsing
