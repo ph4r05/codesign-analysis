@@ -49,6 +49,12 @@ def main():
     parser.add_argument('--datadir', dest='datadir', default='.',
                         help='datadir')
 
+    parser.add_argument('--proc-total', dest='proc_total', default=1, type=int,
+                        help='Total number of processes to run')
+
+    parser.add_argument('--proc-cur', dest='proc_cur', default=0, type=int,
+                        help='ID of the current process')
+
     args = parser.parse_args()
     testrng = range(10, 93)
 
@@ -58,6 +64,9 @@ def main():
 
     jsdb_ids = {x['id']: x for x in jsdb['data']}
     for test_idx in testrng:
+        if int(test_idx % args.proc_total) != int(args.proc_cur):
+            continue
+
         files = jsdb_ids[test_idx]['files']
         filerec = None
         for tmprec in files:
