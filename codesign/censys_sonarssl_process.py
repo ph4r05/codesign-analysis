@@ -174,10 +174,11 @@ def main():
         # Duplicate removal
         with open(jsonufile, 'w') as fh:
             for k, g in itertools.groupby(js_db, key=lambda x: x['n']):
-                js = g[0]
-                js['count'] = len(g)
+                grp = [x for x in g]
+                js = grp[0]
+                js['count'] = len(grp)
                 ips = []
-                for rec in g:
+                for rec in grp:
                     ips += rec['info']['ip']
                 fh.write(json.dumps(js) + '\n')
 
