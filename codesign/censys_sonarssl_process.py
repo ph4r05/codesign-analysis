@@ -175,7 +175,11 @@ def main():
         with open(jsonufile, 'w') as fh:
             for k, g in itertools.groupby(js_db, key=lambda x: x['n']):
                 grp = [x for x in g]
-                js = dict(grp[0])
+                g0 = grp[0]
+                js = collections.OrderedDict()
+                js['source'] = g0['source']
+                js['e'] = g0['e']
+                js['n'] = g0['n']
                 js['count'] = len(grp)
                 ips = []
                 for rec in grp:
