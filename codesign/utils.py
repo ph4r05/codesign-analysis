@@ -737,10 +737,27 @@ def try_is_ca(cert):
         return ext.value.ca
 
     except Exception as e:
-        logger.error('Excepion in getting CA rest. %s' % e)
+        logger.error('Exception in getting CA rest. %s' % e)
         logger.debug(traceback.format_exc())
 
     return False
+
+
+def try_is_self_signed(cert):
+    """
+    Tries to determine if the certificate is self signed
+    Currently implemented by comparing subject & issuer
+    :param cert: 
+    :return: 
+    """
+    try:
+        return cert.subject == cert.issuer
+
+    except Exception as e:
+        logger.error('Exception in self-signed check. %s' % e)
+        logger.debug(traceback.format_exc())
+
+    return None
 
 
 def try_get_cname(cert):
