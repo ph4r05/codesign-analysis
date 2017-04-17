@@ -33,7 +33,6 @@ import grp
 import types
 import binascii
 import resource
-from datetime import datetime
 import dateutil.parser
 import time
 
@@ -74,7 +73,7 @@ def unix_time_millis(dt):
 def unix_time(dt):
     if dt is None:
         return None
-    return (dt - datetime.utcfromtimestamp(0).replace(tzinfo=dt.tzinfo)).total_seconds()
+    return (dt - datetime.datetime.utcfromtimestamp(0).replace(tzinfo=dt.tzinfo)).total_seconds()
 
 
 def fmt_time(dt):
@@ -857,8 +856,8 @@ def monkey_patch_asn1_time():
         )
         try:
             return datetime.datetime.strptime(time, "%Y%m%d%H%M%SZ")
-        except:
-            logger.debug('Parsing ASN.1 date with standard format failed: %s' % time)
+        except Exception as e:
+            logger.debug('Parsing ASN.1 date with standard format failed: %s, exc: %s' % (time, e))
             return dateutil.parser.parse(time)
 
     BackendOssl._parse_asn1_generalized_time = _parse_asn1_generalized_time
@@ -869,8 +868,8 @@ def monkey_patch_asn1_time():
         )
         try:
             return datetime.datetime.strptime(time, "%Y%m%d%H%M%SZ")
-        except:
-            logger.debug('Parsing ASN.1 date with standard format failed: %s' % time)
+        except Exception as e:
+            logger.debug('Parsing ASN.1 date with standard format failed: %s, exc: %s' % (time, e))
             return dateutil.parser.parse(time)
 
     decode_asn1._parse_asn1_generalized_time = _parse_asn1_generalized_time
