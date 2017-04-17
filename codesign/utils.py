@@ -751,19 +751,21 @@ def try_is_ca(cert, quiet=True):
     return False
 
 
-def try_is_self_signed(cert):
+def try_is_self_signed(cert, quiet=True):
     """
     Tries to determine if the certificate is self signed
     Currently implemented by comparing subject & issuer
     :param cert: 
+    :param quiet: 
     :return: 
     """
     try:
         return cert.subject == cert.issuer
 
     except Exception as e:
-        logger.error('Exception in self-signed check. %s' % e)
-        logger.debug(traceback.format_exc())
+        if not quiet:
+            logger.error('Exception in self-signed check. %s' % e)
+            logger.debug(traceback.format_exc())
 
     return None
 
