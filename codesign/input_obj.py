@@ -204,7 +204,7 @@ class LinkInputObject(InputObject):
         return data
 
     def text(self):
-        data = self.r.text
+        data = self.r.text.encode('utf8')
         self.sha256.update(data)
         self.data_read += len(data)
         return data
