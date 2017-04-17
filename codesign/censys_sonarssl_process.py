@@ -90,6 +90,7 @@ def main():
         hostfile = os.path.join(args.datadir, '%s_hosts.gz' % datepart)
         jsonfile = os.path.join(args.datadir, '%s_certs.json' % datepart)
         jsonufile = os.path.join(args.datadir, '%s_certs.uniq.json' % datepart)
+        finishfile = os.path.join(args.datadir, '%s_process.finished' % datepart)
 
         logger.info('Test idx: %d date part: %s, ram: %s MB' % (test_idx, datepart, utils.get_mem_mb()))
         if not os.path.exists(certfile):
@@ -98,6 +99,10 @@ def main():
 
         if not os.path.exists(hostfile):
             logger.error('Host file does not exist %s' % certfile)
+            continue
+
+        if os.path.exists(finishfile):
+            logger.info('Test finished')
             continue
 
         # Load host file, ip->fprint associations.
@@ -189,6 +194,7 @@ def main():
                 js['info']['ip'] = ips
                 fh.write(json.dumps(js) + '\n')
 
+        utils.try_touch(finishfile)
 
 if __name__ == '__main__':
     main()
