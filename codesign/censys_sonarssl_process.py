@@ -115,10 +115,14 @@ def main():
         logger.info('Processed host file, db size: %s, ram: %s MB' % (len(fprints_db), utils.get_mem_mb()))
 
         # Process
+        last_info_time = 0
+        last_info_line = 0
+        line_ctr = 0
         js_db = []
         with gzip.open(certfile) as cf:
             for line in cf:
                 try:
+                    line_ctr += 1
                     js = collections.OrderedDict()
                     linerec = line.strip().split(',')
                     fprint = linerec[0]
@@ -141,6 +145,12 @@ def main():
 
                         js_db.append(js)
 
+                        if line_ctr - last_info_line > 1000 and time.time() - last_info_time > 30:
+                            logger.info('Progress, line: %09d, mem: %s MB, db size: %09d, from last: %05d, cname: %s'
+                                        % (line_ctr, utils.get_mem_mb(), len(js_db), line_ctr - last_info_line, cname))
+                            last_info_time = time.time()
+                            last_info_line = line_ctr
+
                 except Exception as e:
                     logger.error('Exception in rec processing: %s' % e)
                     logger.debug(traceback.format_exc())
@@ -149,6 +159,8 @@ def main():
 
         # Sort
         js_db.sort(key=lambda x: x['nnum'])
+        logger.info('Sorted, mem: %s MB' % utils.get_mem_mb())
+
         with open(jsonfile, 'w') as fh:
             for rec in js_db:
                 del rec['nnum']
