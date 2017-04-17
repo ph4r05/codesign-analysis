@@ -11,8 +11,11 @@ import requests
 import math
 import json
 import shutil
+
 from lxml import html
+
 from cryptography.hazmat.backends import default_backend
+from cryptography.x509 import ExtensionNotFound
 from cryptography.x509.base import load_pem_x509_certificate, load_der_x509_certificate
 from cryptography.hazmat.primitives.serialization import load_ssh_public_key
 from cryptography.hazmat.primitives import hashes
@@ -735,6 +738,9 @@ def try_is_ca(cert):
     try:
         ext = cert.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
         return ext.value.ca
+
+    except ExtensionNotFound:
+        return False
 
     except Exception as e:
         logger.error('Exception in getting CA rest. %s' % e)
