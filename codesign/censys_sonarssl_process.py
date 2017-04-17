@@ -145,8 +145,8 @@ def main():
 
                         js_db.append(js)
 
-                        if line_ctr - last_info_line > 1000 and time.time() - last_info_time > 30:
-                            logger.info('Progress, line: %09d, mem: %s MB, db size: %09d, from last: %05d, cname: %s'
+                        if line_ctr - last_info_line >= 1000 and time.time() - last_info_time >= 30:
+                            logger.info('Progress, line: %9d, mem: %s MB, db size: %9d, from last: %5d, cname: %s'
                                         % (line_ctr, utils.get_mem_mb(), len(js_db), line_ctr - last_info_line, cname))
                             last_info_time = time.time()
                             last_info_line = line_ctr
