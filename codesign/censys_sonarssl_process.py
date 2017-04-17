@@ -29,16 +29,20 @@ coloredlogs.install(level=logging.DEBUG)
 
 
 class SonarSSLProcess(object):
+    """
+    Processing censys datasets
+    Stored sorted fingerprints, scanning big database of fprints, producing new (incremental) certificates.
+    Produces JSON for classification
+    
+    https://scans.io/study/sonar.ssl
+    """
+    
     def __init__(self):
         self.args = None
 
     def main(self):
         """
-        Processing censys datasets
-        Stored sorted fingerprints, scanning big database of fprints, producing new (incremental) certificates.
-        Produces JSON for classification
-    
-        https://scans.io/study/sonar.ssl
+        Main entry point, argument processing
         :return:
         """
         utils.monkey_patch_asn1_time()
@@ -67,6 +71,10 @@ class SonarSSLProcess(object):
         self.work()
 
     def work(self):
+        """
+        Work entry point, arguments processed, do the job
+        :return: 
+        """
         args = self.args
         testrng = range(10, 93)
 
