@@ -56,6 +56,7 @@ class MavenKeyExtract(object):
 
         logger.info('Key list size: %s, key set size: %s' % (len(keylist), len(keyset)))
 
+        keyset_found = set()
         no_key_id = 0
         keys_res = OrderedDict()
         with open(self.args.json) as fh:
@@ -71,6 +72,7 @@ class MavenKeyExtract(object):
                     if key_id_int not in keyset:
                         continue
 
+                    keyset_found.add(key_id_int)
                     keys_res[key_id_int] = rec
                     logger.info('Key found, db size: %s, mem: %s MB ' % (len(keys_res), utils.get_mem_mb()))
                     print(json.dumps(rec))
@@ -83,7 +85,12 @@ class MavenKeyExtract(object):
         with open(json_res_file, 'w') as fw:
             json.dump(keys_res, fw)
 
+        json_missing_file = os.path.join(self.args.data_dir, 'mvn_keys_missing.json')
+        with open(json_missing_file, 'w') as fw:
+            json.dump(sorted(list(keyset - keyset_found)), fw)
+
         logger.info('No key id records found: %s' % no_key_id)
+        logger.info('No key id records missing: %s' % len(keyset - keyset_found))
 
     def check_mod(self, rec):
         """
