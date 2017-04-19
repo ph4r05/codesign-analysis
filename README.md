@@ -60,6 +60,41 @@ For that you may need to install lz4:
 sudo apt-get install liblz4-tool
 ```
 
+## Math modules - installation
+
+```
+#
+# MPFR module load, or manual installation: http://www.mpfr.org/
+#
+module add mpfr-3.1.4
+export CWD=$HOME
+
+#
+# install GMP https://gmplib.org/
+#
+wget https://gmplib.org/download/gmp/gmp-6.1.2.tar.bz2
+tar -xjvf gmp-6.1.2.tar.bz2
+cd gmp-6.1.2
+./configure --prefix=$CWD
+make && make install
+cd $CWD
+
+#
+# install MPC http://www.multiprecision.org/index.php?prog=mpc&page=download
+#
+wget ftp://ftp.gnu.org/gnu/mpc/mpc-1.0.3.tar.gz
+tar -xzvf mpc-1.0.3.tar.gz
+cd mpc-1.0.3
+./configure --prefix=$CWD
+make && make install
+cd $CWD
+
+#
+# Instakk gmpy2
+#
+env CFLAGS="-I${CWD}/include" LDFLAGS="-L${CWD}/lib" --global-option=build_ext --global-option="-I${CWD}/include" pip install gmpy2
+```
+
 # MPI
 
 Message passing interface enables effective parallel computation
