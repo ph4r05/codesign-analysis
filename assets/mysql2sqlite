@@ -54,13 +54,17 @@ inView != 0 { next }
   gsub( /\\"/, "\"" )
   gsub( /\\\\/, "\\" )
   gsub( /\\\032/, "\032" )  # substitute
-  # sqlite3 is limited to 16 significant digits of precision
-  while ( match( $0, /0x[0-9a-fA-F]{17}/ ) ) {
-    hexIssue = 1
-    sub( /0x[0-9a-fA-F]+/, substr( $0, RSTART, RLENGTH-1 ), $0 )
-  }
-  print
+  # insert hex as blobs
+  print gensub( /0x([0-9a-zA-Z]+)/, "X'\\1'", "g")
   next
+  #
+  # previously:
+  # sqlite3 is limited to 16 significant digits of precision
+  #while ( match( $0, /0x[0-9a-fA-F]{17}/ ) ) {
+  #  hexIssue = 1
+  #  sub( /0x[0-9a-fA-F]+/, substr( $0, RSTART, RLENGTH-1 ), $0 )
+  #}
+  #print
 }
 
 # CREATE DATABASE is not supported
