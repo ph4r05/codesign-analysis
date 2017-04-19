@@ -190,7 +190,7 @@ def main():
     parser.add_argument('-c', dest='config', default=None, help='JSON config file')
     parser.add_argument('-s', dest='sqlite', default=None, help='SQlite file')
     parser.add_argument('--json', dest='use_json', default=False, action='store_const', const=True,
-                        help='Load only users list')
+                        help='Dump to JSON')
     parser.add_argument('--sqlite_data', dest='sqlite_data', default=False, action='store_const', const=True,
                         help='To dump also SQLite data')
 
