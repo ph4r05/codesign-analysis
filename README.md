@@ -104,6 +104,7 @@ ssh -nNT -L 60123:localhost:3306 klivm
 ```
 
  * Socat hack, forwarding local bound 60123 port to the global bound 60124. Ideally do that in the `screen`:
+    * Socat can be found here: http://www.dest-unreach.org/socat/download/socat-1.7.3.2.tar.gz
 
 ```
 socat tcp-listen:60124,reuseaddr,fork tcp:localhost:60123
@@ -111,6 +112,12 @@ socat tcp-listen:60124,reuseaddr,fork tcp:localhost:60123
 
  * Use 60124 port for MySQL connection
 
+ * Alternatively you can use another SSH from worker node on *Meta* to the frontend node (benefit: encrypted connection
+ from worker node to the frontend).
+
+```
+ssh -nNT -L 60125:localhost:60123 klivm &
+```
 
 ## Math modules - installation
 
@@ -142,7 +149,7 @@ make && make install
 cd $CWD
 
 #
-# Instakk gmpy2
+# Install gmpy2
 #
 env CFLAGS="-I${CWD}/include" LDFLAGS="-L${CWD}/lib" --global-option=build_ext --global-option="-I${CWD}/include" pip install gmpy2
 ```
