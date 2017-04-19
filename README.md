@@ -65,14 +65,12 @@ sudo apt-get install liblz4-tool
  - One may use export scripts, but this is a bit slower
  - Faster solution: mysqldump + sqlite import.
 
-In the latter the schea is created by the export script
+In the latter the schea is created by the export script.
+Note the modified `mysql2sqlite` script from this repo is needed for import of hex coded blobs.
 
 ```
 mysqldump --skip-extended-insert --compact --hex-blob -u codesign -p codesign \
     --tables maven_artifact maven_signature pgp_key > maven_dump.sql
-
-wget https://raw.githubusercontent.com/dumblob/mysql2sqlite/master/mysql2sqlite
-chmod +x mysql2sqlite
 
 ./mysql2sqlite maven_dump.sql | sqlite3 maven.sqlite
 ```
