@@ -76,6 +76,42 @@ mysqldump --skip-extended-insert --compact --hex-blob -u codesign -p codesign \
 ```
 
 
+## MySQL port forwarding
+
+Forwarding MySQL port from one machine to another via SSH tunnel.
+
+Please note that SSH tunnel forwarding does not allow port binding on the 0.0.0.0 / 0:: by default.
+
+There are 2 ways to do the port binding.
+
+ * Connecting from *Meta* to *DB server*, using local tunneling. Client is in charge. Can open as many tunnels as desired.
+ * Connection from *DB server* to *Meta*, using remote tunelling. Server creates a single connection on some server hub.
+ Binding on the local interface only can be mitigated by using `socat`.
+
+### Client to DB
+
+ * Create a new ssh key on the *Meta*, this key will be allowed to do only the port forward on the *DB server*
+ * DB server `autorized_keys` record:
+
+```
+command="echo 'This account can only be used for port forward'",no-agent-forwarding,no-X11-forwarding,permitopen="localhost:3306" ssh-rsa AAAAB3NzaC1y....
+```
+
+ * Create a tunnel on the *Meta*. Ideally do that in the `screen`:
+
+```
+ssh -nNT -L 60123:localhost:3306 klivm
+```
+
+ * Socat hack, forwarding local bound 60123 port to the global bound 60124. Ideally do that in the `screen`:
+
+```
+socat tcp-listen:60124,reuseaddr,fork tcp:localhost:60123
+```
+
+ * Use 60124 port for MySQL connection
+
+
 ## Math modules - installation
 
 ```
