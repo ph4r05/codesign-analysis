@@ -5,7 +5,13 @@
 GitHub data exporter.
 For mysql 2 sqlite: create schema, then import data:
 
-mysqldump --skip-extended-insert --compact --no-create-db --no-create-info -u root -p codesign
+mysqldump --skip-extended-insert --compact --no-create-db --no-create-info -u codesign -p codesign --hex-blob \
+    --tables github_key github_user > github_dump.sql
+
+wget https://raw.githubusercontent.com/dumblob/mysql2sqlite/master/mysql2sqlite
+chmod +x mysql2sqlite
+
+./mysql2sqlite github_dump.sql | sqlite3 github.sqlite
 """
 
 import os
