@@ -66,6 +66,8 @@ class PGPKey(Base):
 
     # In case of a sub-key
     master_key_id = Column(String(64), nullable=True)
+    master_fingerprint = Column(String(255), nullable=True)
+    master_key_file = Column(BLOB, nullable=True)
 
     date_created = Column(DateTime, nullable=True)
     date_expires = Column(DateTime, nullable=True)
@@ -82,7 +84,7 @@ class PGPKey(Base):
 
     # RSA
     key_modulus = Column(Text, nullable=True)
-    key_exponent = Column(BigInteger, nullable=True)
+    key_exponent = Column(Text, nullable=True)
 
     # (EC)DSA
     prime = Column(Text, nullable=True)

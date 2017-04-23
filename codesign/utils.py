@@ -915,3 +915,13 @@ def monkey_patch_asn1_time():
     decode_asn1._parse_asn1_generalized_time = _parse_asn1_generalized_time
 
 
+def format_pgp_key(key):
+    """
+    Formats PGP key in 16hex digits
+    :param key: 
+    :return: 
+    """
+    if key is None:
+        return None
+    return '%016x' % key
+
