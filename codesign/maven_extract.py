@@ -205,7 +205,7 @@ class MavenKeyExtract(object):
         """
         if not self.args.sec:
             return
-        if rec is not None:
+        if rec is None:
             return
 
         key_id = utils.defvalkey(rec, 'key_id')
