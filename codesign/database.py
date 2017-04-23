@@ -73,6 +73,7 @@ class PGPKey(Base):
     date_expires = Column(DateTime, nullable=True)
 
     signatures_count = Column(DateTime, nullable=True)
+    identity = Column(String(255), nullable=True)
     identity_name = Column(String(255), nullable=True)
     identity_email = Column(String(255), nullable=True)
     identities_json = Column(Text, nullable=True)
@@ -85,6 +86,7 @@ class PGPKey(Base):
     # RSA
     key_modulus = Column(Text, nullable=True)
     key_exponent = Column(Text, nullable=True)
+    is_interesting = Column(Integer, nullable=False, default=0)
 
     # (EC)DSA
     prime = Column(Text, nullable=True)

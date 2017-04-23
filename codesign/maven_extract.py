@@ -49,6 +49,7 @@ class MavenKeyExtract(object):
         self.session = None
 
         self.last_report = 0
+        self.last_flush = 0
         self.found = 0
         self.keys_added = 0
         self.keyset = set()
@@ -120,9 +121,10 @@ class MavenKeyExtract(object):
                 try:
 
                     self.process_record(s, idx, line)
-                    if idx % 15000 == 0:
+                    if time.time() - self.last_flush > 5:
                         s.flush()
                         s.commit()
+                        self.last_flush = time.time()
 
                 except Exception as e:
                     logger.error('Exception when processing line %s: %s' % (idx, e))
@@ -152,10 +154,10 @@ class MavenKeyExtract(object):
             # Phase 2 - sub packet processing
             for packet in packets:
                 if packet['tag_name'] == 'Public-Subkey':
-                    self.test_key(packet)
+                    # self.test_key(packet)
                     self.store_record(s, packet, master_key_id, master_fingerprint, user_name)
 
-        self.test_key(rec)
+        # self.test_key(rec)
         self.store_record(s, rec, None, None, user_name)
 
         if time.time() - self.last_report > 15:
@@ -186,7 +188,7 @@ class MavenKeyExtract(object):
         key.key_id = utils.format_pgp_key(key_id)
         key.master_key_id = utils.format_pgp_key(master_id)
         key.master_fingerprint = master_fingerprint
-        key.identity_email = user_name
+        key.identity = user_name
 
         key.date_last_check = sqlalchemy.func.now()
         key.date_created = datetime.datetime.fromtimestamp(creation_time) if creation_time is not None else None
@@ -194,10 +196,12 @@ class MavenKeyExtract(object):
         key.key_algorithm = algo_id
         key.key_modulus = n
         key.key_exponent = e
+        key.is_interesting = self.test_key(rec=rec)
+
         s.add(key)
         self.keys_added += 1
 
-    def test_key(self, rec):
+    def test_key(self, rec=None):
         """
         Fingerprint test
         :param rec: 
@@ -205,6 +209,7 @@ class MavenKeyExtract(object):
         """
         if not self.args.sec:
             return
+
         if rec is None:
             return
 
@@ -217,6 +222,8 @@ class MavenKeyExtract(object):
         if len(x) > 0:
             self.found += 1
             logger.info('---------------!!!-------------- Keyid: %s' % key_id)
+            return True
+        return False
 
     def work(self):
         """
