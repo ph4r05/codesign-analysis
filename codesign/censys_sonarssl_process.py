@@ -94,7 +94,7 @@ class SonarSSLProcess(object):
         jsdb = []
         with open(self.args.eco_json, 'r') as fh:
             for rec in fh:
-                js_rec = json.load(rec)
+                js_rec = json.loads(rec)
                 jsdb.append(js_rec)
 
         for test_idx, js_rec in enumerate(jsdb):
