@@ -100,14 +100,14 @@ command="echo 'This account can only be used for port forward'",no-agent-forward
  * Create a tunnel on the *Meta*. Ideally do that in the `screen`:
 
 ```
-ssh -nNT -L 60123:localhost:3306 klivm
+ssh -nNT -L 60123:localhost:3306 klivm &
 ```
 
  * Socat hack, forwarding local bound 60123 port to the global bound 60124. Ideally do that in the `screen`:
     * Socat can be found here: http://www.dest-unreach.org/socat/download/socat-1.7.3.2.tar.gz
 
 ```
-socat tcp-listen:60124,reuseaddr,fork tcp:localhost:60123
+socat tcp-listen:60124,reuseaddr,fork tcp:localhost:60123 &
 ```
 
  * Use 60124 port for MySQL connection
@@ -116,7 +116,7 @@ socat tcp-listen:60124,reuseaddr,fork tcp:localhost:60123
  from worker node to the frontend).
 
 ```
-ssh -nNT -L 60125:localhost:60123 klivm &
+ssh -nNT -L 60125:localhost:60123 tarkil &
 ```
 
 ## Math modules - installation
