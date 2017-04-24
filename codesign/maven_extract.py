@@ -143,35 +143,39 @@ class MavenKeyExtract(object):
         master_key_id = int(utils.defvalkey(rec, 'key_id', '0'), 16)
         master_fingerprint = utils.defvalkey(rec, 'fingerprint')
 
+        flat_keys = [rec]
         user_name = None
+
+        # Phase 1 - info extraction
         if 'packets' in rec:
-            # Phase 1 - info building
-            packets = rec['packets']
-            for packet in packets:
+            for packet in rec['packets']:
                 if packet['tag_name'] == 'User ID':
                     user_name = utils.defvalkey(packet, 'user_id')
+                elif packet['tag_name'] == 'Public-Subkey':
+                    flat_keys.append(packet)
 
-            # Phase 2 - sub packet processing
-            for packet in packets:
+        self.test_flat_keys(flat_keys)
+        self.store_record(s, rec, None, None, user_name, None)
+
+        # Phase 2 - sub packet processing
+        if 'packets' in rec:
+            for packet in rec['packets']:
                 if packet['tag_name'] == 'Public-Subkey':
-                    # self.test_key(packet)
-                    self.store_record(s, packet, master_key_id, master_fingerprint, user_name)
-
-        # self.test_key(rec)
-        self.store_record(s, rec, None, None, user_name)
+                    self.store_record(s, packet, master_key_id, master_fingerprint, user_name, rec)
 
         if time.time() - self.last_report > 15:
             logger.debug(' .. report idx: %s, found: %s, keys added: %s, cur key: %016X '
                          % (idx, self.found, self.keys_added, master_key_id))
             self.last_report = time.time()
 
-    def store_record(self, s, rec, master_id, master_fingerprint, user_name):
+    def store_record(self, s, rec, master_id, master_fingerprint, user_name, master_rec):
         """
         Stores master record
         :param rec: 
         :param master_id: 
         :param master_fingerprint: 
         :param user_name: 
+        :param master_rec: 
         :return: 
         """
         key_id = int(utils.defvalkey(rec, 'key_id', '0'), 16)
@@ -196,10 +200,25 @@ class MavenKeyExtract(object):
         key.key_algorithm = algo_id
         key.key_modulus = n
         key.key_exponent = e
-        key.is_interesting = self.test_key(rec=rec)
+        key.is_interesting = self.test_key(rec=rec) or self.test_key(master_rec)
 
         s.add(key)
         self.keys_added += 1
+
+    def test_flat_keys(self, flat_keys):
+        """
+        Tests all keys in the array
+        :param flat_keys: 
+        :return: 
+        """
+        if not self.args.sec_mvn:
+            return
+
+        flat_key_ids = [int(utils.defvalkey(x, 'key_id', '0'), 16) for x in flat_keys]
+        if any([(x in self.already_loaded or x in self.keyset) for x in flat_key_ids]):
+            tested = [self.test_key(x) for x in flat_keys]
+            if any(tested):
+                logger.info('------- interesting map: %s for key ids %s' % (tested, flat_key_ids))
 
     def test_key(self, rec=None):
         """
@@ -318,6 +337,9 @@ class MavenKeyExtract(object):
         parser.add_argument('--sec', dest='sec', default=False, action='store_const', const=True,
                             help='sec')
 
+        parser.add_argument('--sec-mvn', dest='sec_mvn', default=False, action='store_const', const=True,
+                            help='sec')
+
         parser.add_argument('--keys', dest='keys', default=None,
                             help='JSON array with key IDs')
 
@@ -327,6 +349,9 @@ class MavenKeyExtract(object):
         self.args = parser.parse_args()
         self.config_file = self.args.config
         self.sqlite_file = self.args.sqlite
+
+        if self.args.sec_mvn:
+            self.args.sec = True
 
         if self.args.sec:
             import sec
