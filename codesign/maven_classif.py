@@ -92,7 +92,7 @@ class MavenClassif(object):
 
             # Load all existing key ids
             existing_keys = sess.query(PGPKey).all()
-            for rec in existing_keys:
+            for idx, rec in enumerate(existing_keys):
                 key_id = int(rec.key_id, 16)
 
                 # Load all deps.
@@ -119,6 +119,11 @@ class MavenClassif(object):
                 js['deps'] = len(sigs)
                 js['info'] = {'deps': sigs}
                 resfw.write(json.dumps(js) + '\n')
+                resfw.flush()
+
+                if time.time() - self.last_report > 10:
+                    logger.debug(' .. report key idx: %s, key id: %016x' % (idx, key_id))
+                    self.last_report = time.time()
 
     def main(self):
         """
