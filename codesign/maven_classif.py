@@ -86,6 +86,8 @@ class MavenClassif(object):
         self.init_db()
         logger.info('Database initialized')
 
+        non_rsa = 0
+
         resfile = os.path.join(self.args.data_dir, 'maven-dataset.json')
         with open(resfile, 'w') as resfw:
             sess = self.session()
@@ -101,6 +103,10 @@ class MavenClassif(object):
                     .filter(MavenSignature.sig_key_id == utils.format_pgp_key(key_id)) \
                     .all()
 
+                if rec.key_modulus is None:
+                    non_rsa += 1
+                    continue
+
                 try:
                     js = OrderedDict()
                     js['source'] = [rec.identity.decode('utf8', 'replace').encode('utf8'),
@@ -111,15 +117,15 @@ class MavenClassif(object):
                     js['m_key_id'] = rec.master_key_id
                     js['m_fprint'] = rec.master_fingerprint
 
-                    js['e'] = rec.key_exponent
-                    js['n'] = rec.key_modulus
+                    js['e'] = '0x' + rec.key_exponent
+                    js['n'] = '0x' + rec.key_modulus
 
                     sigs = []
                     for dep in deps:
                         sigs.append(utils.maven_package_id(dep.group_id, dep.artifact_id, dep.version_id))
 
-                    js['deps'] = len(sigs)
-                    js['info'] = {'deps': sigs}
+                    js['pkgs_cnt'] = len(sigs)
+                    js['info'] = {'pkgs': sigs}
                     resfw.write(json.dumps(js, ensure_ascii=True) + '\n')
                     resfw.flush()
 
@@ -131,6 +137,8 @@ class MavenClassif(object):
                 if time.time() - self.last_report > 10:
                     logger.debug(' .. report key idx: %s, key id: %016x' % (idx, key_id))
                     self.last_report = time.time()
+
+        logger.info('Non-rsa keys: %s' % non_rsa)
 
     def main(self):
         """
