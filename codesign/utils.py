@@ -925,3 +925,15 @@ def format_pgp_key(key):
         return None
     return '%016x' % key
 
+
+def maven_package_id(group, artifact, version):
+    """
+    Builds maven package id from components
+    :param group: 
+    :param artifact: 
+    :param version: 
+    :return: 
+    """
+    return '%s:%s:%s' % (group, artifact, version)
+
+
