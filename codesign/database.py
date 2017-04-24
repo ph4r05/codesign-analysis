@@ -73,7 +73,7 @@ class PGPKey(Base):
     date_expires = Column(DateTime, nullable=True)
 
     signatures_count = Column(DateTime, nullable=True)
-    identity = Column(String(255), nullable=True)
+    identity = Column(Text, nullable=True)
     identity_name = Column(String(255), nullable=True)
     identity_email = Column(String(255), nullable=True)
     identities_json = Column(Text, nullable=True)
