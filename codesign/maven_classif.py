@@ -138,7 +138,7 @@ class MavenClassif(object):
 
         self.args = parser.parse_args()
         self.config_file = self.args.config
-        self.sqlite_file = self.args.sqlite
+        self.sqlite_file = None
 
         if self.args.debug:
             coloredlogs.install(level=logging.DEBUG)
