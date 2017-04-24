@@ -89,6 +89,7 @@ class MavenClassif(object):
         resfile = os.path.join(self.args.data_dir, 'maven-dataset.json')
         with open(resfile, 'w') as resfw:
             sess = self.session()
+            sess.execute("SET NAMES utf8")
 
             # Load all existing key ids
             existing_keys = sess.query(PGPKey).all()
@@ -100,26 +101,32 @@ class MavenClassif(object):
                     .filter(MavenSignature.sig_key_id == utils.format_pgp_key(key_id)) \
                     .all()
 
-                js = OrderedDict()
-                js['source'] = [rec.identity,
-                                rec.date_created.strftime('%Y-%m-%d') if rec.date_created is not None else '']
-                js['key_id'] = rec.key_id
-                js['fprint'] = rec.fingerprint
+                try:
+                    js = OrderedDict()
+                    js['source'] = [rec.identity.decode('utf8', 'replace').encode('utf8'),
+                                    rec.date_created.strftime('%Y-%m-%d') if rec.date_created is not None else '']
+                    js['key_id'] = rec.key_id
+                    js['fprint'] = rec.fingerprint
 
-                js['m_key_id'] = rec.master_key_id
-                js['m_fprint'] = rec.master_fingerprint
+                    js['m_key_id'] = rec.master_key_id
+                    js['m_fprint'] = rec.master_fingerprint
 
-                js['e'] = rec.key_exponent
-                js['n'] = rec.key_modulus
+                    js['e'] = rec.key_exponent
+                    js['n'] = rec.key_modulus
 
-                sigs = []
-                for dep in deps:
-                    sigs.append(utils.maven_package_id(dep.group_id, dep.artifact_id, dep.version_id))
+                    sigs = []
+                    for dep in deps:
+                        sigs.append(utils.maven_package_id(dep.group_id, dep.artifact_id, dep.version_id))
 
-                js['deps'] = len(sigs)
-                js['info'] = {'deps': sigs}
-                resfw.write(json.dumps(js) + '\n')
-                resfw.flush()
+                    js['deps'] = len(sigs)
+                    js['info'] = {'deps': sigs}
+                    resfw.write(json.dumps(js, ensure_ascii=True) + '\n')
+                    resfw.flush()
+
+                except Exception as e:
+                    logger.error('Exception: %s' % e)
+                    logger.debug(traceback.format_exc())
+                    logger.debug(rec.identity)
 
                 if time.time() - self.last_report > 10:
                     logger.debug(' .. report key idx: %s, key id: %016x' % (idx, key_id))
