@@ -13,6 +13,18 @@ from scrapy.exceptions import NotConfigured
 logger = logging.getLogger(__name__)
 
 
+class ArtifactItem(scrapy.Item):
+    """
+    Basic object for link extraction.
+    Initialized in parse_obj, yielded and saved to the JSON result file.
+    """
+    url = scrapy.Field()
+    versions = scrapy.Field()
+    misc_files = scrapy.Field()
+    artifact_detected = scrapy.Field()
+    confidence = scrapy.Field()
+
+
 class AscItem(scrapy.Item):
     """
     Basic object for link extraction.
