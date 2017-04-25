@@ -237,8 +237,8 @@ class SonarSSLProcess(object):
                         js['ca'] = utils.try_is_ca(cert)
                         js['ss'] = utils.try_is_self_signed(cert)
                         js['fprint'] = fprint
-                        js['e'] = '%x' % pub.public_numbers().e
-                        js['n'] = '%x' % pub.public_numbers().n
+                        js['e'] = '0x%x' % pub.public_numbers().e
+                        js['n'] = '0x%x' % pub.public_numbers().n
                         js['nnum'] = pub.public_numbers().n
                         js['info'] = {'ip': []}
                         if fprint in fprints_db:
