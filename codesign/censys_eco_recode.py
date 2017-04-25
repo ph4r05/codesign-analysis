@@ -65,6 +65,9 @@ class EcoRecode(object):
         parser.add_argument('-t', '--threads', dest='threads', default=1, type=int,
                             help='certificate processing thread')
 
+        parser.add_argument('--space', dest='space', default=False, action='store_const', const=True,
+                            help='Keep at least 7 days spacing')
+
         args = parser.parse_args()
         self.args = args
         self.work()
@@ -153,7 +156,7 @@ class EcoRecode(object):
             fname_2 = os.path.basename(fname)
 
             # As dataset is in a form of snapshots we can skip some time intervals.
-            if date_utc - last_file_date_utc < (60*60*24*7 - 60*60):
+            if self.args.space and date_utc - last_file_date_utc < (60*60*24*7 - 60*60):
                 logger.info('Skipping record %d, as the time diff is too small from the previous one: %s'
                             % (test_idx, date_utc - last_file_date_utc))
                 continue
