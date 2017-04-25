@@ -144,37 +144,37 @@ class MavenKeyExtract(object):
         master_fingerprint = utils.defvalkey(rec, 'fingerprint')
 
         flat_keys = [rec]
-        user_name = None
+        user_names = []
 
         # Phase 1 - info extraction
         if 'packets' in rec:
             for packet in rec['packets']:
                 if packet['tag_name'] == 'User ID':
-                    user_name = utils.defvalkey(packet, 'user_id')
+                    utils.append_not_none(user_names, utils.defvalkey(packet, 'user_id'))
                 elif packet['tag_name'] == 'Public-Subkey':
                     flat_keys.append(packet)
 
         self.test_flat_keys(flat_keys)
-        self.store_record(s, rec, None, None, user_name, None)
+        self.store_record(s, rec, None, None, user_names, None)
 
         # Phase 2 - sub packet processing
         if 'packets' in rec:
             for packet in rec['packets']:
                 if packet['tag_name'] == 'Public-Subkey':
-                    self.store_record(s, packet, master_key_id, master_fingerprint, user_name, rec)
+                    self.store_record(s, packet, master_key_id, master_fingerprint, user_names, rec)
 
         if time.time() - self.last_report > 15:
             logger.debug(' .. report idx: %s, found: %s, keys added: %s, cur key: %016X '
                          % (idx, self.found, self.keys_added, master_key_id))
             self.last_report = time.time()
 
-    def store_record(self, s, rec, master_id, master_fingerprint, user_name, master_rec):
+    def store_record(self, s, rec, master_id, master_fingerprint, user_names, master_rec):
         """
         Stores master record
         :param rec: 
         :param master_id: 
         :param master_fingerprint: 
-        :param user_name: 
+        :param user_names: 
         :param master_rec: 
         :return: 
         """
@@ -192,7 +192,8 @@ class MavenKeyExtract(object):
         key.key_id = utils.format_pgp_key(key_id)
         key.master_key_id = utils.format_pgp_key(master_id)
         key.master_fingerprint = master_fingerprint
-        key.identity = user_name
+        key.identity = utils.first(user_names)
+        key.identities_json = json.dumps(user_names)
 
         key.date_last_check = sqlalchemy.func.now()
         key.date_created = datetime.datetime.fromtimestamp(creation_time) if creation_time is not None else None
