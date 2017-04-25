@@ -682,6 +682,7 @@ class CensysTls(object):
             ret['id'] = self.ctr
             ret['ip'] = ip
             ret['count'] = 1
+            ret['fprint'] = utils.defvalkey(parsed, 'fingerprint_sha256')
             utils.set_nonempty(ret, 'dom', domain)
 
             tstamp = utils.try_parse_timestamp(timestamp_fmt)
