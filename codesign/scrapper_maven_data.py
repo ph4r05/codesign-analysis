@@ -98,7 +98,7 @@ class DbPipeline(object):
         logger.info('New DB pipeline created %s' % crawler)
 
     @classmethod
-    def from_crawler(cls, crawler):
+    def from_crawler(cls, crawler, *args, **kwargs):
         return cls(crawler)
 
     def open_spider(self, spider):
@@ -253,8 +253,6 @@ class MavenDataSpider(LinkSpider):
             'scrapper_maven_data.DbPipeline': 10
         },
 
-
-
         'AUTOTHROTTLE_ENABLED': True,
         'DOWNLOAD_DELAY': 0.5,
         'CONCURRENT_REQUESTS_PER_IP': 24,
@@ -272,7 +270,8 @@ class MavenDataSpider(LinkSpider):
         self.link_queue_mode = True
         self.app = kw.get('app', None)
         self.session = kw.get('dbsess', None)
-        logger.info('App: %s' % self.app)
+        logger.info('App: %s, sess: %s, self: %s' % (self.app, self.session, self))
+        logger.info('Args: %s, kwargs: %s' % (a, kw))
 
     def should_follow_link(self, link, response):
         should_follow = super(MavenDataSpider, self).should_follow_link(link, response)
@@ -442,18 +441,23 @@ class MavenDataSpider(LinkSpider):
                 cur_sess = None
                 try:
                     cur_sess = self.session()
-                    max_version = sorted(versions, cmp=vv.version_cmp, reverse=True)[0]
-                    grp_id, art_id = get_maven_id_from_url(response.url)
+
+                    burl = utils.strip_leading_slash(response.url)
+                    max_version = sorted([x['v'] for x in versions], cmp=vv.version_cmp, reverse=True)[0]
+                    grp_id, art_id = get_maven_id_from_url(burl)
+
                     if not self.pom_exists(grp_id, art_id, max_version, cur_sess):
-                        logger.debug('Enqueueing %s %s' % (grp_id, art_id))
-                        meta = {'burl': response.url, 'artifact_id': art_id, 'group_id': grp_id,
+                        logger.info('Enqueueing artifact %s %s %s' % (grp_id, art_id, max_version))
+                        meta = {'burl': burl, 'artifact_id': art_id, 'group_id': grp_id,
                                 'max_version': max_version}
-                        art_url = '%s/%s' % (response.url, max_version)
+                        art_url = '%s/%s' % (burl, max_version)
                         art_base_name = '%s-%s' % (art_id, max_version)
                         pom_link = '%s/%s.pom' % (art_url, art_base_name)
                         yield Request(pom_link, callback=self.parse_pom, meta=dict(meta))
 
-                except:
+                except Exception as e:
+                    logger.debug('Exception in POM exist check: %s, self: %s, sess: %s' % (e, self, self.session))
+                    logger.debug(traceback.format_exc())
                     utils.silent_close(cur_sess)
 
             # Case: maven-metadata is present, but we have also another directories here -> crawl it.
@@ -589,6 +593,7 @@ class MainMavenDataWrapper(object):
         logger.info('Starting crawler')
         crawler.crawl(self.spider, app=self, dbsess=self.session)
 
+        self.spider = crawler.spider
         self.spider.link_queue_mode = False
         if self.args.debug:
             coloredlogs.install(level=logging.DEBUG)
