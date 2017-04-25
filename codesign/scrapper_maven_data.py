@@ -219,6 +219,9 @@ class DbPipeline(object):
 
 
 class MavenDataSpider(LinkSpider):
+    """
+    Maven spider downloading maven repo sitemap / structure, POM files, pom.asc files.
+    """
     name = 'maven'
     download_delay = 0.75
     AUTOTHROTTLE_ENABLED = True
@@ -480,6 +483,11 @@ class MavenDataSpider(LinkSpider):
 
 
 class MainMavenDataWrapper(object):
+    """
+    Main running class for the maven scraper. 
+    Argument processing, environment preparation, DB connection. 
+    Starts the crawling process.
+    """
     def __init__(self):
         self.args = None
         self.spider = None
