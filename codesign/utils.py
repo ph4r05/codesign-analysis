@@ -688,6 +688,39 @@ def defvalkeys(js, key, default=None):
     return default
 
 
+def append_not_none(arr, elem):
+    """
+    Appends if the elem is not none
+    :param arr: 
+    :param elem: 
+    :return: 
+    """
+    if elem is not None:
+        arr.append(elem)
+
+
+def first(arr):
+    """
+    First elem if possible
+    :param arr: 
+    :return: 
+    """
+    if arr is None or len(arr) == 0:
+        return None
+    return arr[0]
+
+
+def last(arr):
+    """
+    Last elem if possible
+    :param arr: 
+    :return: 
+    """
+    if arr is None or len(arr) == 0:
+        return None
+    return arr[-1]
+
+
 def touch(fname, times=None):
     """
     Touches the file
