@@ -40,14 +40,6 @@ def get_backend(backend=None):
     return default_backend() if backend is None else backend
 
 
-class MyCrt(object):
-    """
-    My certificate record
-    """
-    def __init__(self, *args, **kwargs):
-        pass
-
-
 class DecompressorCheckpoint(object):
     """
     Represents simple point in the data stream for random access read.
