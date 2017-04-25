@@ -518,7 +518,7 @@ class MainMavenDataWrapper(object):
         """
         # Load sitemap JSON - generate queues
         if self.args.sitemap_json is None:
-            yield Request('https://repo1.maven.org/maven2/', callback=self.spider.parse_obj, meta=dict())
+            yield Request('https://repo1.maven.org/maven2/', callback=self.spider.parse_page, meta=dict())
             return
 
         for req in self.gen_links(self.args.sitemap_json):
