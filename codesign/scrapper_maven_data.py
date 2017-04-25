@@ -18,7 +18,7 @@ import databaseutils
 from collections import OrderedDict
 from database import MavenArtifact, MavenSignature
 from database import Base as DB_Base
-from scrapper_tools import PomItem, AscItem
+from scrapper_tools import PomItem, AscItem, ArtifactItem
 
 from scrapy.settings.default_settings import RETRY_TIMES
 from scrapy.spiders import CrawlSpider, Rule
@@ -74,6 +74,18 @@ def strkey(item):
     :return: 
     """
     return '%s:%s:%s' % (item['group_id'], item['artifact_id'], item['version'])
+
+
+def get_maven_id_from_url(url):
+    """
+    Returns group id, artifact id from the url
+    :param url: 
+    :return: 
+    """
+    burl = utils.strip_leading_slash(url)
+    artifact_id = utils.get_last_url_segment(burl)
+    group_id = get_group_id(burl)
+    return group_id, artifact_id
 
 
 class DbPipeline(object):
@@ -137,6 +149,10 @@ class DbPipeline(object):
                 self.store_pom(item, s)
             elif isinstance(item, (AscItem, type(AscItem()), type(AscItem))):
                 self.store_asc(item, s)
+            elif isinstance(item, (ArtifactItem, type(ArtifactItem()), type(ArtifactItem))):
+                pass
+            elif isinstance(item, LinkItem):
+                pass
             else:
                 logger.warning('Unknown item: %s type %s' % (item, type(item)))
                 return
@@ -222,7 +238,7 @@ class MavenDataSpider(LinkSpider):
                                    '.+asc', '.+md5', '.+sha1',
                                ),
                                process_value='process_link'),
-             callback='parse_obj', follow=False),
+             callback='parse_page', follow=False),
     )
 
     custom_settings = {
@@ -237,20 +253,25 @@ class MavenDataSpider(LinkSpider):
             'scrapper_maven_data.DbPipeline': 10
         },
 
+
+
         'AUTOTHROTTLE_ENABLED': True,
         'DOWNLOAD_DELAY': 0.5,
-        'CONCURRENT_REQUESTS_PER_IP': 10,
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 10,
-        'AUTOTHROTTLE_TARGET_CONCURRENCY': 10,
+        'CONCURRENT_REQUESTS_PER_IP': 24,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 24,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 24,
         'RETRY_ENABLED': True,
-        'RETRY_TIMES': 5,
+        'RETRY_TIMES': 3,
 
     }
+
+    # 'SCHEDULER_DISK_QUEUE': 'queuelib.queue.FifoSQLiteQueue',
 
     def __init__(self, *a, **kw):
         super(MavenDataSpider, self).__init__(*a, **kw)
         self.link_queue_mode = True
         self.app = kw.get('app', None)
+        self.session = kw.get('dbsess', None)
         logger.info('App: %s' % self.app)
 
     def should_follow_link(self, link, response):
@@ -348,6 +369,111 @@ class MavenDataSpider(LinkSpider):
 
         yield item
 
+    def pom_exists(self, group_id, artifact_id, version_id, s):
+        """
+        Returns True if POM already exists
+        :param group_id: 
+        :param artifact_id: 
+        :param version_id: 
+        :param s: 
+        :return: 
+        """
+        res = s.query(MavenArtifact)\
+            .filter(MavenArtifact.group_id == group_id)\
+            .filter(MavenArtifact.artifact_id == artifact_id)\
+            .filter(MavenArtifact.version_id == version_id)\
+            .one_or_none()
+        return res is not None
+
+    def parse_page(self, response):
+        """
+        General page parser
+        :param response: 
+        :return: 
+        """
+        links_visit = set()
+        links = set()
+        for link in LxmlLinkExtractor(allow=(), deny=()).extract_links(response):
+            # Add all links except up link.
+            if link.text != '../':
+                links.add(link.url)
+
+        # Links extracted from the current page.
+        # Extract links only if landed in the artifact directory.
+        is_artifact = False
+        art_conf = 0
+        if len(links) < 100:
+            art_conf += 3
+
+        versions = []
+        misc_files = []
+        for link in links:
+            if link.endswith('/maven-metadata.xml'):
+                is_artifact = True
+
+            last_segment = link
+            last_slash = link[-1] == '/'
+
+            if last_slash:
+                last_segment = link[0:-1]
+            last_segment = last_segment.rsplit('/', 1)[1]
+
+            if self.is_version_folder(last_segment):
+                art_conf += 1
+                versions.append({'v': last_segment, 'l': self.remove_prefix(link, response.url)})
+
+            elif link != response.url:
+                misc_files.append(self.remove_prefix(link, response.url))
+
+        # TODO: if non-standard format, download also maven-metadata.xml
+        # Store only artifacts related URLs
+        if is_artifact or art_conf > 5:
+            logger.info('New artifact(%s), confidence(%s): %s' % (is_artifact, art_conf, response.url))
+            item = ArtifactItem()
+            item['url'] = response.url
+            item['versions'] = versions
+            item['misc_files'] = misc_files
+            item['artifact_detected'] = is_artifact
+            item['confidence'] = art_conf
+            yield item
+
+            # Generate request for the newest version
+            if is_artifact and len(versions) > 0:
+                cur_sess = None
+                try:
+                    cur_sess = self.session()
+                    max_version = sorted(versions, cmp=vv.version_cmp, reverse=True)[0]
+                    grp_id, art_id = get_maven_id_from_url(response.url)
+                    if not self.pom_exists(grp_id, art_id, max_version, cur_sess):
+                        logger.debug('Enqueueing %s %s' % (grp_id, art_id))
+                        meta = {'burl': response.url, 'artifact_id': art_id, 'group_id': grp_id,
+                                'max_version': max_version}
+                        art_url = '%s/%s' % (response.url, max_version)
+                        art_base_name = '%s-%s' % (art_id, max_version)
+                        pom_link = '%s/%s.pom' % (art_url, art_base_name)
+                        yield Request(pom_link, callback=self.parse_pom, meta=dict(meta))
+
+                except:
+                    utils.silent_close(cur_sess)
+
+            # Case: maven-metadata is present, but we have also another directories here -> crawl it.
+            # otherwise do not follow any more links from this page.
+            base_url = response.url
+            if base_url[-1] != '/':
+                base_url += '/'
+
+            links = [base_url + x for x in misc_files if x.endswith('/')]
+
+        # Links post processing
+        for link in links:
+            if not self.should_follow_link(link, response):
+                continue
+            links_visit.add(link)
+
+        logger.debug('Extracted %s links from %s' % (len(links_visit), response.url))
+        for link in list(links_visit):
+            yield Request(link, callback=self.parse_page)
+
 
 class MainMavenDataWrapper(object):
     def __init__(self):
@@ -392,6 +518,7 @@ class MainMavenDataWrapper(object):
         """
         # Load sitemap JSON - generate queues
         if self.args.sitemap_json is None:
+            yield Request('https://repo1.maven.org/maven2/', callback=self.spider.parse_obj, meta=dict())
             return
 
         for req in self.gen_links(self.args.sitemap_json):
@@ -460,9 +587,11 @@ class MainMavenDataWrapper(object):
         crawler.signals.connect(spider_closing, signal=signals.spider_closed)
 
         logger.info('Starting crawler')
-        crawler.crawl(self.spider, app=self)
+        crawler.crawl(self.spider, app=self, dbsess=self.session)
 
         self.spider.link_queue_mode = False
+        if self.args.debug:
+            coloredlogs.install(level=logging.DEBUG)
 
         # Keeping thread working
         reactor.run()
@@ -521,7 +650,7 @@ class MainMavenDataWrapper(object):
         parser.add_argument('--mpi', dest='mpi', default=False, action='store_const', const=True,
                             help='Use MPI distribution')
 
-        parser.add_argument('--sitemap-json', dest='sitemap_json', default='.',
+        parser.add_argument('--sitemap-json', dest='sitemap_json', default=None,
                             help='JSON sitemap')
 
         parser.add_argument('--config', dest='config', default=None,
