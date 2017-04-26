@@ -152,7 +152,7 @@ class PGPCheck(object):
             self.dump_file.flush()
 
             self.found_master_key += 1
-            self.found_sub_key += tested[1:]
+            self.found_sub_key += sum(tested[1:])
             self.found += sum(tested)
             for x in det_key_ids:
                 self.flat_key_ids.add(x)
