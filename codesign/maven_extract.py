@@ -56,6 +56,7 @@ class MavenKeyExtract(object):
         self.keyset_found = set()
         self.no_key_id = 0
         self.already_loaded = set()
+        self.flat_test_res = []
 
     def init_config(self):
         """
@@ -132,6 +133,11 @@ class MavenKeyExtract(object):
 
             utils.silent_close(s)
 
+        # fprint keys
+        for x in self.flat_test_res:
+            logger.info('Interesting keys %s: %s' % (x[0], x[1]))
+
+        # keys not found:
         not_found = sorted([x for x in list(self.keyset) if x not in self.already_loaded])
         logger.info('Keys not found (%s): %s '
                     % (len(not_found), json.dumps([utils.format_pgp_key(x) for x in not_found])))
@@ -224,7 +230,9 @@ class MavenKeyExtract(object):
         if any([(x in self.already_loaded or x in self.keyset) for x in flat_key_ids]):
             tested = [self.test_key(x) for x in flat_keys]
             if any(tested):
-                logger.info('------- interesting map: %s for key ids %s' % (tested, flat_key_ids))
+                keys_hex = [utils.format_pgp_key(x) for x in flat_key_ids]
+                logger.info('------- interesting map: %s for key ids %s' % (tested, keys_hex))
+                self.flat_test_res.append((tested, keys_hex))
 
     def test_key(self, rec=None):
         """
