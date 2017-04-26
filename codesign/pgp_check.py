@@ -164,17 +164,14 @@ class PGPCheck(object):
         :return: 
         """
         if rec is None:
-            return
+            return False
 
-        key_id = utils.defvalkey(rec, 'key_id')
         n = utils.defvalkey(rec, 'n')
         if n is None:
-            return
+            return False
 
         x = self.fmagic.magic16([n])
         if len(x) > 0:
-            self.found += 1
-            logger.info('---------------!!!-------------- Keyid: %s' % key_id)
             return True
         return False
 
