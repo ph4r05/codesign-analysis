@@ -151,7 +151,7 @@ class PGPCheck(object):
             self.dump_file.write(json.dumps(js) + '\n')
             self.dump_file.flush()
 
-            self.found_master_key += 1
+            self.found_master_key += tested[0]
             self.found_sub_key += sum(tested[1:])
             self.found += sum(tested)
             for x in det_key_ids:
