@@ -132,6 +132,10 @@ class MavenKeyExtract(object):
 
             utils.silent_close(s)
 
+        not_found = sorted([x for x in list(self.keyset) if x not in self.already_loaded])
+        logger.info('Keys not found (%s): %s '
+                    % (len(not_found), json.dumps([utils.format_pgp_key(x) for x in not_found])))
+
     def process_record(self, s, idx, line):
         """
         Processes one record from PGP dump
@@ -205,6 +209,7 @@ class MavenKeyExtract(object):
 
         s.add(key)
         self.keys_added += 1
+        self.already_loaded.add(key_id)
 
     def test_flat_keys(self, flat_keys):
         """
