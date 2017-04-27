@@ -49,8 +49,11 @@ class PGPCheck(object):
         self.found_sub_key = 0
         self.found_entities = 0
         self.found_entities_keynum = 0
+
         self.num_master_keys = 0
         self.num_sub_keys = 0
+        self.num_master_keys_rsa = 0
+        self.num_sub_keys_rsa = 0
 
         self.no_key_id = 0
         self.flat_key_ids = set()
@@ -83,9 +86,11 @@ class PGPCheck(object):
         logger.info('Found master: %s' % self.found_master_key)
         logger.info('Found no master: %s' % self.found_no_master_key)
         logger.info('Found sub key: %s' % self.found_sub_key)
-        logger.info('Found avg num of keys: %s' % float(self.found_entities_keynum) / self.found_entities)
+        logger.info('Found avg num of keys: %s' % (float(self.found_entities_keynum) / self.found_entities))
         logger.info('Num master keys: %s' % self.num_master_keys)
         logger.info('Num sub keys: %s' % self.num_sub_keys)
+        logger.info('Num master RSA keys: %s' % self.num_master_keys_rsa)
+        logger.info('Num sub RSA keys: %s' % self.num_sub_keys_rsa)
 
         keys_path = os.path.join(self.args.data_dir, 'inter_keys_ids.json')
         with open(keys_path, 'w') as fw:
@@ -138,6 +143,10 @@ class PGPCheck(object):
 
         self.num_master_keys += 1
         self.num_sub_keys += len(flat_keys) - 1
+
+        rsa_keys = ['n' in x and len(x['n']) > 0 for x in flat_keys]
+        self.num_master_keys_rsa += rsa_keys[0]
+        self.num_sub_keys_rsa += sum(rsa_keys[1:])
 
         tested = [self.test_key(x) for x in flat_keys]
         if any(tested):
