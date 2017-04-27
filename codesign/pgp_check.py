@@ -45,7 +45,10 @@ class PGPCheck(object):
 
         self.found = 0
         self.found_master_key = 0
+        self.found_no_master_key = 0
         self.found_sub_key = 0
+        self.found_entities = 0
+        self.found_entities_keynum = 0
         self.num_master_keys = 0
         self.num_sub_keys = 0
 
@@ -76,8 +79,11 @@ class PGPCheck(object):
         # fprint keys
         logger.info('Job finished')
         logger.info('Found: %s' % self.found)
+        logger.info('Found entities: %s' % self.found_entities)
         logger.info('Found master: %s' % self.found_master_key)
+        logger.info('Found no master: %s' % self.found_no_master_key)
         logger.info('Found sub key: %s' % self.found_sub_key)
+        logger.info('Found avg num of keys: %s' % float(self.found_entities_keynum) / self.found_entities)
         logger.info('Num master keys: %s' % self.num_master_keys)
         logger.info('Num sub keys: %s' % self.num_sub_keys)
 
@@ -113,7 +119,8 @@ class PGPCheck(object):
 
         if time.time() - self.last_report > self.report_time:
             per_second = (idx - self.last_report_idx) / float(self.report_time)
-            logger.debug(' .. report idx: %s, per second: %2.2f, found: %s, num_master: %s, num_sub: %s, ratio: %s, cur key: %016X '
+            logger.debug(' .. report idx: %s, per second: %2.2f, found: %s, '
+                         'num_master: %s, num_sub: %s, ratio: %s, cur key: %016X '
                          % (idx, per_second, self.found, self.num_master_keys, self.num_sub_keys,
                             float(self.num_sub_keys) / self.num_master_keys, master_key_id))
 
@@ -144,16 +151,19 @@ class PGPCheck(object):
             js['detection'] = tested
             js['key_ids'] = keys_hex
             js['names'] = user_names
-            js['master_key_id'] = master_key_id
+            js['master_key_id'] = utils.format_pgp_key(master_key_id)
             js['master_key_fprint'] = master_fingerprint
-            js['pgp'] = rec
+            # js['pgp'] = rec
 
             self.dump_file.write(json.dumps(js) + '\n')
             self.dump_file.flush()
 
+            self.found_no_master_key += not tested[0]
             self.found_master_key += tested[0]
             self.found_sub_key += sum(tested[1:])
             self.found += sum(tested)
+            self.found_entities += 1
+            self.found_entities_keynum += len(tested)
             for x in det_key_ids:
                 self.flat_key_ids.add(x)
 
