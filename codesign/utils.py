@@ -36,6 +36,7 @@ import grp
 import types
 import binascii
 import resource
+import dateutil
 import dateutil.parser
 import time
 
@@ -259,10 +260,7 @@ def get_pgp_key(key_id, attempts=3, timeout=20, logger=None):
     :param id:
     :return:
     """
-    if not key_id.startswith('0x'):
-        key_id = '0x' + key_id
-
-    res = requests.get('https://pgp.mit.edu/pks/lookup?op=get&search=%s' % key_id, timeout=20)
+    res = requests.get('https://pgp.mit.edu/pks/lookup?op=get&search=0x%s' % format_pgp_key(key_id), timeout=20)
     if math.floor(res.status_code / 100) != 2.0:
         res.raise_for_status()
 
@@ -956,7 +954,14 @@ def format_pgp_key(key):
     """
     if key is None:
         return None
-    return '%016x' % key
+    if isinstance(key, (types.IntType, types.LongType)):
+        return '%016x' % key
+    elif isinstance(key, types.ListType):
+        return [format_pgp_key(x) for x in key]
+    else:
+        key = key.strip()
+        key = strip_hex_prefix(key)
+        return format_pgp_key(int(key, 16))
 
 
 def maven_package_id(group, artifact, version):
