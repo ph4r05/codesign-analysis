@@ -189,30 +189,13 @@ class PGPCheck(object):
         if n is None:
             return False
 
+        n = n.strip()
+        n = utils.strip_hex_prefix(n)
+
         x = self.fmagic.magic16([n])
         if len(x) > 0:
             return True
         return False
-
-    def check_mod(self, rec):
-        """
-        Checks domain for iont
-        :param mod16: 
-        :param domain: 
-        :param js: 
-        :return: 
-        """
-        if not self.args.sec:
-            return
-
-        if 'n' not in rec:
-            return
-
-        mod16 = rec['n']
-        x = self.fmagic.magic16([mod16])
-
-        if len(x) > 0:
-            logger.error('-------------------------------- Keyid: %s' % rec['key_id'])
 
     def main(self):
         """
