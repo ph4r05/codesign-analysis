@@ -49,6 +49,7 @@ class PGPCheck(object):
         self.found_sub_key = 0
         self.found_entities = 0
         self.found_entities_keynum = 0
+        self.found_master_not_rsa = 0
 
         self.num_master_keys = 0
         self.num_sub_keys = 0
@@ -88,6 +89,7 @@ class PGPCheck(object):
         logger.info('Found no master: %s' % self.found_no_master_key)
         logger.info('Found sub key: %s' % self.found_sub_key)
         logger.info('Found avg num of keys: %s' % (float(self.found_entities_keynum) / self.found_entities))
+        logger.info('Found master not RSA: %s' % self.found_master_not_rsa)
         logger.info('Num master keys: %s' % self.num_master_keys)
         logger.info('Num sub keys: %s' % self.num_sub_keys)
         logger.info('Num master RSA keys: %s' % self.num_master_keys_rsa)
@@ -174,6 +176,7 @@ class PGPCheck(object):
             self.found += sum(tested)
             self.found_entities += 1
             self.found_entities_keynum += len(tested)
+            self.found_master_not_rsa += not rsa_keys[0]
             for x in det_key_ids:
                 self.flat_key_ids.add(x)
 
