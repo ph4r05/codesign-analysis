@@ -5,9 +5,11 @@
 Extracting maven keys identified by key IDs from the json file using big PGP dump 
 """
 
+from queue import Queue, Empty as QEmpty
 import re
 import os
 import json
+import types
 import argparse
 import logging
 import coloredlogs
@@ -15,9 +17,12 @@ import traceback
 import time
 import datetime
 import utils
+import threading
 import versions as vv
 import databaseutils
 from collections import OrderedDict
+from pgpdump.data import AsciiData
+from pgpdump.packet import SignaturePacket, PublicKeyPacket, PublicSubkeyPacket, UserIDPacket
 
 import sqlalchemy
 from sqlalchemy import create_engine
@@ -57,6 +62,13 @@ class MavenKeyExtract(object):
         self.no_key_id = 0
         self.already_loaded = set()
         self.flat_test_res = []
+
+        self.all_keys_inserted = False
+        self.stop_event = threading.Event()
+        self.local_data = threading.local()
+        self.queue = Queue()
+        self.pgp_downloaded = Queue()
+        self.workers = []
 
     def init_config(self):
         """
@@ -116,22 +128,27 @@ class MavenKeyExtract(object):
         utils.silent_close(sess)
 
         # process PGP dump, fill in keys DB
-        with open(self.args.json) as fh:
-            s = self.session()
-            for idx, line in enumerate(fh):
-                try:
+        if self.args.json:
+            with open(self.args.json) as fh:
+                s = self.session()
+                for idx, line in enumerate(fh):
+                    try:
 
-                    self.process_record(s, idx, line)
-                    if time.time() - self.last_flush > 5:
-                        s.flush()
-                        s.commit()
-                        self.last_flush = time.time()
+                        self.process_record(s, idx, line)
+                        if time.time() - self.last_flush > 5:
+                            s.flush()
+                            s.commit()
+                            self.last_flush = time.time()
 
-                except Exception as e:
-                    logger.error('Exception when processing line %s: %s' % (idx, e))
-                    logger.debug(traceback.format_exc())
+                    except Exception as e:
+                        logger.error('Exception when processing line %s: %s' % (idx, e))
+                        logger.debug(traceback.format_exc())
 
-            utils.silent_close(s)
+                utils.silent_close(s)
+
+        # download missing keys
+        if self.args.download_missing:
+            self.download_missing()
 
         # fprint keys
         for x in self.flat_test_res:
@@ -141,6 +158,36 @@ class MavenKeyExtract(object):
         not_found = sorted([x for x in list(self.keyset) if x not in self.already_loaded])
         logger.info('Keys not found (%s): %s '
                     % (len(not_found), json.dumps([utils.format_pgp_key(x) for x in not_found])))
+
+    def download_missing(self):
+        """
+        Download missing keys from PGP key server
+        :return: 
+        """
+        not_found = sorted([x for x in list(self.keyset) if x not in self.already_loaded])
+
+        # Kick off the workers
+        for worker_idx in range(self.args.threads):
+            t = threading.Thread(target=self.pgp_download_main, args=(worker_idx,))
+            t.setDaemon(True)
+            t.start()
+
+        for x in not_found:
+            self.queue.put(x)
+
+        self.all_keys_inserted = True
+
+        # processor / consumer
+        t = threading.Thread(target=self.pgp_process_downloaded_keys, args=())
+        t.setDaemon(True)
+        t.start()
+
+        # Wait on all jobs being finished
+        self.queue.join()
+        self.pgp_downloaded.join()
+
+        # All data processed, terminate bored workers
+        self.stop_event.set()
 
     def process_record(self, s, idx, line):
         """
@@ -241,20 +288,36 @@ class MavenKeyExtract(object):
         :return: 
         """
         if not self.args.sec:
-            return
+            return False
 
         if rec is None:
-            return
+            return False
 
         key_id = utils.defvalkey(rec, 'key_id')
         n = utils.defvalkey(rec, 'n')
+        return self.test_mod(n, key_id)
+
+    def test_mod(self, n, key_id=None):
+        """
+        Mod testing - fprint
+        :param n: 
+        :return: 
+        """
         if n is None:
-            return
+            return False
+        if self.fmagic is None:
+            return False
+        if isinstance(n, (types.IntType, types.LongType)):
+            n = '%x' % n
+
+        n = n.strip()
+        n = utils.strip_hex_prefix(n)
 
         x = self.fmagic.magic16([n])
         if len(x) > 0:
             self.found += 1
-            logger.info('---------------!!!-------------- Keyid: %s' % key_id)
+            if key_id is not None:
+                logger.info('---------------!!!-------------- Keyid: %s' % key_id)
             return True
         return False
 
@@ -329,12 +392,161 @@ class MavenKeyExtract(object):
         if len(x) > 0:
             logger.error('-------------------------------- Keyid: %s' % rec['key_id'])
 
+    def pgp_download_main(self, idx):
+        """
+        Producer / downloader thread.
+        Downloads PGP keys from the key server. 
+        :param idx: 
+        :return: 
+        """
+        self.local_data.idx = idx
+        logger.info('Worker %02d started' % idx)
+
+        while not self.stop_event.is_set():
+            job = None
+            try:
+                job = self.queue.get(True, timeout=1.0)
+            except QEmpty:
+                if self.all_keys_inserted:
+                    return
+                time.sleep(0.1)
+                continue
+
+            try:
+                # Process job in try-catch so it does not break worker
+                logger.info('[%02d] Processing job %s' % (idx, job))
+                the_key = utils.get_pgp_key(job)
+                self.pgp_downloaded.put((job, the_key))
+
+            except Exception as e:
+                logger.error('Exception in processing job %s: %s' % (e, job))
+                logger.debug(traceback.format_exc())
+
+            finally:
+                self.queue.task_done()
+        logger.info('Worker %02d terminated' % idx)
+
+    def pgp_process_downloaded_keys(self):
+        """
+        Consumer thread.
+        Process all downloaded elements from the queue.
+        :return: 
+        """
+        while not self.stop_event.is_set():
+            job = None
+            try:
+                job = self.pgp_downloaded.get(True, timeout=1.0)
+            except QEmpty:
+                time.sleep(0.1)
+                continue
+
+            s = self.session()
+            try:
+                self.pgp_process_key(s, job)
+                s.flush()
+                s.commit()
+
+            except Exception as e:
+                logger.error('Exception in processing job %s: %s' % (e, job))
+                logger.debug(traceback.format_exc())
+
+            finally:
+                self.pgp_downloaded.task_done()
+                utils.silent_close(s)
+
+        logger.info('PGP downloaded processor terminated')
+
+    def pgp_process_key(self, s, data):
+        """
+        Process downloaded key
+        :param key: 
+        :return: 
+        """
+        key_id, key = data
+
+        pgp_key_data = AsciiData(key)
+        packets = list(pgp_key_data.packets())
+
+        db_key = PGPKey()
+        db_key.date_downloaded = sqlalchemy.func.now()
+        db_key.date_last_check = sqlalchemy.func.now()
+        db_key.key_id = utils.format_pgp_key(key_id)
+        db_key.key_file = key
+
+        identities = []
+        pubkeys = []
+        sig_cnt = 0
+        for idx, packet in enumerate(packets):
+            if isinstance(packet, PublicKeyPacket):
+                pubkeys.append(packet)
+            elif isinstance(packet, PublicSubkeyPacket):
+                pubkeys.append(packet)
+            elif isinstance(packet, UserIDPacket):
+                identities.append(packet)
+            elif isinstance(packet, SignaturePacket):
+                sig_cnt += 1
+
+        # Names / identities
+        ids_arr = []
+        for packet in identities:
+            db_key.identity_email = packet.user_email
+            db_key.identity_name = packet.user_name
+            db_key.identity = '%s <%s>' % (packet.user_name, packet.user_email)
+            idjs = OrderedDict()
+            idjs['name'] = packet.user_name
+            idjs['email'] = packet.user_email
+            ids_arr.append(idjs)
+        db_key.identities_json = json.dumps(ids_arr)
+        db_key.signatures_count = sig_cnt
+
+        # Public keys processing
+        key_found = False
+        is_interesting = False
+        for packet in pubkeys:
+            cur_key_id = int(utils.strip_hex_prefix(packet.key_id), 16)
+
+            if cur_key_id == key_id:
+                key_found = True
+                db_key.fingerprint = '%s' % packet.fingerprint
+                db_key.key_version = int(packet.pubkey_version)
+                db_key.key_algorithm = '%s' % packet.pub_algorithm
+                db_key.date_created = packet.creation_time
+                db_key.date_expires = packet.expiration_time
+
+                if packet.modulus is not None:
+                    db_key.key_modulus = '%x' % packet.modulus
+                    is_interesting |= self.test_mod(packet.modulus)
+
+                if packet.exponent is not None:
+                    db_key.key_exponent = '%x' % packet.exponent
+
+            elif not isinstance(packet, PublicSubkeyPacket):
+                db_key.master_key_id = utils.format_pgp_key(cur_key_id)
+                db_key.master_fingerprint = '%s' % packet.fingerprint
+                if packet.modulus is not None:
+                    is_interesting |= self.test_mod(packet.modulus)
+
+        db_key.is_interesting = is_interesting
+        if key_found:
+            s.add(db_key)
+            self.keys_added += 1
+            self.already_loaded.add(key_id)
+        else:
+            logger.warning('Key not found: %s' % utils.format_pgp_key(key_id))
+
+        # Global testing of keys
+        tested_keys = [self.test_mod(x.modulus) for x in pubkeys]
+        if any(tested_keys):
+            keys_hex = [utils.format_pgp_key(x.key_id) for x in pubkeys]
+            logger.info('------- interesting map: %s for key ids %s' % (tested_keys, keys_hex))
+            self.flat_test_res.append((tested_keys, keys_hex))
+
     def main(self):
         """
         Main entry point
         :return: 
         """
-        parser = argparse.ArgumentParser(description='Maven data crawler')
+        parser = argparse.ArgumentParser(description='Maven PGP key processor')
 
         parser.add_argument('-c', dest='config', default=None,
                             help='JSON config file')
@@ -353,6 +565,12 @@ class MavenKeyExtract(object):
 
         parser.add_argument('--sec-mvn', dest='sec_mvn', default=False, action='store_const', const=True,
                             help='sec')
+
+        parser.add_argument('--download-missing', dest='download_missing', default=False, action='store_const', const=True,
+                            help='downloads missing pgp keys from the key server')
+
+        parser.add_argument('-t', dest='threads', default=1, type=int,
+                            help='Number of threads to use for downloading the keys')
 
         parser.add_argument('--keys', dest='keys', default=None,
                             help='JSON array with key IDs')
