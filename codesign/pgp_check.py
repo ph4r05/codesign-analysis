@@ -82,6 +82,7 @@ class PGPCheck(object):
         # fprint keys
         logger.info('Job finished')
         logger.info('Found: %s' % self.found)
+        logger.info('Found unique: %s' % len(self.flat_key_ids))
         logger.info('Found entities: %s' % self.found_entities)
         logger.info('Found master: %s' % self.found_master_key)
         logger.info('Found no master: %s' % self.found_no_master_key)
