@@ -63,6 +63,7 @@ class PGPKey(Base):
     key_file = Column(BLOB, nullable=True)
 
     date_last_check = Column(DateTime, nullable=True)
+    date_downloaded = Column(DateTime, nullable=True)
 
     # In case of a sub-key
     master_key_id = Column(String(64), nullable=True)
