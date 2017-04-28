@@ -17,7 +17,7 @@ import datetime
 import utils
 import versions as vv
 import databaseutils
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import sec
 
 
@@ -55,6 +55,7 @@ class PGPCheck(object):
         self.num_sub_keys = 0
         self.num_master_keys_rsa = 0
         self.num_sub_keys_rsa = 0
+        self.key_counts = defaultdict(lambda: 0)
 
         self.no_key_id = 0
         self.flat_key_ids = set()
@@ -94,6 +95,10 @@ class PGPCheck(object):
         logger.info('Num sub keys: %s' % self.num_sub_keys)
         logger.info('Num master RSA keys: %s' % self.num_master_keys_rsa)
         logger.info('Num sub RSA keys: %s' % self.num_sub_keys_rsa)
+
+        for cnt in sorted(self.key_counts.keys()):
+            logger.info('  Key count %02d: %08d (%s)'
+                        % (cnt, self.key_counts[cnt], float(self.key_counts[cnt]) / self.num_master_keys))
 
         keys_path = os.path.join(self.args.data_dir, 'inter_keys_ids.json')
         with open(keys_path, 'w') as fw:
@@ -150,6 +155,7 @@ class PGPCheck(object):
         rsa_keys = ['n' in x and len(x['n']) > 0 for x in flat_keys]
         self.num_master_keys_rsa += rsa_keys[0]
         self.num_sub_keys_rsa += sum(rsa_keys[1:])
+        self.key_counts[len(flat_keys)] += 1
 
         tested = [self.test_key(x) for x in flat_keys]
         if any(tested):
