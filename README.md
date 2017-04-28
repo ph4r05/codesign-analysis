@@ -20,6 +20,13 @@ mkdir -p jobs
 cd jobs
 
 python ../cas/codesign/censys_gen_jobs.py --home=$HOMEDIR --data=$DATADIR --wrapper ${HOMEDIR}/cas/censys_tls_wrapper.sh ${HOMEDIR}/cas/tls_ipv4_history.json
+
+# or
+python ../cas/codesign/censys_gen_jobs.py \
+    --data /storage/brno3-cerit/home/ph4r05/fulltls \
+    --wrapper /storage/praha1/home/ph4r05/cas/censys_tls_wrapper.sh \
+    --home  /storage/praha1/home/ph4r05/cas \
+    /storage/praha1/home/ph4r05/cas/tls_ipv4_history.json
 ```
 
 ## Interactive job
