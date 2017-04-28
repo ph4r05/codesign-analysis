@@ -50,6 +50,7 @@ class PGPCheck(object):
         self.found_entities = 0
         self.found_entities_keynum = 0
         self.found_master_not_rsa = 0
+        self.found_key_counts = defaultdict(lambda: 0)
 
         self.num_master_keys = 0
         self.num_sub_keys = 0
@@ -99,6 +100,10 @@ class PGPCheck(object):
         for cnt in sorted(self.key_counts.keys()):
             logger.info('  Key count %02d: %08d (%s)'
                         % (cnt, self.key_counts[cnt], float(self.key_counts[cnt]) / self.num_master_keys))
+
+        for cnt in sorted(self.found_key_counts.keys()):
+            logger.info('  Found Key count %02d: %08d (%s)'
+                        % (cnt, self.found_key_counts[cnt], float(self.found_key_counts[cnt]) / self.found_entities))
 
         keys_path = os.path.join(self.args.data_dir, 'inter_keys_ids.json')
         with open(keys_path, 'w') as fw:
@@ -183,6 +188,7 @@ class PGPCheck(object):
             self.found_entities += 1
             self.found_entities_keynum += len(tested)
             self.found_master_not_rsa += not rsa_keys[0]
+            self.found_key_counts[len(flat_keys)] += 1
             for x in det_key_ids:
                 self.flat_key_ids.add(x)
 
