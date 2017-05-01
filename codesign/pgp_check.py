@@ -121,8 +121,8 @@ class PGPCheck(object):
         logger.info('Found Key count histogram')
         for cnt in sorted(self.found_key_counts.keys()):
             logger.info('  .. size count %8d: %8d (%8.6f)'
-                        % (cnt, self.found_key_counts[cnt], (float(self.found_key_counts[cnt]) / self.found)
-            if self.found > 0 else -1))
+                        % (cnt, self.found_key_counts[cnt], (float(self.found_key_counts[cnt]) / self.found_entities)
+            if self.found_entities > 0 else -1))
 
         logger.info('Found RSA Key sizes histogram')
         for cnt in sorted(self.found_key_sizes.keys()):
