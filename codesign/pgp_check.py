@@ -7,6 +7,7 @@ Check PGP keys & subkeys
 
 import re
 import os
+import math
 import json
 import argparse
 import logging
@@ -51,12 +52,17 @@ class PGPCheck(object):
         self.found_entities_keynum = 0
         self.found_master_not_rsa = 0
         self.found_key_counts = defaultdict(lambda: 0)
+        self.found_key_sizes = defaultdict(lambda: 0)
+        self.found_info = []
 
         self.num_master_keys = 0
         self.num_sub_keys = 0
         self.num_master_keys_rsa = 0
         self.num_sub_keys_rsa = 0
         self.key_counts = defaultdict(lambda: 0)
+        self.key_sizes = defaultdict(lambda: 0)
+
+        self.bench_mods = []
 
         self.no_key_id = 0
         self.flat_key_ids = set()
@@ -76,6 +82,9 @@ class PGPCheck(object):
                 try:
                     self.process_record(idx, line)
 
+                    if self.args.test and self.num_master_keys > 10000:
+                        break
+
                 except Exception as e:
                     logger.error('Exception when processing line %s: %s' % (idx, e))
                     logger.debug(traceback.format_exc())
@@ -90,25 +99,57 @@ class PGPCheck(object):
         logger.info('Found master: %s' % self.found_master_key)
         logger.info('Found no master: %s' % self.found_no_master_key)
         logger.info('Found sub key: %s' % self.found_sub_key)
-        logger.info('Found avg num of keys: %s' % (float(self.found_entities_keynum) / self.found_entities))
+        logger.info('Found avg num of keys: %s' % ((float(self.found_entities_keynum) / self.found_entities)
+                    if self.found_entities > 0 else -1))
         logger.info('Found master not RSA: %s' % self.found_master_not_rsa)
         logger.info('Num master keys: %s' % self.num_master_keys)
         logger.info('Num sub keys: %s' % self.num_sub_keys)
         logger.info('Num master RSA keys: %s' % self.num_master_keys_rsa)
         logger.info('Num sub RSA keys: %s' % self.num_sub_keys_rsa)
 
+        total_rsa = self.num_master_keys_rsa + self.num_sub_keys_rsa
+        logger.info('Key count histogram')
         for cnt in sorted(self.key_counts.keys()):
-            logger.info('  Key count %02d: %08d (%s)'
+            logger.info('  .. Key count %8d: %8d (%8.6f)'
                         % (cnt, self.key_counts[cnt], float(self.key_counts[cnt]) / self.num_master_keys))
 
+        logger.info('RSA Key size histogram')
+        for cnt in sorted(self.key_sizes.keys()):
+            logger.info('  .. Key count %8s: %8d (%8.6f)'
+                        % (cnt, self.key_sizes[cnt], float(self.key_sizes[cnt]) / total_rsa))
+
+        logger.info('Found Key count histogram')
         for cnt in sorted(self.found_key_counts.keys()):
-            logger.info('  Found Key count %02d: %08d (%s)'
-                        % (cnt, self.found_key_counts[cnt], float(self.found_key_counts[cnt]) / self.found_entities))
+            logger.info('  .. size count %8d: %8d (%8.6f)'
+                        % (cnt, self.found_key_counts[cnt], (float(self.found_key_counts[cnt]) / self.found)
+            if self.found > 0 else -1))
+
+        logger.info('Found RSA Key sizes histogram')
+        for cnt in sorted(self.found_key_sizes.keys()):
+            logger.info('  .. size count %8s: %8d (%8.6f)'
+                        % (cnt, self.found_key_sizes[cnt], (float(self.found_key_sizes[cnt]) / self.found)
+            if self.found > 0 else -1))
+
+        logger.info('Found records data:')
+        for x in self.found_info:
+            print(';'.join([str(y) for y in x]))
 
         keys_path = os.path.join(self.args.data_dir, 'inter_keys_ids.json')
         with open(keys_path, 'w') as fw:
             for x in sorted(list(self.flat_key_ids)):
                 fw.write(utils.format_pgp_key(x) + '\n')
+
+        if self.args.bench:
+            logger.info('Benchmark start, total keys: %s' % len(self.bench_mods))
+            stime = time.time()
+            fd = 0
+            for x in self.bench_mods:
+                y = self.fmagic.magic16([x])
+                if len(y) > 0:
+                    fd += 1
+
+            bech_total = time.time() - stime
+            logger.info('Benchmark finished, found: %s, total: %s' % (fd, bech_total))
 
     def process_record(self, idx, line):
         """
@@ -162,6 +203,18 @@ class PGPCheck(object):
         self.num_sub_keys_rsa += sum(rsa_keys[1:])
         self.key_counts[len(flat_keys)] += 1
 
+        key_sizes = [self.key_size(x) for x in flat_keys]
+        for x in key_sizes:
+            self.key_sizes[x] += 1
+
+        if self.args.bench:
+            for rec in flat_keys:
+                n = self.key_mod(rec)
+                if n is None or n == 0:
+                    continue
+
+                self.bench_mods.append('%x' % n)
+
         tested = [self.test_key(x) for x in flat_keys]
         if any(tested):
             flat_key_ids = [int(utils.defvalkey(x, 'key_id', '0'), 16) for x in flat_keys]
@@ -192,6 +245,26 @@ class PGPCheck(object):
             for x in det_key_ids:
                 self.flat_key_ids.add(x)
 
+            for idx, x in enumerate(key_sizes):
+                if tested[idx]:
+                    self.found_key_sizes[x] += 1
+
+            for idx, x in enumerate(tested):
+                if not tested:
+                    continue
+
+                # 2012-04-30; rsa_bit_length; subkey_yes_no; email; MSB(modulus); modulus;
+                rec = flat_keys[idx]
+
+                res = []
+                res.append(datetime.datetime.utcfromtimestamp(rec['creation_time']).strftime('%Y-%m-%d') if 'creation_time' in rec else '')
+                res.append(self.key_size(rec))
+                res.append(int(idx == 0))
+                res.append(user_names[0].replace(';', '_') if len(user_names) > 0 else '')
+                res.append('%x' % self.key_msb(rec))
+                res.append('%x' % self.key_mod(rec))
+                self.found_info.append(res)
+
     def test_key(self, rec=None):
         """
         Fingerprint test
@@ -213,12 +286,56 @@ class PGPCheck(object):
             return True
         return False
 
+    def key_mod(self, rec=None):
+        """
+        Returns modulus from the record
+        :param rec: 
+        :return: 
+        """
+        if rec is None:
+            return False
+
+        n = utils.defvalkey(rec, 'n')
+        if n is None:
+            return False
+
+        n = n.strip()
+        n = utils.strip_hex_prefix(n)
+        return int(n, 16)
+
+    def key_size(self, rec=None, n=None):
+        """
+        Get key size from the modulus
+        :param rec: 
+        :param n: 
+        :return: 
+        """
+        if n is None:
+            n = self.key_mod(rec)
+        if n is None or n == 0:
+            return None
+        return int(math.ceil(math.log(n, 2)))
+
+    def key_msb(self, rec=None):
+        """
+        Returns the MSB
+        :param rec: 
+        :return: 
+        """
+        n = self.key_mod(rec)
+        if n is None:
+            return None
+        size = self.key_size(n=n)
+        if size == 0:
+            return None
+        return 0 if n == 0 else (n >> (((size - 1) >> 3) << 3))
+
     def main(self):
         """
         Main entry point
         :return: 
         """
-        parser = argparse.ArgumentParser(description='Maven data crawler')
+        parser = argparse.ArgumentParser(description='PGP dump analyser')
 
         parser.add_argument('-c', dest='config', default=None,
                             help='JSON config file')
@@ -228,6 +345,12 @@ class PGPCheck(object):
 
         parser.add_argument('--debug', dest='debug', default=False, action='store_const', const=True,
                             help='Debugging logging')
+
+        parser.add_argument('--bench', dest='bench', default=False, action='store_const', const=True,
+                            help='Benchmark ')
+
+        parser.add_argument('--test', dest='test', default=False, action='store_const', const=True,
+                            help='Test ')
 
         parser.add_argument('--json', dest='json', default=None,
                             help='Big json file from pgp dump')
