@@ -131,12 +131,14 @@ class PGPCheck(object):
             if self.found > 0 else -1))
 
         logger.info('Found records data:')
-        for x in self.found_info:
-            try:
-                print(';'.join([str(y) for y in x]))
-            except Exception as e:
-                logger.error('Exception in dump, %s' % e)
-                logger.debug(traceback.format_exc())
+        records_path = os.path.join(self.args.data_dir, 'inter_keys.json')
+        with open(records_path, 'w') as fw:
+            for x in self.found_info:
+                try:
+                    fw.write((';'.join([str(y) for y in x])) + '\n')
+                except Exception as e:
+                    logger.error('Exception in dump, %s' % e)
+                    logger.debug(traceback.format_exc())
 
         keys_path = os.path.join(self.args.data_dir, 'inter_keys_ids.json')
         with open(keys_path, 'w') as fw:
@@ -254,7 +256,7 @@ class PGPCheck(object):
                     self.found_key_sizes[x] += 1
 
             for idx, x in enumerate(tested):
-                if not tested:
+                if not tested[idx]:
                     continue
 
                 # 2012-04-30; rsa_bit_length; subkey_yes_no; email; MSB(modulus); modulus;
