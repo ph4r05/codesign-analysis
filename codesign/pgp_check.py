@@ -132,7 +132,11 @@ class PGPCheck(object):
 
         logger.info('Found records data:')
         for x in self.found_info:
-            print(';'.join([str(y) for y in x]))
+            try:
+                print(';'.join([str(y) for y in x]))
+            except Exception as e:
+                logger.error('Exception in dump, %s' % e)
+                logger.debug(traceback.format_exc())
 
         keys_path = os.path.join(self.args.data_dir, 'inter_keys_ids.json')
         with open(keys_path, 'w') as fw:
@@ -260,7 +264,7 @@ class PGPCheck(object):
                 res.append(datetime.datetime.utcfromtimestamp(rec['creation_time']).strftime('%Y-%m-%d') if 'creation_time' in rec else '')
                 res.append(self.key_size(rec))
                 res.append(int(idx == 0))
-                res.append(user_names[0].replace(';', '_') if len(user_names) > 0 else '')
+                res.append(user_names[0].encode('utf8').replace(';', '_') if len(user_names) > 0 else '')
                 res.append('%x' % self.key_msb(rec))
                 res.append('%x' % self.key_mod(rec))
                 self.found_info.append(res)
