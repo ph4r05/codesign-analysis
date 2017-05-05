@@ -840,6 +840,20 @@ def set_nonempty(dest, key, val):
     dest[key] = val
 
 
+def time_between(now, start, end):
+    """
+    True if time is between start & end
+    :param now: 
+    :param start: 
+    :param end: 
+    :return: 
+    """
+    if start <= end:
+        return start <= now < end
+    else:  # over midnight e.g., 23:30-04:15
+        return start <= now or now < end
+
+
 def get_mem_usage():
     """
     Returns current memory usage
