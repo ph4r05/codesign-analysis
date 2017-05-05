@@ -14,7 +14,7 @@ class Version(object):
     Simple object representing version
     """
     def __init__(self, version):
-        self.version = str(version).replace(':', '.')
+        self.version = str(version)
 
     def __str__(self):
         return self.version
@@ -26,18 +26,22 @@ class Version(object):
         return self.version.__hash__()
 
     def __cmp__(self, other):
-        return version_cmp(self.version, str(other))
+        return version_cmp(Version.normalize(self.version), Version.normalize(other))
 
     def to_json(self):
         return self.version
 
     def trim(self, max_comp=None):
-        self.version = version_trim(self.version, max_comp)
+        self.version = version_trim(Version.normalize(self.version), max_comp)
         return self
 
     def pad(self, ln):
-        self.version = version_pad(self.version, ln)
+        self.version = version_pad(Version.normalize(self.version), ln)
         return self
+
+    @staticmethod
+    def normalize(x):
+        return str(x).replace(':', '.')
 
 
 def version_filter(objects, key=lambda x: x, min_version=None, max_version=None, exact_version=None):
