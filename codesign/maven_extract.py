@@ -20,7 +20,9 @@ import utils
 import threading
 import versions as vv
 import databaseutils
+import pprint
 from collections import OrderedDict
+from maven_base import Artifact, ArtifactVer, DepMapper
 from pgpdump.data import AsciiData
 from pgpdump.packet import SignaturePacket, PublicKeyPacket, PublicSubkeyPacket, UserIDPacket
 
@@ -62,6 +64,7 @@ class MavenKeyExtract(object):
         self.no_key_id = 0
         self.already_loaded = set()
         self.flat_test_res = []
+        self.dep_mapper = DepMapper()
 
         self.all_keys_inserted = False
         self.stop_event = threading.Event()
@@ -127,6 +130,9 @@ class MavenKeyExtract(object):
         logger.info('key set size to load: %s' % len(self.keyset))
         utils.silent_close(sess)
 
+        # load dependency tree if applicable
+        self.load_dep_tree()
+
         # process PGP dump, fill in keys DB
         if self.args.json:
             with open(self.args.json) as fh:
@@ -158,6 +164,79 @@ class MavenKeyExtract(object):
         not_found = sorted([x for x in list(self.keyset) if x not in self.already_loaded])
         logger.info('Keys not found (%s): %s '
                     % (len(not_found), json.dumps([utils.format_pgp_key(x) for x in not_found])))
+
+    def load_dep_tree(self):
+        """
+        Loads all dependencies, build maven deptree in memory
+        :return: 
+        """
+        if not self.args.deptree:
+            return
+
+        from lxml import etree
+        sess = self.session()
+        try:
+            artifacts = sess.query(MavenArtifact).yield_per(1000)
+            for art_idx, artifact in enumerate(artifacts):
+
+                parent = Artifact(artifact.group_id, artifact.artifact_id, artifact.version_id)
+                pom = artifact.pom_file
+                try:
+                    pom_root = etree.fromstring(pom)
+                    xpath = './dependencies/dependency'
+                    ns = None
+
+                    match = re.match(r'{(.+?)}.+?', pom_root.tag)
+                    if match is not None:
+                        ns = {'x': match.group(1)}
+                        xpath = './x:dependencies/x:dependency'
+
+                    deps = pom_root.findall(xpath, ns)
+                    arts = [self.dep_bld(x) for x in deps]
+
+                    for art in arts:
+                        if art is None:
+                            continue
+                        self.dep_mapper.add_dependency(parent, art)
+
+                    if art_idx % 5000 == 0:
+                        logger.debug('.. progress: %s, mem: %s' % (art_idx, utils.get_mem_mb()))
+
+                except Exception as e:
+                    logger.warning('Exception parsing pom.xml for %s: %s' % (artifact.artifact_id, e))
+
+        finally:
+            utils.silent_close(sess)
+
+        # test
+        aff = self.dep_mapper.affected(Artifact('org.json', 'json'))
+        print(json.dumps(DepMapper.to_json(aff), indent=2, cls=utils.AutoJSONEncoder))
+
+    def dep_bld(self, dep, ns=None):
+        """
+        Creates an artifact from the xml dep 
+        :param dep: 
+        :return: 
+        """
+        art = Artifact()
+        try:
+            for x in dep:
+                if str(x.tag).endswith('groupId'):
+                    art.group = x.text
+                elif str(x.tag).endswith('artifactId'):
+                    art.artifact = x.text
+                elif str(x.tag).endswith('version'):
+                    art.version = x.text
+
+            if art.group is None or art.artifact is None:
+                return None
+
+            return art
+
+        except Exception as e:
+            logger.error('Error in dep parsing: %s' % e)
+            logger.debug(traceback.format_exc())
+            return None
 
     def download_missing(self):
         """
@@ -565,6 +644,9 @@ class MavenKeyExtract(object):
 
         parser.add_argument('--sec-mvn', dest='sec_mvn', default=False, action='store_const', const=True,
                             help='sec')
+
+        parser.add_argument('--deptree', dest='deptree', default=False, action='store_const', const=True,
+                            help='deptree')
 
         parser.add_argument('--download-missing', dest='download_missing', default=False, action='store_const', const=True,
                             help='downloads missing pgp keys from the key server')
