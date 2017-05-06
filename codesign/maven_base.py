@@ -8,7 +8,11 @@ Basic maven classes / helpers
 from past.builtins import cmp, reduce
 import types
 import collections
+import logging
 import versions as vvs
+
+
+logger = logging.getLogger(__name__)
 
 
 class Artifact(object):
@@ -152,10 +156,11 @@ class DepMapper(object):
 
                 rec = self.db[art]  # rec: ver -> [packages]
                 flat = list(set(reduce(lambda x, y: x+y, [[]] + [rec[x] for x in rec])))
+
                 for sub in flat:
                     sub = sub.to_base()
                     cur_layer[art][sub] = collections.OrderedDict()
-                    next_layer[sub] = collections.OrderedDict()
+                    next_layer[sub] = cur_layer[art][sub]
                     num_added += 1
 
                 checked.add(art.to_base())
