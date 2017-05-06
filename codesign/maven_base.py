@@ -40,6 +40,9 @@ class Artifact(object):
     def __repr__(self):
         return 'Artifact(%r, %r, %r)' % (self.group, self.artifact, self.version)
 
+    def __str__(self):
+        return '%s:%s:%s' % (self.group, self.artifact, self.version)
+
     def to_json(self):
         js = collections.OrderedDict()
         js['group'] = self.group
@@ -163,7 +166,20 @@ class DepMapper(object):
 
         return ret
 
-
+    @staticmethod
+    def to_json(inp):
+        """
+        Converts result of affected to the json 
+        :param inp: 
+        :return: 
+        """
+        if isinstance(inp, types.DictionaryType):
+            ret = collections.OrderedDict()
+            for key in inp:
+                ret[str(key)] = DepMapper.to_json(inp[key])
+            return ret
+        else:
+            return inp
 
 
 
