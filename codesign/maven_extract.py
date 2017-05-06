@@ -179,7 +179,7 @@ class MavenKeyExtract(object):
         try:
             artifacts = sess.query(MavenArtifact).yield_per(1000)
             for art_idx, artifact in enumerate(artifacts):
-                parent = Artifact(artifact.group_id, artifact.artifact_id, artifact.version_id)
+                parent = self.artifact_from_db(artifact)
                 pom = artifact.pom_file
                 try:
                     pom_root = etree.fromstring(pom)
