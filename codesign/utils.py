@@ -7,6 +7,9 @@ import datetime
 import binascii
 import traceback
 import logging
+from json import JSONEncoder
+
+import decimal
 import requests
 import math
 import json
@@ -43,6 +46,34 @@ import time
 
 logger = logging.getLogger(__name__)
 
+
+class AutoJSONEncoder(JSONEncoder):
+    """
+    JSON encoder trying to_json() first
+    """
+    DATE_FORMAT = "%Y-%m-%d"
+    TIME_FORMAT = "%H:%M:%S"
+
+    def default(self, obj):
+        try:
+            return obj.to_json()
+        except AttributeError:
+            return self.default_classic(obj)
+
+    def default_classic(self, o):
+        if isinstance(o, set):
+            return list(o)
+        elif isinstance(o, datetime.datetime):
+            return o.strftime("%s %s" % (self.DATE_FORMAT, self.TIME_FORMAT))
+        elif isinstance(o, datetime.date):
+            return o.strftime(self.DATE_FORMAT)
+        elif isinstance(o, datetime.time):
+            return o.strftime(self.TIME_FORMAT)
+        elif isinstance(o, decimal.Decimal):
+            return str(o)
+        else:
+            return super(AutoJSONEncoder, self).default(o)
+        
 
 def slugify(value):
     """
