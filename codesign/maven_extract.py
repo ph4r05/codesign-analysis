@@ -20,7 +20,7 @@ import utils
 import threading
 import versions as vv
 import databaseutils
-import pprint
+import math
 from collections import OrderedDict
 from maven_base import Artifact, ArtifactVer, DepMapper
 from pgpdump.data import AsciiData
@@ -132,6 +132,7 @@ class MavenKeyExtract(object):
 
         # load dependency tree if applicable
         self.load_dep_tree()
+        self.process_nice()
 
         # process PGP dump, fill in keys DB
         if self.args.json:
@@ -178,7 +179,6 @@ class MavenKeyExtract(object):
         try:
             artifacts = sess.query(MavenArtifact).yield_per(1000)
             for art_idx, artifact in enumerate(artifacts):
-
                 parent = Artifact(artifact.group_id, artifact.artifact_id, artifact.version_id)
                 pom = artifact.pom_file
                 try:
@@ -199,18 +199,21 @@ class MavenKeyExtract(object):
                             continue
                         self.dep_mapper.add_dependency(parent, art)
 
-                    if art_idx % 5000 == 0:
+                    if art_idx % 10000 == 0:
                         logger.debug('.. progress: %s, mem: %s' % (art_idx, utils.get_mem_mb()))
 
                 except Exception as e:
-                    logger.warning('Exception parsing pom.xml for %s: %s' % (artifact.artifact_id, e))
+                    logger.warning('Exception parsing pom.xml for %s: %s' % (parent, e))
 
         finally:
             utils.silent_close(sess)
 
-        # test
-        aff = self.dep_mapper.affected(Artifact('org.json', 'json'))
-        print(json.dumps(DepMapper.to_json(aff), indent=2, cls=utils.AutoJSONEncoder))
+        # Test
+        # aff = self.dep_mapper.affected([
+        #     Artifact('org.slf4j', 'slf4j-api'),
+        #     Artifact('com.google.guava', 'guava'),
+        # ])
+        # print(json.dumps(DepMapper.to_json(aff), indent=2, cls=utils.AutoJSONEncoder))
 
     def dep_bld(self, dep, ns=None):
         """
@@ -237,6 +240,54 @@ class MavenKeyExtract(object):
             logger.error('Error in dep parsing: %s' % e)
             logger.debug(traceback.format_exc())
             return None
+
+    def process_nice(self):
+        """
+        Nice artifact processor
+        :return: 
+        """
+        sess = self.session()
+        try:
+            nice_keys = sess.query(PGPKey).filter(PGPKey.is_interesting).all()
+            key_ids = [x.key_id for x in nice_keys]
+            logger.info('Nice keys (%s): %s' % (len(nice_keys), json.dumps(key_ids)))
+            for key in nice_keys:
+                dt = key.date_created.strftime('%Y-%m-%d') if key.date_created is not None else None
+                mod = key.key_modulus
+                n = int(mod, 16)
+                bitsize = int(math.ceil(math.log(n, 2)))
+                print('%s;%s;%s;%s;%s' % (dt, bitsize, key.identity, key.key_id, mod))
+
+            artifacts = sess.query(MavenSignature).filter(MavenSignature.sig_key_id.in_(key_ids)).all()
+
+            artifacts_objs = [self.artifact_from_db(art) for art in artifacts]
+            art_objs = []
+            for art in artifacts:
+                js = OrderedDict()
+                js['art'] = str(self.artifact_from_db(art))
+                js['key'] = art.sig_key_id
+                art_objs.append(js)
+
+            print('Fingerprinted packages (%s): ' % len(art_objs))
+            print(json.dumps(DepMapper.to_json(art_objs), indent=2, cls=utils.AutoJSONEncoder))
+
+            # Find affected:
+            print('Affected packages:')
+            aff = self.dep_mapper.affected(artifacts_objs)
+            print(json.dumps(DepMapper.to_json(aff), indent=2, cls=utils.AutoJSONEncoder))
+
+        finally:
+            utils.silent_close(sess)
+
+    def artifact_from_db(self, ent):
+        """
+        Artifact object from DB entity
+        :param ent: 
+        :return: 
+        """
+        grp = ent.group_id
+        grp, art = grp.rsplit('.', 1)
+        return Artifact(grp, art, ent.version_id)
 
     def download_missing(self):
         """
