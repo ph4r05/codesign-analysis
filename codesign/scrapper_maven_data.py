@@ -16,7 +16,7 @@ import utils
 import versions as vv
 import databaseutils
 from collections import OrderedDict
-from database import MavenArtifact, MavenSignature
+from database import MavenArtifact, MavenSignature, MavenArtifactIndex
 from database import Base as DB_Base
 from scrapper_tools import PomItem, AscItem, ArtifactItem
 
@@ -37,7 +37,7 @@ from scrapy import signals
 from twisted.internet import reactor
 from scrapy.crawler import Crawler
 from scrapy.settings import Settings
-
+import sqlalchemy
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.INFO)
@@ -110,6 +110,18 @@ class DbPipeline(object):
     def close_spider(self, spider):
         logger.info('Spider closed %s' % spider)
 
+    def index_load(self, groupId, artifactId, s):
+        """
+        Returns True if index already exists
+        :param pomItem: 
+        :return: 
+        """
+        res = s.query(MavenArtifactIndex)\
+            .filter(MavenArtifactIndex.group_id == groupId)\
+            .filter(MavenArtifactIndex.artifact_id == artifactId)\
+            .one_or_none()
+        return res
+
     def pom_exists(self, pomItem, s):
         """
         Returns True if POM already exists
@@ -150,7 +162,7 @@ class DbPipeline(object):
             elif isinstance(item, (AscItem, type(AscItem()), type(AscItem))):
                 self.store_asc(item, s)
             elif isinstance(item, (ArtifactItem, type(ArtifactItem()), type(ArtifactItem))):
-                pass
+                self.store_index(item, s)
             elif isinstance(item, LinkItem):
                 pass
             else:
@@ -216,6 +228,33 @@ class DbPipeline(object):
 
         s.add(rec)
         logger.info('Storing asc: %s' % strkey(item))
+
+    def store_index(self, item, s):
+        """
+        Stores ASC file
+        :param item: 
+        :param s: 
+        :return: 
+        """
+        burl = utils.strip_leading_slash(item['url'])
+        grp_id, art_id = get_maven_id_from_url(burl)
+
+        is_new = False
+        rec = self.index_load(grp_id, art_id, s)
+
+        if rec is None:
+            rec = MavenArtifactIndex()
+            rec.group_id = grp_id
+            rec.artifact_id = art_id
+            is_new = True
+
+        rec.date_last_check = sqlalchemy.func.now()
+        rec.versions = json.dumps(item['versions'], cls=utils.AutoJSONEncoder)
+
+        if is_new:
+            s.add(rec)
+        else:
+            s.merge(rec)
 
 
 class MavenDataSpider(LinkSpider):
