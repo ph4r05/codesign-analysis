@@ -40,6 +40,8 @@ class PgpDump(object):
             import sec
             self.fmagic = sec.Fprinter(167)
 
+        keys_data = []
+
         files = self.args.files
         for fname in files:
             if fname == '-':
@@ -51,6 +53,7 @@ class PgpDump(object):
                 key = fh.read()
                 pgp_key_data = AsciiData(key)
                 packets = list(pgp_key_data.packets())
+                print('File: %s' % fname)
                 print('Packets: %s' % len(packets))
                 print('-' * 80)
 
@@ -80,14 +83,17 @@ class PgpDump(object):
                     print('expiration_time: %s' % packet.expiration_time)
                     print('raw_days_valid: %s' % packet.raw_days_valid)
                     print('pub_algorithm_type: %s' % packet.pub_algorithm_type)
-                    print('modulus: %s' % packet.modulus)
+                    print('modulus: %s' % self.hex_if_num(packet.modulus))
                     print('modulus_bitlen: %s' % packet.modulus_bitlen)
-                    print('exponent: %s' % packet.exponent)
-                    print('prime: %s' % packet.prime)
-                    print('group_order: %s' % packet.group_order)
-                    print('group_gen: %s' % packet.group_gen)
+                    print('exponent: %s' % self.hex_if_num(packet.exponent))
+                    print('prime: %s' % self.hex_if_num(packet.prime))
+                    print('group_order: %s' % self.hex_if_num(packet.group_order))
+                    print('group_gen: %s' % self.hex_if_num(packet.group_gen))
                     print('key_value: %s' % packet.key_value)
                     print('-' * 80)
+
+                    if packet.modulus is not None:
+                        keys_data.append((packet.modulus_bitlen, packet.modulus, ))
 
                     if self.args.sec and packet.modulus is not None:
                         n = '%x' % packet.modulus
@@ -98,6 +104,22 @@ class PgpDump(object):
                             print('---- !!! ----')
 
         logger.info('Records tested: %s, found: %s' % (self.tested, self.found))
+        if self.args.dump_keys:
+            for x in keys_data:
+                print('%s;%s' % (x[0], self.hex_if_num(x[1])))
+
+    def hex_if_num(self, x):
+        """
+        returns hex string if modulus is not none
+        :param x: 
+        :return: 
+        """
+        if x is None:
+            return None
+        if isinstance(x, (types.IntType, types.LongType)):
+            return '%x' % x
+        else:
+            return str(x)
 
     def main(self):
         """
@@ -114,6 +136,9 @@ class PgpDump(object):
 
         parser.add_argument('--sec', dest='sec', default=False, action='store_const', const=True,
                             help='Sec')
+
+        parser.add_argument('--dump-keys', dest='dump_keys', default=False, action='store_const', const=True,
+                            help='dump keys')
 
         parser.add_argument('files', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='files to process')
