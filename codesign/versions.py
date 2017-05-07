@@ -155,6 +155,25 @@ def version_cmp_norm(a, b, max_comp=None, version_delim='.'):
     """
     return version_cmp(a, b, max_comp, version_delim, normalize=True)
 
+
+def version_split(v, version_delim='.', normalize=False):
+    """
+    Version split to base components
+    :param v: 
+    :param version_delim: 
+    :param normalize: 
+    :return: 
+    """
+    if isinstance(v, types.IntType):
+        return [v]
+    if isinstance(v, types.ListType):
+        return v
+
+    if normalize:
+        v = Version.normalize(v)
+    return v.split(version_delim)
+
+
 def version_cmp(a, b, max_comp=None, version_delim='.', normalize=False):
     """
     Compares versions a, b lexicographically
