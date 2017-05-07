@@ -223,7 +223,6 @@ class MavenDataSpider(LinkSpider):
     Maven spider downloading maven repo sitemap / structure, POM files, pom.asc files.
     """
     name = 'maven'
-    download_delay = 0.75
     AUTOTHROTTLE_ENABLED = True
 
     allowed_domains = ['repo1.maven.org']
@@ -258,9 +257,9 @@ class MavenDataSpider(LinkSpider):
 
         'AUTOTHROTTLE_ENABLED': True,
         'DOWNLOAD_DELAY': 0.5,
-        'CONCURRENT_REQUESTS_PER_IP': 24,
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 24,
-        'AUTOTHROTTLE_TARGET_CONCURRENCY': 24,
+        'CONCURRENT_REQUESTS_PER_IP': 32,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 32,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 32,
         'RETRY_ENABLED': True,
         'RETRY_TIMES': 3,
 
