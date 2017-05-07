@@ -112,6 +112,7 @@ class GitHubKey(Base):
     key_modulus_hex = Column(Text, nullable=True)
     key_exponent = Column(BigInteger, nullable=True)
     key_size = Column(Integer, nullable=True)
+    is_interesting = Column(Integer, nullable=False, default=0)
 
     key_user_found = Column(String(255), nullable=True)
     key_user_id_found = Column(BigInteger, nullable=True)
