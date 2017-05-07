@@ -56,7 +56,7 @@ class MavenArtifactIndex(Base):
     """
     Base maven artifact - versions
     """
-    __tablename__ = 'maven_artifact'
+    __tablename__ = 'maven_artifact_idx'
     id = Column(BigInteger, primary_key=True)
 
     group_id = Column(String(255), nullable=False, )
