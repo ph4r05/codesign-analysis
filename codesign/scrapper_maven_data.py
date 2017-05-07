@@ -88,6 +88,36 @@ def get_maven_id_from_url(url):
     return group_id, artifact_id
 
 
+def pick_versions(versions):
+    """
+    Picks interesting versions to download
+    :param versions: 
+    :return: 
+    """
+    if len(versions) == 0:
+        return []
+
+    versions_return = []
+    versions_sorted = sorted(versions, cmp=vv.version_cmp_norm, reverse=True)
+
+    max_version = versions_sorted[0]
+    max_trim = vv.version_trim(max_version, 2)
+    max_trim_1 = vv.version_trim(max_version, 1)
+    versions_return.append(max_version)
+    if len(versions) == 1:
+        return versions_return
+
+    lower_ver = [x for x in versions_sorted if vv.version_cmp_norm(max_trim, x) > 0 and x != max_version]
+    lower_ver.sort(key=lambda x: (
+        vv.Version(vv.version_trim(x, 2)),
+        -1 * len(vv.version_split(x)),
+        vv.Version(vv.version_split(x)[2:])), reverse=True)
+
+    if len(lower_ver) > 0:
+        versions_return.append(str(lower_ver[0]))
+    return versions_return
+
+
 class DbPipeline(object):
     """
     Storing items to the database
@@ -262,7 +292,6 @@ class MavenDataSpider(LinkSpider):
     Maven spider downloading maven repo sitemap / structure, POM files, pom.asc files.
     """
     name = 'maven'
-    AUTOTHROTTLE_ENABLED = True
 
     allowed_domains = ['repo1.maven.org']
     allowed_kw = ['repo1.maven.org']
@@ -295,7 +324,7 @@ class MavenDataSpider(LinkSpider):
         },
 
         'AUTOTHROTTLE_ENABLED': True,
-        'DOWNLOAD_DELAY': 0.5,
+        'DOWNLOAD_DELAY': 0.25,
         'CONCURRENT_REQUESTS_PER_IP': 32,
         'CONCURRENT_REQUESTS_PER_DOMAIN': 32,
         'AUTOTHROTTLE_TARGET_CONCURRENCY': 32,
@@ -484,15 +513,16 @@ class MavenDataSpider(LinkSpider):
                     cur_sess = self.session()
 
                     burl = utils.strip_leading_slash(response.url)
-                    max_version = sorted([x['v'] for x in versions], cmp=vv.version_cmp, reverse=True)[0]
                     grp_id, art_id = get_maven_id_from_url(burl)
 
-                    if not self.pom_exists(grp_id, art_id, max_version, cur_sess):
-                        logger.info('Enqueueing artifact %s %s %s' % (grp_id, art_id, max_version))
+                    for cur_version in pick_versions([x['v'] for x in versions]):
+                        if self.pom_exists(grp_id, art_id, cur_version, cur_sess):
+                            continue
+                        logger.info('Enqueueing artifact %s %s %s' % (grp_id, art_id, cur_version))
                         meta = {'burl': burl, 'artifact_id': art_id, 'group_id': grp_id,
-                                'max_version': max_version}
-                        art_url = '%s/%s' % (burl, max_version)
-                        art_base_name = '%s-%s' % (art_id, max_version)
+                                'max_version': cur_version}
+                        art_url = '%s/%s' % (burl, cur_version)
+                        art_base_name = '%s-%s' % (art_id, cur_version)
                         pom_link = '%s/%s.pom' % (art_url, art_base_name)
                         yield Request(pom_link, callback=self.parse_pom, meta=dict(meta))
 
@@ -592,26 +622,25 @@ class MainMavenDataWrapper(object):
                     burl = utils.strip_leading_slash(rec['url'])
                     artifact_detected = rec['artifact_detected']
                     if not artifact_detected:
-                        # logger.debug('Not an artifact: %s' % burl)
                         continue
 
                     artifact_id = utils.get_last_url_segment(burl)
                     versions = [x['v'] for x in rec['versions']]
                     if len(versions) == 0:
-                        # logger.debug('No versions for %s' % artifact_id)
                         continue
 
                     group_id = get_group_id(burl)
-                    max_version = sorted(versions, cmp=vv.version_cmp, reverse=True)[0]
-                    url = '%s/%s' % (burl, max_version)
-                    base_name = '%s-%s' % (artifact_id, max_version)
-                    meta = {'burl': burl, 'artifact_id': artifact_id, 'group_id': group_id, 'max_version': max_version}
+                    for cur_version in pick_versions(versions):
+                        url = '%s/%s' % (burl, cur_version)
+                        base_name = '%s-%s' % (artifact_id, cur_version)
+                        meta = {'burl': burl,
+                                'artifact_id': artifact_id,
+                                'group_id': group_id,
+                                'max_version': cur_version
+                                }
+                        pom_link = '%s/%s.pom' % (url, base_name)
+                        yield Request(pom_link, callback=self.spider.parse_pom, meta=dict(meta))
 
-                    pom_link = '%s/%s.pom' % (url, base_name)
-                    pom_asc_link = '%s/%s.pom.asc' % (url, base_name)
-
-                    yield Request(pom_link, callback=self.spider.parse_pom, meta=dict(meta))
-                    # yield Request(pom_asc_link, callback=self.spider.parse_asc, meta=dict(meta))
                     ctr += 1
 
                 except Exception as e:
