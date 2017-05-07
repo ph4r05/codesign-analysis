@@ -52,6 +52,21 @@ class MavenArtifact(Base):
     pom_file = Column(BLOB, nullable=True)
 
 
+class MavenArtifactIndex(Base):
+    """
+    Base maven artifact - versions
+    """
+    __tablename__ = 'maven_artifact'
+    id = Column(BigInteger, primary_key=True)
+
+    group_id = Column(String(255), nullable=False, )
+    artifact_id = Column(String(255), nullable=True)
+    versions = Column(BLOB, nullable=True)
+
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+
+
 class PGPKey(Base):
     """
     Entity storing PGP keys
