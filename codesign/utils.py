@@ -1020,3 +1020,14 @@ def maven_package_id(group, artifact, version):
     return '%s:%s:%s' % (group, artifact, version)
 
 
+def utf8ize(x):
+    """
+    Converts to utf8 if non-empty
+    :param x: 
+    :return: 
+    """
+    if x is None:
+        return None
+    return x.encode('utf-8')
+
+
