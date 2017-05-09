@@ -805,18 +805,20 @@ class GitHubLoader(Cmd):
                 dbu.repo_forks_url = repo['forks_url']
 
                 # Colab fetch - skip, no auth
-                new_meta = dict(job.meta)
-                new_meta['page'] = 1
-                new_meta['repo'] = repo['full_name']
-                new_meta['owner'] = repo['owner']['login']
-                job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['full_name']),
-                                  jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
-                # not added to the queue on purpose - no auth for that
+                if not from_user and repo['stargazers_count'] > 100:
+                    new_meta = dict(job.meta)
+                    new_meta['page'] = 1
+                    new_meta['repo'] = repo['full_name']
+                    new_meta['owner'] = repo['owner']['login']
+                    job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['full_name']),
+                                      jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
+                    # not added to the queue on purpose - no auth for that
 
-                # Asignee fetch
-                job = DownloadJob(url=self.ORG_REPO_ASSIGNEES_URL % (repo['full_name']),
-                                  jtype=DownloadJob.TYPE_REPO_ASSIGNEE, meta=new_meta)
-                self.link_queue.put(job)
+                    # Asignee fetch
+                    job = DownloadJob(url=self.ORG_REPO_ASSIGNEES_URL % (repo['full_name']),
+                                      jtype=DownloadJob.TYPE_REPO_ASSIGNEE, meta=dict(new_meta))
+
+                    self.link_queue.put(job)
 
                 # DB save
                 if dbe is None:
