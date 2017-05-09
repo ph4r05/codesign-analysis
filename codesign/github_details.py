@@ -799,11 +799,6 @@ class GitHubLoader(Cmd):
                 dbu.repo_stargazers_url = repo['stargazers_url']
                 dbu.repo_forks_url = repo['forks_url']
 
-                s.add(dbu)
-                s.commit()
-                s.flush()
-                s.expunge_all()
-
                 # Colab fetch
                 new_meta = dict(job.meta)
                 new_meta['page'] = 1
@@ -812,6 +807,12 @@ class GitHubLoader(Cmd):
                 job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['full_name']),
                                   jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
                 self.link_queue.put(job)
+
+                # DB save
+                s.add(dbu)
+                s.commit()
+                s.flush()
+                s.expunge_all()
 
             except Exception as e:
                 logger.error('Exception storing repo details: %s:%s meta: %s, url: %s, exc: %s'
