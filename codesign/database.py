@@ -235,3 +235,15 @@ class GitHubRepoColab(Base):
     can_admin = Column(Integer, nullable=False)
 
 
+class GitHubRepoAssignee(Base):
+    """
+    Github repositories assignees
+    """
+    __tablename__ = 'github_repo_assignee'
+    id = Column(BigInteger, primary_key=True)
+
+    repo_name = Column(String(255), nullable=False)
+    user_name = Column(String(255), nullable=False)
+
+
+

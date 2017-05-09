@@ -46,7 +46,7 @@ from evt_dequeue import EvtDequeue
 from github_base import AccessResource, RateLimitHit
 
 from database import GitHubKey, GitHubUser as GitHubUserDb
-from database import GitHubUserDetails, GitHubUserOrgs, GitHubRepo, GitHubRepoColab
+from database import GitHubUserDetails, GitHubUserOrgs, GitHubRepo, GitHubRepoColab, GitHubRepoAssignee
 from database import Base as DB_Base
 
 from sqlalchemy.orm import scoped_session
@@ -72,6 +72,7 @@ class DownloadJob(object):
     TYPE_REPOS_USER = 3
     TYPE_REPOS_ORG = 4
     TYPE_REPO_COLAB = 5
+    TYPE_REPO_ASSIGNEE = 6
 
     __slots__ = ['url', 'type', 'user', 'meta', 'fail_cnt', 'last_fail', 'priority', 'time_added']
 
@@ -164,6 +165,7 @@ class GitHubLoader(Cmd):
     USER_ORGS_URL = 'https://api.github.com/users/%s/orgs'
     ORG_REPOS_URL = 'https://api.github.com/orgs/%s/repos'
     ORG_REPO_COLAB_URL = 'https://api.github.com/repos/%s/collaborators'
+    ORG_REPO_ASSIGNEES_URL = 'https://api.github.com/repos/%s/assignees'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
                  max_mem=None, *args, **kwargs):
@@ -619,6 +621,8 @@ class GitHubLoader(Cmd):
             self.process_repo(job, js_data, headers, raw_response, False)
         elif job.type == DownloadJob.TYPE_REPO_COLAB:
             self.process_colab(job, js_data, headers, raw_response)
+        elif job.type == DownloadJob.TYPE_REPO_ASSIGNEE:
+            self.process_assignee(job, js_data, headers, raw_response)
         else:
             logger.error('Unrecognized type %s' % job.type)
 
@@ -769,6 +773,7 @@ class GitHubLoader(Cmd):
             s = self.session()
             try:
                 repo_id = int(repo['id'])
+                dbe = s.query(GitHubRepo).filter(GitHubRepo.id == repo_id).one_or_none()
 
                 dbu = GitHubRepo()
                 dbu.id = repo_id
@@ -799,17 +804,35 @@ class GitHubLoader(Cmd):
                 dbu.repo_stargazers_url = repo['stargazers_url']
                 dbu.repo_forks_url = repo['forks_url']
 
-                # Colab fetch
+                # Colab fetch - skip, no auth
                 new_meta = dict(job.meta)
                 new_meta['page'] = 1
                 new_meta['repo'] = repo['full_name']
                 new_meta['owner'] = repo['owner']['login']
                 job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['full_name']),
                                   jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
+                # not added to the queue on purpose - no auth for that
+
+                # Asignee fetch
+                job = DownloadJob(url=self.ORG_REPO_ASSIGNEES_URL % (repo['full_name']),
+                                  jtype=DownloadJob.TYPE_REPO_ASSIGNEE, meta=new_meta)
                 self.link_queue.put(job)
 
                 # DB save
-                s.add(dbu)
+                if dbe is None:
+                    s.add(dbu)
+
+                else:
+                    if dbe.username != dbu.username:
+                        logger.warning('Username does not match for %s %s %s'
+                                       % (repo_id, dbe.username, dbu.username))
+                    if dbe.org_name != dbu.org_name:
+                        logger.warning('org_name does not match for %s %s %s'
+                                       % (repo_id, dbe.org_name, dbu.org_name))
+                    if dbe.owner_login != dbu.owner_login:
+                        logger.warning('owner_login does not match for %s %s %s'
+                                       % (repo_id, dbe.owner_login, dbu.owner_login))
+
                 s.commit()
                 s.flush()
                 s.expunge_all()
@@ -890,6 +913,57 @@ class GitHubLoader(Cmd):
         new_meta['page'] = cur_page + 1
 
         job = DownloadJob(url=new_url, jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
+        self.link_queue.put(job)
+
+    def process_assignee(self, job, js, headers, raw_response):
+        """
+        Process assignees for org owned repos
+        :param job:
+        :param js:
+        :param headers:
+        :param raw_response:
+        :return:
+        """
+        for assignee in js:
+            if 'id' not in assignee:
+                logger.error('Field ID not found in assignees')
+                continue
+
+            s = self.session()
+            try:
+                # delete first - avoid excs
+                s.query(GitHubRepoAssignee)\
+                    .filter(GitHubRepoAssignee.user_name == assignee['login'])\
+                    .filter(GitHubRepoAssignee.repo_name == job.meta['repo'])\
+                    .delete()
+
+                dbu = GitHubRepoAssignee()
+                dbu.repo_name = job.meta['repo']
+                dbu.user_name = assignee['login']
+
+                s.add(dbu)
+                s.commit()
+                s.flush()
+                s.expunge_all()
+
+            except Exception as e:
+                logger.error('Exception storing cassignee details: %s:%s: %s'
+                             % (assignee['login'], job.meta['repo'], e))
+                logger.debug(traceback.format_exc())
+
+            finally:
+                utils.silent_close(s)
+
+        if len(js) == 0:
+            return
+
+        # Load next page
+        cur_page = utils.defvalkey(job.meta, 'page', 1)
+        new_url = (self.ORG_REPO_ASSIGNEES_URL % (job.meta['repo'])) + ('?page=%s' % (cur_page + 1))
+        new_meta = dict(job.meta)
+        new_meta['page'] = cur_page + 1
+
+        job = DownloadJob(url=new_url, jtype=DownloadJob.TYPE_REPO_ASSIGNEE, meta=new_meta)
         self.link_queue.put(job)
 
     #
@@ -1082,6 +1156,8 @@ class GitHubLoader(Cmd):
             elif job.type == DownloadJob.TYPE_REPOS_ORG:
                 return ','
             elif job.type == DownloadJob.TYPE_REPO_COLAB:
+                return 'c'
+            elif job.type == DownloadJob.TYPE_REPO_ASSIGNEE:
                 return '-'
             else:
                 return '!'
