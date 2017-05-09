@@ -182,8 +182,6 @@ class GitHubLoader(Cmd):
         self.orgs_loaded_lock = Lock()
 
         self.max_mem = max_mem
-        self.users_per_page = 30
-        self.users_bulk_load_pages = 500
         self.state = state
         self.state_file_path = state_file
         self.rate_limit_reset = None
@@ -646,12 +644,12 @@ class GitHubLoader(Cmd):
 
             dbu.date_last_check = salch.func.now()
             dbu.username = js['login']
-            dbu.name = utils.defvalkey(js, 'name')
+            dbu.name = utils.utf8ize(utils.defvalkey(js, 'name'))
 
-            dbu.company = utils.defvalkey(js, 'company')
+            dbu.company = utils.utf8ize(utils.defvalkey(js, 'company'))
             dbu.blog = utils.defvalkey(js, 'blog')
             dbu.email = utils.defvalkey(js, 'email')
-            dbu.bio = utils.defvalkey(js, 'bio')
+            dbu.bio = utils.utf8ize(utils.defvalkey(js, 'bio'))
             dbu.usr_type = utils.defvalkey(js, 'type')
 
             dbu.public_repos = js['public_repos']
@@ -659,8 +657,8 @@ class GitHubLoader(Cmd):
             dbu.followers = js['followers']
             dbu.following = js['following']
 
-            dbu.created_at = utils.try_parse_timestamp(utils.defvalkey(js, 'created_at'))
-            dbu.updated_at = utils.try_parse_timestamp(utils.defvalkey(js, 'updated_at'))
+            dbu.created_at = utils.dt_norm(utils.try_parse_timestamp(utils.defvalkey(js, 'created_at')))
+            dbu.updated_at = utils.dt_norm(utils.try_parse_timestamp(utils.defvalkey(js, 'updated_at')))
 
             if is_new:
                 s.add(dbu)
@@ -706,7 +704,7 @@ class GitHubLoader(Cmd):
                 dbu.username = job.meta['user']
                 dbu.org_id = org['id']
                 dbu.org_name = org['login']
-                dbu.org_desc = org['description']
+                dbu.org_desc = utils.utf8ize(org['description'])
                 new_orgs.append(org['login'])
 
                 s.add(dbu)
@@ -716,7 +714,7 @@ class GitHubLoader(Cmd):
                 s.expunge_all()
 
             except Exception as e:
-                logger.error('Exception storing user details: %s: %s' % (org['id'], e))
+                logger.error('Exception storing user->org details: %s: %s' % (org['id'], e))
                 logger.debug(traceback.format_exc())
 
             finally:
@@ -782,7 +780,7 @@ class GitHubLoader(Cmd):
                 dbu.repo_forks = repo['forks']
                 dbu.repo_watchers = repo['watchers']
                 dbu.repo_is_fork = repo['fork']
-                dbu.repo_description = repo['description']
+                dbu.repo_description = utils.utf8ize(repo['description'])
 
                 dbu.repo_stargazers_url = repo['stargazers_url']
                 dbu.repo_forks_url = repo['forks_url']
@@ -793,7 +791,8 @@ class GitHubLoader(Cmd):
                 s.expunge_all()
 
             except Exception as e:
-                logger.error('Exception storing user details: %s: %s' % (repo['id'], e))
+                logger.error('Exception storing repo details: %s:%s meta: %s, url: %s, exc: %s'
+                             % (repo['id'], repo['full_name'], json.dumps(job.meta), job.url, e))
                 logger.debug(traceback.format_exc())
 
             finally:
@@ -1087,7 +1086,7 @@ class GitHubLoader(Cmd):
         parser = argparse.ArgumentParser(description='Downloads GitHub User info')
         parser.add_argument('-c', dest='config', default=None, help='JSON config file')
         parser.add_argument('-s', dest='status', default=None, help='JSON status file')
-        parser.add_argument('-t', dest='threads', default=1, help='Number of download threads to use')
+        parser.add_argument('-t', dest='threads', default=1, type=int, help='Number of download threads to use')
         parser.add_argument('--max-mem', dest='max_mem', default=None, type=int,
                             help='Maximal memory threshold in kB when program terminates itself')
 
