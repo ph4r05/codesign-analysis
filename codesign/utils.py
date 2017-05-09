@@ -1031,3 +1031,26 @@ def utf8ize(x):
     return x.encode('utf-8')
 
 
+def dt_unaware(x):
+    """
+    Makes date time zone unaware
+    :param x: 
+    :return: 
+    """
+    if x is None:
+        return None
+    return x.replace(tzinfo=None)
+
+
+def dt_norm(x):
+    """
+    Normalizes timestamp to UTC
+    :param x: 
+    :return: 
+    """
+    if x is None:
+        return None
+
+    tstamp = unix_time(x)
+    return datetime.datetime.utcfromtimestamp(tstamp)
+
