@@ -393,6 +393,30 @@ class GitHubLoader(Cmd):
         logger.info('Queue initialized, users cnt: %s' % users_cnt)
         utils.silent_close(sess)
 
+    def _init_queue_assignee(self):
+        """
+        Init queue with assignees repos
+        :return: 
+        """
+        sess = self.session()
+        logger.debug('Loading repos...')
+
+        users_cnt = 0
+        repos = sess.query(GitHubRepo).filter(GitHubRepo.user_repo == 0).filter(GitHubRepo.repo_stars >= 100).all()
+        logger.debug('Repos loaded: %s' % len(repos))
+
+        for rec in repos:
+            users_cnt += 1
+
+            job = DownloadJob(url=self.ORG_REPO_ASSIGNEES_URL % rec.repo_name, jtype=DownloadJob.TYPE_REPO_ASSIGNEE,
+                              meta={
+                                  'user': rec.owner_login,
+                                  'user_id': rec.owner_id,
+                                  'repo': rec.repo_name,
+                                  'page': 1
+                              })
+            self.link_queue.put(job)
+
     def work(self):
         """
         Main thread work method
@@ -413,7 +437,10 @@ class GitHubLoader(Cmd):
 
         # If there is no link to process - create from since.
         if self.link_queue.qsize() == 0:
-            self._init_queue()
+            if self.args.assign_only:
+                self._init_queue_assignee()
+            else:
+                self._init_queue()
 
         # Worker threads
         self.init_workers()
@@ -804,15 +831,15 @@ class GitHubLoader(Cmd):
                 dbu.repo_stargazers_url = repo['stargazers_url']
                 dbu.repo_forks_url = repo['forks_url']
 
-                # Colab fetch - skip, no auth
                 if not from_user and repo['stargazers_count'] > 100:
                     new_meta = dict(job.meta)
                     new_meta['page'] = 1
                     new_meta['repo'] = repo['full_name']
                     new_meta['owner'] = repo['owner']['login']
+
+                    # Colab fetch - skip, no auth
                     job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['full_name']),
                                       jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
-                    # not added to the queue on purpose - no auth for that
 
                     # Asignee fetch
                     job = DownloadJob(url=self.ORG_REPO_ASSIGNEES_URL % (repo['full_name']),
@@ -1246,6 +1273,8 @@ class GitHubLoader(Cmd):
         parser.add_argument('-t', dest='threads', default=1, type=int, help='Number of download threads to use')
         parser.add_argument('--max-mem', dest='max_mem', default=None, type=int,
                             help='Maximal memory threshold in kB when program terminates itself')
+        parser.add_argument('--assign-only', dest='assign_only', default=False, action='store_const', const=True,
+                            help='fetch assignees')
 
         args = self.args = parser.parse_args(args=args_src[1:])
 
