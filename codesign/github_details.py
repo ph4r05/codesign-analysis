@@ -780,6 +780,13 @@ class GitHubLoader(Cmd):
                 dbu.repo_forks = repo['forks']
                 dbu.repo_watchers = repo['watchers']
                 dbu.repo_is_fork = repo['fork']
+                dbu.repo_size = repo['size']
+                dbu.repo_homepage = utils.defvalkey(js, 'homepage')
+                dbu.repo_language = utils.defvalkey(js, 'language')
+                dbu.created_at = utils.dt_norm(utils.try_parse_timestamp(utils.defvalkey(js, 'created_at')))
+                dbu.updated_at = utils.dt_norm(utils.try_parse_timestamp(utils.defvalkey(js, 'updated_at')))
+                dbu.pushed_at = utils.dt_norm(utils.try_parse_timestamp(utils.defvalkey(js, 'pushed_at')))
+
                 dbu.repo_description = utils.utf8ize(repo['description'])
 
                 dbu.repo_stargazers_url = repo['stargazers_url']

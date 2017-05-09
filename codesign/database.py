@@ -201,14 +201,22 @@ class GitHubRepo(Base):
 
     date_discovered = Column(DateTime, default=func.now())
     date_last_check = Column(DateTime, default=func.now())
+
     repo_name = Column(String(255), nullable=False)
     repo_stars = Column(Integer, nullable=False)
     repo_forks = Column(Integer, nullable=False)
     repo_watchers = Column(Integer, nullable=False)
     repo_is_fork = Column(Integer, nullable=False)
+    repo_size = Column(Integer, nullable=False)
     repo_description = Column(Text, nullable=True)
+    repo_homepage = Column(Text, nullable=True)
+    repo_language = Column(String(255), nullable=True)
 
     repo_stargazers_url = Column(String(255), nullable=False)
     repo_forks_url = Column(String(255), nullable=False)
+
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+    pushed_at = Column(DateTime, nullable=True)
 
 
