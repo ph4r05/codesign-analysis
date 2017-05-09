@@ -46,7 +46,7 @@ from evt_dequeue import EvtDequeue
 from github_base import AccessResource, RateLimitHit
 
 from database import GitHubKey, GitHubUser as GitHubUserDb
-from database import GitHubUserDetails, GitHubUserOrgs, GitHubRepo
+from database import GitHubUserDetails, GitHubUserOrgs, GitHubRepo, GitHubRepoColab
 from database import Base as DB_Base
 
 from sqlalchemy.orm import scoped_session
@@ -71,6 +71,7 @@ class DownloadJob(object):
     TYPE_ORG = 2
     TYPE_REPOS_USER = 3
     TYPE_REPOS_ORG = 4
+    TYPE_REPO_COLAB = 5
 
     __slots__ = ['url', 'type', 'user', 'meta', 'fail_cnt', 'last_fail', 'priority', 'time_added']
 
@@ -162,6 +163,7 @@ class GitHubLoader(Cmd):
     USER_REPOS_URL = 'https://api.github.com/users/%s/repos'
     USER_ORGS_URL = 'https://api.github.com/users/%s/orgs'
     ORG_REPOS_URL = 'https://api.github.com/orgs/%s/repos'
+    ORG_REPO_COLAB_URL = 'https://api.github.com/repos/%s/%s/collaborators'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
                  max_mem=None, *args, **kwargs):
@@ -615,6 +617,8 @@ class GitHubLoader(Cmd):
             self.process_repo(job, js_data, headers, raw_response, True)
         elif job.type == DownloadJob.TYPE_REPOS_ORG:
             self.process_repo(job, js_data, headers, raw_response, False)
+        elif job.type == DownloadJob.TYPE_REPO_COLAB:
+            self.process_colab(job, js_data, headers, raw_response)
         else:
             logger.error('Unrecognized type %s' % job.type)
 
@@ -741,7 +745,10 @@ class GitHubLoader(Cmd):
                 self.orgs_loaded_set.add(x)
 
         for x in not_loaded_orgs:
-            job = DownloadJob(url=self.ORG_REPOS_URL % x, jtype=DownloadJob.TYPE_REPOS_ORG, meta={'org': x})
+            new_meta = dict(job.meta)
+            new_meta['page'] = 1
+            new_meta['org'] = x
+            job = DownloadJob(url=self.ORG_REPOS_URL % x, jtype=DownloadJob.TYPE_REPOS_ORG, meta=new_meta)
             self.link_queue.put(job)
 
     def process_repo(self, job, js, headers, raw_response, from_user):
@@ -797,6 +804,15 @@ class GitHubLoader(Cmd):
                 s.flush()
                 s.expunge_all()
 
+                # Colab fetch
+                new_meta = dict(job.meta)
+                new_meta['page'] = 1
+                new_meta['repo'] = repo['full_name']
+                new_meta['owner'] = repo['owner']['login']
+                job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['owner']['login'], repo['full_name']),
+                                  jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
+                self.link_queue.put(job)
+
             except Exception as e:
                 logger.error('Exception storing repo details: %s:%s meta: %s, url: %s, exc: %s'
                              % (repo['id'], repo['full_name'], json.dumps(job.meta), job.url, e))
@@ -820,6 +836,59 @@ class GitHubLoader(Cmd):
             new_url = (self.ORG_REPOS_URL % job.meta['org']) + ('?page=%s' % (cur_page + 1))
             job = DownloadJob(url=new_url, jtype=DownloadJob.TYPE_REPOS_ORG, meta=new_meta)
 
+        self.link_queue.put(job)
+
+    def process_colab(self, job, js, headers, raw_response):
+        """
+        Process colaborators for org owned repos
+        :param job:
+        :param js:
+        :param headers:
+        :param raw_response:
+        :return:
+        """
+        for colab in js:
+            if 'id' not in colab:
+                logger.error('Field ID not found in colab')
+                continue
+
+            s = self.session()
+            try:
+                # delete first - avoid excs
+                s.query(GitHubRepoColab)\
+                    .filter(GitHubRepoColab.user_name == colab['login'])\
+                    .filter(GitHubRepoColab.repo_name == job.meta['repo'])\
+                    .delete()
+
+                dbu = GitHubRepoColab()
+                dbu.repo_name = job.meta['repo']
+                dbu.user_name = colab['login']
+                dbu.can_pull = colab['permissions']['pull']
+                dbu.can_push = colab['permissions']['push']
+                dbu.can_admin = colab['permissions']['admin']
+
+                s.add(dbu)
+                s.commit()
+                s.flush()
+                s.expunge_all()
+
+            except Exception as e:
+                logger.error('Exception storing colab details: %s:%s: %s' % (colab['login'], job.meta['repo'], e))
+                logger.debug(traceback.format_exc())
+
+            finally:
+                utils.silent_close(s)
+
+        if len(js) == 0:
+            return
+
+        # Load next page
+        cur_page = utils.defvalkey(job.meta, 'page', 1)
+        new_url = (self.ORG_REPO_COLAB_URL % (job.meta['owner'], job.meta['repo'])) + ('?page=%s' % (cur_page + 1))
+        new_meta = dict(job.meta)
+        new_meta['page'] = cur_page + 1
+
+        job = DownloadJob(url=new_url, jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
         self.link_queue.put(job)
 
     #
@@ -1011,6 +1080,8 @@ class GitHubLoader(Cmd):
                 return '.'
             elif job.type == DownloadJob.TYPE_REPOS_ORG:
                 return ','
+            elif job.type == DownloadJob.TYPE_REPO_COLAB:
+                return '-'
             else:
                 return '!'
 

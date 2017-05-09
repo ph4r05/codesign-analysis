@@ -220,3 +220,18 @@ class GitHubRepo(Base):
     pushed_at = Column(DateTime, nullable=True)
 
 
+class GitHubRepoColab(Base):
+    """
+    Github repositories colaborators
+    """
+    __tablename__ = 'github_repo_colab'
+    id = Column(BigInteger, primary_key=True)
+
+    repo_name = Column(String(255), nullable=False)
+    user_name = Column(String(255), nullable=False)
+
+    can_pull = Column(Integer, nullable=False)
+    can_push = Column(Integer, nullable=False)
+    can_admin = Column(Integer, nullable=False)
+
+
