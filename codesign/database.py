@@ -145,3 +145,70 @@ class GitHubUser(Base):
     usr_type = Column(Integer, nullable=True)
 
 
+class GitHubUserDetails(Base):
+    """
+    GitHub users
+    """
+    __tablename__ = 'github_user_details'
+    id = Column(BigInteger, primary_key=True)
+    username = Column(String(255), nullable=False)
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+
+    name = Column(String(255), nullable=True)
+    company = Column(String(255), nullable=True)
+    blog = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    bio = Column(Text, nullable=True)
+    usr_type = Column(String(255), nullable=True)
+
+    public_repos = Column(Integer, nullable=False, default=0)
+    public_gists = Column(Integer, nullable=False, default=0)
+    followers = Column(Integer, nullable=False, default=0)
+    following = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+
+class GitHubUserOrgs(Base):
+    """
+    GitHub users organisations
+    """
+    __tablename__ = 'github_user_orgs'
+    id = Column(BigInteger, primary_key=True)
+    username = Column(String(255), nullable=False)
+    org_name = Column(String(255), nullable=False)
+    org_id = Column(BigInteger, nullable=False)
+    org_desc = Column(Text, nullable=True)
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+
+
+class GitHubRepo(Base):
+    """
+    Github repositories for the user
+    """
+    __tablename__ = 'github_repo'
+    id = Column(BigInteger, primary_key=True)
+    user_repo = Column(Integer, nullable=False, default=1)
+
+    org_name = Column(String(255), nullable=True)
+    username = Column(String(255), nullable=True)
+
+    owner_id = Column(String(255), nullable=True)
+    owner_login = Column(String(255), nullable=True)
+
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+    repo_name = Column(String(255), nullable=False)
+    repo_stars = Column(Integer, nullable=False)
+    repo_forks = Column(Integer, nullable=False)
+    repo_watchers = Column(Integer, nullable=False)
+    repo_is_fork = Column(Integer, nullable=False)
+    repo_description = Column(Text, nullable=True)
+
+    repo_stargazers_url = Column(String(255), nullable=False)
+    repo_forks_url = Column(String(255), nullable=False)
+
+
