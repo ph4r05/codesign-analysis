@@ -163,7 +163,7 @@ class GitHubLoader(Cmd):
     USER_REPOS_URL = 'https://api.github.com/users/%s/repos'
     USER_ORGS_URL = 'https://api.github.com/users/%s/orgs'
     ORG_REPOS_URL = 'https://api.github.com/orgs/%s/repos'
-    ORG_REPO_COLAB_URL = 'https://api.github.com/repos/%s/%s/collaborators'
+    ORG_REPO_COLAB_URL = 'https://api.github.com/repos/%s/collaborators'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
                  max_mem=None, *args, **kwargs):
@@ -809,7 +809,7 @@ class GitHubLoader(Cmd):
                 new_meta['page'] = 1
                 new_meta['repo'] = repo['full_name']
                 new_meta['owner'] = repo['owner']['login']
-                job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['owner']['login'], repo['full_name']),
+                job = DownloadJob(url=self.ORG_REPO_COLAB_URL % (repo['full_name']),
                                   jtype=DownloadJob.TYPE_REPO_COLAB, meta=new_meta)
                 self.link_queue.put(job)
 
@@ -884,7 +884,7 @@ class GitHubLoader(Cmd):
 
         # Load next page
         cur_page = utils.defvalkey(job.meta, 'page', 1)
-        new_url = (self.ORG_REPO_COLAB_URL % (job.meta['owner'], job.meta['repo'])) + ('?page=%s' % (cur_page + 1))
+        new_url = (self.ORG_REPO_COLAB_URL % (job.meta['repo'])) + ('?page=%s' % (cur_page + 1))
         new_meta = dict(job.meta)
         new_meta['page'] = cur_page + 1
 
