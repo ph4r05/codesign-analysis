@@ -121,10 +121,12 @@ class GitHubKey(Base):
 
     date_discovered = Column(DateTime, default=func.now())
     date_last_check = Column(DateTime, default=func.now())
+    date_lost = Column(DateTime, default=func.now())
 
     key_id = Column(BigInteger, nullable=True)
     key_type = Column(String(32), nullable=True)
     key_modulus_hex = Column(Text, nullable=True)
+    key_exponent_hex = Column(Text, nullable=True)
     key_exponent = Column(BigInteger, nullable=True)
     key_size = Column(Integer, nullable=True)
     is_interesting = Column(Integer, nullable=False, default=0)
