@@ -38,7 +38,7 @@ class Tracelogger(object):
         self.logger = logger
         self._db = set()
 
-    def log(self, cause=None, do_message=True):
+    def log(self, cause=None, do_message=True, custom_msg=None):
         """
         Loads exception data from the current exception frame - should be called inside the except block
         :return:
@@ -53,6 +53,13 @@ class Tracelogger(object):
         if md5 in self._db:
             self.logger.debug('Exception trace logged: %s' % md5)
             return
+
+        if custom_msg is not None and cause is not None:
+            self.logger.debug('%s : %s' % (custom_msg, cause))
+        elif custom_msg is not None:
+            self.logger.debug(custom_msg)
+        elif cause is not None:
+            self.logger.debug('%s' % cause)
 
         self.logger.debug(traceback_formatted)
         self._db.add(md5)
