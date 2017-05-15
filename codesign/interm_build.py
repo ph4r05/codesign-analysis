@@ -70,6 +70,10 @@ class IntermediateBuilder(object):
         self.all_certs = []
         self.interms = {}
 
+        self.state_last_dump = 0
+        self.state_time_dump = 300
+        self.cur_file = None
+
         self.num_no_fprint_raw = 0
         self.num_not_ca = 0
         self.num_errs = 0
@@ -87,6 +91,20 @@ class IntermediateBuilder(object):
         resource_package = __name__
         resource_path = '../certs/data/cacert.pem'
         return pkg_resources.resource_string(resource_package, resource_path)
+
+    def report(self):
+        """
+        pass
+        :return: 
+        """
+        ct = time.time()
+        if ct - self.state_last_dump < self.state_time_dump:
+            return
+
+        logger.debug('.. rsa: %s, non-rsa: %s, errs: %s, nofpr: %s, found: %s, mem: %s MB, depth: %s, cfile: %s'
+                     % (self.num_rsa, self.num_non_rsa, self.num_errs, self.num_no_fprint_raw,
+                        self.num_found, utils.get_mem_mb(), self.cur_depth, self.cur_file))
+        self.state_last_dump = ct
 
     def test_cert(self, cert, js=None):
         """
@@ -123,6 +141,7 @@ class IntermediateBuilder(object):
         :return: 
         """
         logger.info('Reading file[%02d] %s' % (self.cur_depth, fname))
+        self.cur_file = fname
         with open(fname) as fh:
             for line in fh:
                 try:
@@ -181,7 +200,8 @@ class IntermediateBuilder(object):
 
                     except:
                         pass
-
+                    self.report()
+                    
                 except Exception as e:
                     logger.error('Exception in processing certs %s' % e)
                     self.trace_logger.log(e)
