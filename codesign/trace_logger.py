@@ -51,7 +51,7 @@ class Tracelogger(object):
         md5 = hashlib.md5(traceback_formatted).hexdigest()
 
         if md5 in self._db:
-            self.logger.debug('Exception trace logged: %s' % md5)
+            # self.logger.debug('Exception trace logged: %s' % md5)
             return
 
         if custom_msg is not None and cause is not None:
