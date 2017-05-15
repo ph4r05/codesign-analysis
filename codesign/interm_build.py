@@ -16,6 +16,7 @@ import datetime
 import base64
 import hashlib
 import binascii
+import types
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -25,7 +26,7 @@ from cryptography.x509.oid import NameOID
 from cryptography.x509.oid import ExtensionOID
 from cryptography import x509
 
-from OpenSSL.crypto import load_certificate, load_privatekey, FILETYPE_PEM, FILETYPE_ASN1
+from OpenSSL.crypto import load_certificate, load_privatekey, FILETYPE_PEM, FILETYPE_ASN1, X509StoreContextError
 from OpenSSL.crypto import X509Store, X509StoreContext
 from six import u, b, binary_type, PY3
 
@@ -71,7 +72,7 @@ class IntermediateBuilder(object):
         self.interms = {}
 
         self.state_last_dump = 0
-        self.state_time_dump = 180
+        self.state_time_dump = 60
         self.cur_file = None
 
         self.num_no_fprint_raw = 0
@@ -80,6 +81,7 @@ class IntermediateBuilder(object):
         self.num_errs = 0
         self.num_non_rsa = 0
         self.num_rsa = 0
+        self.num_expired = 0
         self.num_found = 0
 
     def new_store(self):
@@ -112,10 +114,10 @@ class IntermediateBuilder(object):
         if ct - self.state_last_dump < self.state_time_dump:
             return
 
-        logger.debug('.. rsa: %s, non-rsa: %s, errs: %s, nofpr: %s, nor: %s, found: %s, mem: %s MB, '
+        logger.debug('.. rsa: %s, non-rsa: %s, errs: %s, nofpr: %s, nor: %s, exp: %s, found: %s, mem: %s MB, '
                      'depth: %s, cfile: %s'
                      % (self.num_rsa, self.num_non_rsa, self.num_errs, self.num_no_fprint_raw, self.num_no_raw,
-                        self.num_found, utils.get_mem_mb(), self.cur_depth, self.cur_file))
+                        self.num_expired, self.num_found, utils.get_mem_mb(), self.cur_depth, self.cur_file))
         self.state_last_dump = ct
 
     def test_cert(self, cert, js=None):
@@ -202,6 +204,7 @@ class IntermediateBuilder(object):
 
                     # Verify
                     ossl_cert = load_certificate(FILETYPE_ASN1, rawb)
+                    self.cur_store.set_flags(0x200000)
                     store_ctx = X509StoreContext(self.cur_store, ossl_cert)
                     try:
                         store_ctx.verify_certificate()
@@ -210,8 +213,15 @@ class IntermediateBuilder(object):
                         self.all_certs.append(ossl_cert)
                         self.test_cert(crypt_cert, js)
 
+                    except X509StoreContextError as cex:
+                        self.trace_logger.log(cex, custom_msg='Exc in verification')
+                        if isinstance(cex.message, (types.ListType, types.TupleType)):
+                            if cex.message[0] == 10:
+                                self.num_expired += 1
+
                     except Exception as e:
-                        self.trace_logger.log(e, custom_msg='Exc in verification')
+                        self.trace_logger.log(e, custom_msg='General Exc in verification')
+
                     self.report()
                     
                 except Exception as e:
