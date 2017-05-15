@@ -71,10 +71,11 @@ class IntermediateBuilder(object):
         self.interms = {}
 
         self.state_last_dump = 0
-        self.state_time_dump = 300
+        self.state_time_dump = 180
         self.cur_file = None
 
         self.num_no_fprint_raw = 0
+        self.num_no_raw = 0
         self.num_not_ca = 0
         self.num_errs = 0
         self.num_non_rsa = 0
@@ -101,8 +102,9 @@ class IntermediateBuilder(object):
         if ct - self.state_last_dump < self.state_time_dump:
             return
 
-        logger.debug('.. rsa: %s, non-rsa: %s, errs: %s, nofpr: %s, found: %s, mem: %s MB, depth: %s, cfile: %s'
-                     % (self.num_rsa, self.num_non_rsa, self.num_errs, self.num_no_fprint_raw,
+        logger.debug('.. rsa: %s, non-rsa: %s, errs: %s, nofpr: %s, nor: %s, found: %s, mem: %s MB, '
+                     'depth: %s, cfile: %s'
+                     % (self.num_rsa, self.num_non_rsa, self.num_errs, self.num_no_fprint_raw, self.num_no_raw,
                         self.num_found, utils.get_mem_mb(), self.cur_depth, self.cur_file))
         self.state_last_dump = ct
 
@@ -172,7 +174,7 @@ class IntermediateBuilder(object):
                         continue
 
                     if 'raw' not in js:
-                        logger.debug('Raw not present: %s' % fprint)
+                        self.num_no_raw += 1
                         continue
 
                     if rawb is None:
@@ -198,8 +200,8 @@ class IntermediateBuilder(object):
                         self.all_certs.append(ossl_cert)
                         self.test_cert(crypt_cert, js)
 
-                    except:
-                        pass
+                    except Exception as e:
+                        self.trace_logger.log(e, custom_msg='Exc in verification')
                     self.report()
                     
                 except Exception as e:
