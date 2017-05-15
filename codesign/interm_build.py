@@ -65,8 +65,8 @@ class IntermediateBuilder(object):
 
         self.assigned_fprints = set()
         self.cur_depth = 1
-        self.root_store = X509Store()
-        self.cur_store = X509Store()
+        self.root_store = self.new_store()
+        self.cur_store = self.new_store()
         self.all_certs = []
         self.interms = {}
 
@@ -81,6 +81,16 @@ class IntermediateBuilder(object):
         self.num_non_rsa = 0
         self.num_rsa = 0
         self.num_found = 0
+
+    def new_store(self):
+        """
+        Creates a new store
+        # define X509_V_FLAG_NO_CHECK_TIME               0x200000
+        :return: 
+        """
+        store = X509Store()
+        store.set_flags(0x200000)
+        return store
 
     def load_roots(self):
         """
@@ -266,7 +276,7 @@ class IntermediateBuilder(object):
             for fname in root_files:
                 self.roots(fname)
 
-            self.cur_store = X509Store()
+            self.cur_store = self.new_store()
             for crt in self.all_certs:
                 try:
                     self.cur_store.add_cert(crt)
