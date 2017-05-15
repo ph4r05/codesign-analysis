@@ -35,10 +35,14 @@ import time
 import input_obj
 import lz4framed
 import newline_reader
-
+from trace_logger import Tracelogger
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.INFO)
+
+
+FMT_TLS = 1
+FMT_SON = 2
 
 
 def get_backend(backend=None):
@@ -52,7 +56,9 @@ class IntermediateBuilder(object):
 
     def __init__(self):
         self.args = None
+        self.trace_logger = Tracelogger(logger=logger)
         self.chain_cert_db = {}
+        self.fmagic = None
 
         self.ctr = 0
         self.input_objects = []
@@ -63,6 +69,13 @@ class IntermediateBuilder(object):
         self.cur_store = X509Store()
         self.all_certs = []
         self.interms = {}
+
+        self.num_no_fprint_raw = 0
+        self.num_not_ca = 0
+        self.num_errs = 0
+        self.num_non_rsa = 0
+        self.num_rsa = 0
+        self.num_found = 0
 
     def load_roots(self):
         """
@@ -75,6 +88,34 @@ class IntermediateBuilder(object):
         resource_path = '../certs/data/cacert.pem'
         return pkg_resources.resource_string(resource_package, resource_path)
 
+    def test_cert(self, cert, js=None):
+        """
+        Test der x509 certificate
+        :param js: 
+        :return: 
+        """
+        if self.fmagic is None:
+            return
+
+        try:
+            pub = cert.public_key()
+            if not isinstance(pub, RSAPublicKey):
+                self.num_non_rsa += 1
+                return
+
+            pubnum = cert.public_key().public_numbers()
+            self.num_rsa += 1
+
+            xres = self.fmagic.magic16(['%x' % pubnum.n])
+            if len(xres) > 0:
+                self.num_found += 1
+                logger.error('!!!!!!!!!!!!!!!!!!!!!!!!! JS: %s' % utils.try_get_cname(cert))
+                logger.info(js)
+
+        except Exception as e:
+            logger.error('Exception testing certificate: %s' % e)
+            self.trace_logger.log(e)
+
     def roots(self, fname):
         """
         One root file processing
@@ -84,41 +125,67 @@ class IntermediateBuilder(object):
         logger.info('Reading file[%02d] %s' % (self.cur_depth, fname))
         with open(fname) as fh:
             for line in fh:
-                js = json.loads(line)
-
-                # Already seen in this round
-                if js['fprint'] in self.chain_cert_db:
-                    continue
-
-                # Already assigned to a trust category
-                if js['fprint'] in self.assigned_fprints:
-                    continue
-
-                if 'raw' not in js:
-                    logger.debug('Raw not present: %s' % js['fprint'])
-                    continue
-
-                raw = js['raw']
-                rawb = base64.b64decode(raw)
-                self.chain_cert_db[js['fprint']] = True
-
-                crypt_cert = load_der_x509_certificate(rawb, get_backend())
-
-                if not utils.try_is_ca(crypt_cert):
-                    logger.debug('Cert is not CA: %s' % js['fprint'])
-                    continue
-
-                # Verify
-                ossl_cert = load_certificate(FILETYPE_ASN1, rawb)
-                store_ctx = X509StoreContext(self.cur_store, ossl_cert)
                 try:
-                    store_ctx.verify_certificate()
-                    self.interms[self.cur_depth].append(js)
-                    self.assigned_fprints.add(js['fprint'])
-                    self.all_certs.append(ossl_cert)
+                    js = json.loads(line)
+                    fprint = None
+                    raw = None
+                    rawb = None
 
-                except:
-                    pass
+                    if 'fprint' in js:
+                        fprint = js['fprint']
+
+                    fprint_requires_raw = fprint is None or len(fprint) != 40
+                    if fprint_requires_raw and 'raw' not in js:
+                        self.num_no_fprint_raw += 1
+                        continue
+
+                    if fprint_requires_raw:
+                        raw = js['raw']
+                        rawb = base64.b64decode(raw)
+                        fprint = hashlib.sha1(rawb).hexdigest()
+
+                    # Already seen in this round
+                    if fprint in self.chain_cert_db:
+                        continue
+
+                    # Already assigned to a trust category
+                    if fprint in self.assigned_fprints:
+                        continue
+
+                    if 'raw' not in js:
+                        logger.debug('Raw not present: %s' % fprint)
+                        continue
+
+                    if rawb is None:
+                        raw = js['raw']
+                        rawb = base64.b64decode(raw)
+
+                    self.chain_cert_db[fprint] = True
+                    crypt_cert = load_der_x509_certificate(rawb, get_backend())
+
+                    if not utils.try_is_ca(crypt_cert):
+                        if self.num_not_ca % 1000 == 0:
+                            logger.debug('Cert is not CA: %s (%d)' % (fprint, self.num_not_ca))
+                        self.num_not_ca += 1
+                        continue
+
+                    # Verify
+                    ossl_cert = load_certificate(FILETYPE_ASN1, rawb)
+                    store_ctx = X509StoreContext(self.cur_store, ossl_cert)
+                    try:
+                        store_ctx.verify_certificate()
+                        self.interms[self.cur_depth].append(js)
+                        self.assigned_fprints.add(fprint)
+                        self.all_certs.append(ossl_cert)
+                        self.test_cert(crypt_cert, js)
+
+                    except:
+                        pass
+
+                except Exception as e:
+                    logger.error('Exception in processing certs %s' % e)
+                    self.trace_logger.log(e)
+                    self.num_errs += 1
 
     def work(self):
         """
@@ -140,8 +207,9 @@ class IntermediateBuilder(object):
                 self.root_store.add_cert(root_cert)
                 self.cur_store.add_cert(root_cert)
                 self.all_certs.append(root_cert)
-                root_fprint = binascii.hexlify(crypt_cert.fingerprint(hashes.SHA256()))
+                root_fprint = binascii.hexlify(crypt_cert.fingerprint(hashes.SHA1()))
                 self.assigned_fprints.add(root_fprint)
+                self.test_cert(crypt_cert)
                 logger.info('Root: %s' % root_fprint)
 
             except Exception as e:
@@ -154,6 +222,17 @@ class IntermediateBuilder(object):
         for tlsdir in self.args.tlsdir:
             root_files += ([os.path.join(tlsdir, f) for f in os.listdir(tlsdir)
                             if (os.path.isfile(os.path.join(tlsdir, f)) and '.cr.json' in f)])
+
+        for alexa in self.args.alexa:
+            root_files += ([os.path.join(alexa, f) for f in os.listdir(alexa)
+                            if (os.path.isfile(os.path.join(alexa, f)) and '.cr.json' in f)])
+
+        for sonar in self.args.sonar:
+            root_files += ([os.path.join(sonar, f) for f in os.listdir(sonar)
+                            if (os.path.isfile(os.path.join(sonar, f)) and '_certs.uniq.json' in f)])
+
+        for fl in root_files:
+            logger.debug('File: %s' % fl)
 
         # Waves
         for cdepth in range(1, 10):
@@ -198,16 +277,29 @@ class IntermediateBuilder(object):
         parser.add_argument('--debug', dest='debug', default=False, action='store_const', const=True,
                             help='Debugging logging')
 
+        parser.add_argument('--sec', dest='sec', default=False, action='store_const', const=True,
+                            help='Security scan')
+
         parser.add_argument('--dry-run', dest='dry_run', default=False, action='store_const', const=True,
                             help='Dry run - no file will be overwritten or deleted')
 
         parser.add_argument('--tlsdir', dest='tlsdir', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='Directory with TLS results to process')
 
+        parser.add_argument('--alexa', dest='alexa', nargs=argparse.ZERO_OR_MORE, default=[],
+                            help='Directory with Alexa results to process')
+
+        parser.add_argument('--sonar', dest='sonar', nargs=argparse.ZERO_OR_MORE, default=[],
+                            help='Sonar SSL dir with *_certs.uniq.json files, json per line, raw record for cert')
+
         self.args = parser.parse_args()
 
         if self.args.debug:
             coloredlogs.install(level=logging.DEBUG)
+
+        if self.args.sec:
+            import sec
+            self.fmagic = sec.Fprinter(167)
 
         self.work()
 
