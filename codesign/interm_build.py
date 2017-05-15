@@ -120,7 +120,7 @@ class IntermediateBuilder(object):
                         self.num_expired, self.num_found, utils.get_mem_mb(), self.cur_depth, self.cur_file))
         self.state_last_dump = ct
 
-    def test_cert(self, cert, js=None):
+    def test_cert(self, cert, js=None, aux=None):
         """
         Test der x509 certificate
         :param js: 
@@ -141,7 +141,7 @@ class IntermediateBuilder(object):
             xres = self.fmagic.magic16(['%x' % pubnum.n])
             if len(xres) > 0:
                 self.num_found += 1
-                logger.error('!!!!!!!!!!!!!!!!!!!!!!!!! JS: %s' % utils.try_get_cname(cert))
+                logger.error('!!!!!!!!!!!!!!!!!!!!!!!!! JS: %s, aux: %s' % (utils.try_get_cname(cert), aux))
                 logger.info(js)
 
         except Exception as e:
@@ -218,6 +218,7 @@ class IntermediateBuilder(object):
                         if isinstance(cex.message, (types.ListType, types.TupleType)):
                             if cex.message[0] == 10:
                                 self.num_expired += 1
+                                self.test_cert(crypt_cert, js, 'Expired')
 
                     except Exception as e:
                         self.trace_logger.log(e, custom_msg='General Exc in verification')
