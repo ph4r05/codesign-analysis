@@ -167,6 +167,9 @@ class IntermediateBuilder(object):
                     if 'fprint' in js:
                         fprint = js['fprint']
 
+                    if 'ca' in js and not js['ca']:
+                        continue
+
                     fprint_requires_raw = fprint is None or len(fprint) != 40
                     if fprint_requires_raw and 'raw' not in js:
                         self.num_no_fprint_raw += 1
