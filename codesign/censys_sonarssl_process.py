@@ -340,6 +340,16 @@ class SonarSSLProcess(object):
                 lst.append(ip)
         return fprints_db
 
+    def _exists(self, x):
+        """
+        returns true if input is valid & readable
+        :param x: 
+        :return: 
+        """
+        if isinstance(x, input_obj.InputObject):
+            return True
+        return os.path.exists(x)
+
     def process_dataset(self, test_idx, datepart, certfile, hostfile):
         """
         Processes single dataset, generates jsons
@@ -354,11 +364,11 @@ class SonarSSLProcess(object):
         jsonufile = os.path.join(self.args.datadir, '%s_certs.uniq.json' % datepart)
         finishfile = os.path.join(self.args.datadir, '%s_process.finished' % datepart)
 
-        if not os.path.exists(certfile):
+        if not self._exists(certfile):
             logger.error('Cert file does not exist %s' % certfile)
             return
 
-        if not os.path.exists(hostfile):
+        if not self._exists(hostfile):
             logger.error('Host file does not exist %s' % hostfile)
             return
 
