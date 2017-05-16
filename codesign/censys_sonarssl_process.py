@@ -61,6 +61,7 @@ class SonarSSLProcess(object):
         self.args = None
         self.is_eco = False
         self.trace_logger = Tracelogger(logger=logger)
+        self.fmagic = None
 
     def main(self):
         """
@@ -96,7 +97,15 @@ class SonarSSLProcess(object):
         parser.add_argument('--months', dest='months', default=False, action='store_const', const=True,
                             help='Merge incremental snapshots on-per month basis')
 
+        parser.add_argument('--sec', dest='sec', default=False, action='store_const', const=True,
+                            help='Sec')
+
         self.args = parser.parse_args()
+
+        if self.args.sec:
+            import sec
+            self.fmagic = sec.Fprinter()
+
         self.work()
 
     def work(self):
@@ -431,6 +440,8 @@ class SonarSSLProcess(object):
                             js['e'] = '0x%x' % pub.public_numbers().e
                             js['n'] = '0x%x' % pub.public_numbers().n
                             js['nnum'] = pub.public_numbers().n
+                            if self.fmagic is not None:
+                                js['sec'] = self.fmagic.test16('%x' % pub.public_numbers().n)
                         else:
                             js['nnum'] = 9e99
 
