@@ -471,7 +471,7 @@ class SonarSSLProcess(object):
 
         # Duplicate removal
         with open(jsonufile, 'w') as fh:
-            for k, g in itertools.groupby(js_db, key=lambda x: x['n']):
+            for k, g in itertools.groupby(js_db, key=lambda x: x['fprint']):
                 grp = [x for x in g]
                 g0 = grp[0]
                 js = collections.OrderedDict(g0)
