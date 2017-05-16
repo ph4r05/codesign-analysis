@@ -519,6 +519,7 @@ class SonarSSLProcess(object):
         logger.info('JSON file produced, mem: %s MB' % utils.get_mem_mb())
 
         # Duplicate removal
+        js_db.sort(key=lambda x: x['fprint'])
         with open(jsonufile, 'w') as fh:
             for k, g in itertools.groupby(js_db, key=lambda x: x['fprint']):
                 grp = [x for x in g]
