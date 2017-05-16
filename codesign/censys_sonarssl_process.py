@@ -221,7 +221,7 @@ class SonarSSLProcess(object):
 
             test_name = '%s_%s_merge' % (k[0], k[1])
             certfiles = utils.drop_nones([self._sonar_get_certrec(x) for x in group_recs])
-            hostfiles = utils.drop_nones([self._sonar_get_certrec(x) for x in group_recs])
+            hostfiles = utils.drop_nones([self._sonar_get_hostrec(x) for x in group_recs])
 
             certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
             hostfiles = [self._sonar_augment_filepaths(x) for x in hostfiles]
