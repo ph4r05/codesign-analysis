@@ -233,7 +233,8 @@ class SonarSSLProcess(object):
             hostfile = self._iobj_fetchable(path=hostfiles[0]['fpath'], url=hostfiles[0]['href'])
 
             logger.info(
-                'Processing sonar dataset - merged %s, %s rec: %s' % (test_idx, test_name, json.dumps(group_recs)))
+                'Processing sonar dataset - merged %s, %s rec: %s, certfiles: %s, hostfiles: %s'
+                % (test_idx, test_name, json.dumps(group_recs), json.dumps(certfiles), json.dumps(hostfiles)))
             self.process_dataset(test_idx, test_name, certfile, hostfile)
 
     def _sonar_get_filerec(self, rec, name):
