@@ -763,11 +763,12 @@ class MergedInputObject(InputObject):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(MergedInputObject, self).__exit__(exc_type, exc_val, exc_tb)
-        try:
-            self.iobjs[self.cur_iobj].__exit__(exc_type, exc_val, exc_tb)
-        except Exception as e:
-            logger.debug('Exception when exiting from the sub fh %s %s' % (self.cur_iobj, e))
-            logger.debug(traceback.format_exc())
+        for idx in range(len(self.iobjs)):
+            try:
+                self.iobjs[idx].__exit__(exc_type, exc_val, exc_tb)
+            except Exception as e:
+                logger.debug('Exception when exiting from the sub fh %s %s' % (self.cur_iobj, e))
+                logger.debug(traceback.format_exc())
 
     def __repr__(self):
         return 'MergedInputObject(iobjs=%r)' % (self.iobjs)
@@ -782,18 +783,21 @@ class MergedInputObject(InputObject):
         return -1
 
     def read(self, size=None):
-        while True:
+        while not self.finished:
             data = self.iobjs[self.cur_iobj].read(size)
             if is_empty(data):
                 if self.cur_iobj + 1 == len(self.iobjs):
                     self.finished = True
                     return data
+
                 self.cur_iobj += 1
+                self.iobjs[self.cur_iobj].__enter__()
                 continue
 
             self.sha256.update(data)
             self.data_read += len(data)
             return data
+        return ''
 
     def handle(self):
         return self.iobjs[self.cur_iobj].handle()
