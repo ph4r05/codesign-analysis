@@ -15,6 +15,7 @@ import threading
 import time
 import collections
 import string
+from gzipinputstream import GzipInputStream
 
 
 logger = logging.getLogger(__name__)
@@ -799,4 +800,74 @@ class MergedInputObject(InputObject):
 
     def flush(self):
         self.iobjs[self.cur_iobj].flush()
+
+
+class GzipInputObject(InputObject):
+    """
+    Input object for reading another input object in gzip form
+    """
+    def __init__(self, iobj, *args, **kwargs):
+        super(GzipInputObject, self).__init__(*args, **kwargs)
+        self.iobj = iobj
+        self.gzip_fh = None
+
+    def __enter__(self):
+        super(GzipInputObject, self).__enter__()
+        try:
+            self.iobj.__enter__()
+            self.gzip_fh = GzipInputStream(fileobj=self.iobj)
+        except Exception as e:
+            logger.debug('Exception when entering to the parent fh %s' % e)
+            logger.debug(traceback.format_exc())
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(GzipInputObject, self).__exit__(exc_type, exc_val, exc_tb)
+        try:
+            self.iobj.__exit__(exc_type, exc_val, exc_tb)
+        except Exception as e:
+            logger.debug('Exception when exiting to the parent fh %s' % e)
+            logger.debug(traceback.format_exc())
+
+    def __repr__(self):
+        return 'GzipInputObject(iobj=%r)' % (self.iobj)
+
+    def __str__(self):
+        return self.__repr__()
+
+    def check(self):
+        return self.iobj.check()
+
+    def size(self):
+        return -1
+
+    def read(self, size=None):
+        data = self.gzip_fh.read(size)
+        self.sha256.update(data)
+        self.data_read += len(data)
+
+    def handle(self):
+        return None
+
+    def to_state(self):
+        js = collections.OrderedDict()
+        js['iobj'] = self.iobj.to_state()
+        return js
+
+    def flush(self):
+        self.iobj.flush()
+
+    def readline(self):
+        """
+        Read a single line
+        :return: 
+        """
+        return self.gzip_fh.readline()
+
+    def readlines(self):
+        """
+        Return all lines as an array
+        :return: 
+        """
+        return self.gzip_fh.readlines()
+
 
