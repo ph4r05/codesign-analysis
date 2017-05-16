@@ -1054,3 +1054,21 @@ def dt_norm(x):
     tstamp = unix_time(x)
     return datetime.datetime.utcfromtimestamp(tstamp)
 
+
+def is_empty(x):
+    """
+    Returns true if string is None or empty
+    :param x: 
+    :return: 
+    """
+    return x is None or len(x) == 0
+
+
+def drop_nones(lst):
+    """
+    Drop None elements from the list
+    :param lst: 
+    :return: 
+    """
+    return [x for x in lst if x is not None]
+
