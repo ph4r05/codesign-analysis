@@ -35,9 +35,12 @@ class InputObject(object):
     Input stream object.
     Can be a file, stream, or something else
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, rec=None, aux=None, *args, **kwargs):
         self.sha256 = hashlib.sha256()
         self.data_read = 0
+
+        self.rec = rec
+        self.aux = aux
 
         # readline iterators
         self._data = ''
@@ -203,10 +206,9 @@ class FileInputObject(InputObject):
     """
     File input object - reading from the file
     """
-    def __init__(self, fname, rec=None, *args, **kwargs):
+    def __init__(self, fname, *args, **kwargs):
         super(FileInputObject, self).__init__(*args, **kwargs)
         self.fname = fname
-        self.rec = rec
         self.fh = None
 
     def __enter__(self):
@@ -309,13 +311,12 @@ class LinkInputObject(InputObject):
     """
     Input object using link - remote load
     """
-    def __init__(self, url, rec=None, headers=None, auth=None, timeout=None, *args, **kwargs):
+    def __init__(self, url, headers=None, auth=None, timeout=None, *args, **kwargs):
         super(LinkInputObject, self).__init__(*args, **kwargs)
         self.url = url
         self.headers = headers
         self.auth = auth
         self.r = None
-        self.rec = None
         self.timeout = timeout
         self.kwargs = kwargs
 
@@ -388,13 +389,12 @@ class ReconnectingLinkInputObject(InputObject):
     Link should support calling HEAD method and RangeBytes.
     If this is not supported no reconnection will be used.
     """
-    def __init__(self, url, rec=None, headers=None, auth=None, timeout=None,
+    def __init__(self, url, headers=None, auth=None, timeout=None,
                  max_reconnects=None, start_offset=0, pre_data_reconnect_hook=None, *args, **kwargs):
         super(ReconnectingLinkInputObject, self).__init__(*args, **kwargs)
         self.url = url
         self.headers = headers
         self.auth = auth
-        self.rec = rec
         self.timeout = timeout
         self.max_reconnects = max_reconnects
         self.start_offset = start_offset
