@@ -283,6 +283,10 @@ class IntermediateBuilder(object):
             root_files += sorted([os.path.join(sonar, f) for f in os.listdir(sonar)
                             if (os.path.isfile(os.path.join(sonar, f)) and '_certs.uniq.json' in f)])
 
+        for sonar in self.args.sonar_snap:
+            root_files += sorted([os.path.join(sonar, f) for f in os.listdir(sonar)
+                            if (os.path.isfile(os.path.join(sonar, f)) and '_merge_certs.uniq.json' in f)])
+
         for fl in root_files:
             logger.debug('File: %s' % fl)
 
@@ -341,6 +345,9 @@ class IntermediateBuilder(object):
 
         parser.add_argument('--sonar', dest='sonar', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='Sonar SSL dir with *_certs.uniq.json files, json per line, raw record for cert')
+
+        parser.add_argument('--sonar-snap', dest='sonar_snap', nargs=argparse.ZERO_OR_MORE, default=[],
+                            help='Sonar SSL dir with snapshots - _merge_certs.uniq.json')
 
         self.args = parser.parse_args()
 
