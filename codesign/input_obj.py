@@ -272,7 +272,9 @@ class FileLikeInputObject(InputObject):
         if self.fh is not None:
             return
         if self.open_call is not None:
-            self.open_call(self)
+            x = self.open_call(self)
+            if x is not None:
+                self.fh = x
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(FileLikeInputObject, self).__exit__(exc_type, exc_val, exc_tb)
