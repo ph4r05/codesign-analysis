@@ -268,19 +268,19 @@ class IntermediateBuilder(object):
                 logger.error('Exception in processing root cert %s' % e)
                 logger.debug(traceback.format_exc())
 
-        logger.info('Roots %s' % self.root_store)
+        logger.info('Roots[%s] %s' % (len(self.all_certs), self.root_store))
 
         root_files = []
         for tlsdir in self.args.tlsdir:
-            root_files += ([os.path.join(tlsdir, f) for f in os.listdir(tlsdir)
+            root_files += sorted([os.path.join(tlsdir, f) for f in os.listdir(tlsdir)
                             if (os.path.isfile(os.path.join(tlsdir, f)) and '.cr.json' in f)])
 
         for alexa in self.args.alexa:
-            root_files += ([os.path.join(alexa, f) for f in os.listdir(alexa)
+            root_files += sorted([os.path.join(alexa, f) for f in os.listdir(alexa)
                             if (os.path.isfile(os.path.join(alexa, f)) and '.cr.json' in f)])
 
         for sonar in self.args.sonar:
-            root_files += ([os.path.join(sonar, f) for f in os.listdir(sonar)
+            root_files += sorted([os.path.join(sonar, f) for f in os.listdir(sonar)
                             if (os.path.isfile(os.path.join(sonar, f)) and '_certs.uniq.json' in f)])
 
         for fl in root_files:
