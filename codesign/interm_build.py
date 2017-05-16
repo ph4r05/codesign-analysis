@@ -266,7 +266,7 @@ class IntermediateBuilder(object):
 
             except Exception as e:
                 logger.error('Exception in processing root cert %s' % e)
-                logger.debug(traceback.format_exc())
+                self.trace_logger.log(e)
 
         logger.info('Roots[%s] %s' % (len(self.all_certs), self.root_store))
 
@@ -286,7 +286,7 @@ class IntermediateBuilder(object):
         for fl in root_files:
             logger.debug('File: %s' % fl)
 
-        # Waves
+        # BFS on CA tree
         for cdepth in range(1, 10):
             logger.info('New depth level: %d' % cdepth)
             self.cur_depth = cdepth
@@ -310,9 +310,6 @@ class IntermediateBuilder(object):
                 break
 
             logger.info('New certificates added: %s' % ln)
-
-        # Dump
-        for cdepth in range(1, self.cur_depth+1):
             dpath = os.path.join(self.args.data_dir, 'interm-lvl%02d.json' % cdepth)
             with open(dpath, 'w') as fh:
                 json.dump(self.interms[cdepth], fh)
