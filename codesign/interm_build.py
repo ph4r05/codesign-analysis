@@ -58,7 +58,7 @@ class IntermediateBuilder(object):
     def __init__(self):
         self.args = None
         self.trace_logger = Tracelogger(logger=logger)
-        self.chain_cert_db = {}
+        self.chain_cert_db = set()
         self.fmagic = None
 
         self.ctr = 0
@@ -180,7 +180,7 @@ class IntermediateBuilder(object):
                         rawb = base64.b64decode(raw)
                         fprint = hashlib.sha1(rawb).hexdigest()
 
-                    # Already seen in this round
+                    # Already seen in this round, may become valid in the next round.
                     if fprint in self.chain_cert_db:
                         continue
 
@@ -196,7 +196,7 @@ class IntermediateBuilder(object):
                         raw = js['raw']
                         rawb = base64.b64decode(raw)
 
-                    self.chain_cert_db[fprint] = True
+                    self.chain_cert_db.add(fprint)
                     crypt_cert = load_der_x509_certificate(rawb, get_backend())
 
                     if not utils.try_is_ca(crypt_cert):
@@ -285,7 +285,7 @@ class IntermediateBuilder(object):
             logger.info('New depth level: %d' % cdepth)
             self.cur_depth = cdepth
             self.interms[cdepth] = []
-            self.chain_cert_db = {}
+            self.chain_cert_db = set()
 
             for fname in root_files:
                 self.roots(fname)
