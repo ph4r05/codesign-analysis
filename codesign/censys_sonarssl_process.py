@@ -22,12 +22,30 @@ import time
 import input_obj
 import gzip
 import gzipinputstream
-from datetime import datetime
+import datetime
 from trace_logger import Tracelogger
 
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.DEBUG)
+
+
+def month_key_fnc(dt):
+    """
+    Month key function from timestamp
+    :param tstamp: 
+    :return: 
+    """
+    return dt.year, dt.month
+
+
+def keyfnc(x):
+    """
+    Date_utc key function
+    :param x: 
+    :return: 
+    """
+    return month_key_fnc(datetime.datetime.utcfromtimestamp(x['date_utc']))
 
 
 class SonarSSLProcess(object):
@@ -75,6 +93,9 @@ class SonarSSLProcess(object):
         parser.add_argument('--nrsa', dest='nrsa', default=False, action='store_const', const=True,
                             help='Store also non-rsa intermediates')
 
+        parser.add_argument('--months', dest='months', default=False, action='store_const', const=True,
+                            help='Merge incremental snapshots on-per month basis')
+
         self.args = parser.parse_args()
         self.work()
 
@@ -104,6 +125,11 @@ class SonarSSLProcess(object):
                 js_rec = json.loads(rec)
                 jsdb.append(js_rec)
 
+        jsdb.sort(key=lambda x: x['date_utc'])
+        if self.args.months:
+            self.work_eco_months(jsdb)
+            return
+
         for test_idx, js_rec in enumerate(jsdb):
             if int(test_idx % self.args.proc_total) != int(self.args.proc_cur):
                 continue
@@ -113,6 +139,36 @@ class SonarSSLProcess(object):
             certfile = js_rec['certfile']
             logger.info('Processing eco dataset %s, %s rec: %s' % (test_idx, datepart, json.dumps(js_rec)))
             self.process_dataset(test_idx, datepart, certfile, hostfile)
+
+    def work_eco_months(self, jsdb):
+        """
+        Months based processing
+        :param jsdb: 
+        :return: 
+        """
+        data = sorted(jsdb, key=lambda x: x['date_utc'])  # stronger sorting function than keyfnc. breaks in-month ties.
+        test_idx = -1
+        for k, g in itertools.groupby(data, keyfnc):
+            test_idx += 1
+            group_recs = list(g)
+
+            if int(test_idx % self.args.proc_total) != int(self.args.proc_cur):
+                continue
+
+            test_name = '%s_%s_merge' % (k[0], k[1])
+            certfiles = [js_rec['certfile'] for js_rec in group_recs]
+            certfile = input_obj.MergedInputObject([
+                input_obj.FileLikeInputObject(open_call=lambda x: gzip.open(x.desc), desc=ff) for ff in certfiles
+            ])
+
+            hostfiles = [js_rec['hostfile'] for js_rec in group_recs]
+            # hostfile = input_obj.MergedInputObject([
+            #     input_obj.FileLikeInputObject(open_call=lambda x: gzip.open(x.desc), desc=ff) for ff in hostfiles
+            # ])
+            hostfile = hostfiles[-1]  # take the last host file to make it simple
+
+            logger.info('Processing eco dataset - merged %s, %s rec: %s' % (test_idx, test_name, json.dumps(group_recs)))
+            self.process_dataset(test_idx, test_name, certfile, hostfile)
 
     def work_sonar(self):
         """
@@ -126,28 +182,117 @@ class SonarSSLProcess(object):
         with open(args.json, 'r') as fh:
             jsdb = json.load(fh)
 
-        jsdb_ids = {x['id']: x for x in jsdb['data']}
+        jsdb_ids = {x['id']: x for x in jsdb['data'] if x['id'] in testrng}
+        if self.args.months:
+            self.work_sonar_months(jsdb_ids)
+            return
+
         for test_idx in testrng:
             if int(test_idx % args.proc_total) != int(args.proc_cur):
                 continue
 
-            files = jsdb_ids[test_idx]['files']
-            filerec = None
-            for tmprec in files:
-                if '_hosts.gz' in tmprec:
-                    filerec = files[tmprec]
-                    break
-
-            fname = filerec['name']
-
-            # 20131104/20131104_hosts.gz
-            fname_2 = os.path.basename(fname)
-            dateparts = fname_2.split('_')
-            datepart = dateparts[0]
-
-            certfile = os.path.join(args.datadir, '%s_certs.gz' % datepart)
-            hostfile = os.path.join(args.datadir, '%s_hosts.gz' % datepart)
+            rec = jsdb_ids[test_idx]
+            certfile, hostfile, datepart = self._sonar_get_certfile_hostfile(rec)
             self.process_dataset(test_idx, datepart, certfile, hostfile)
+
+    def work_sonar_months(self, jsdb_ids):
+        """
+        Month based processing
+        :param jsdb_ids: 
+        :return: 
+        """
+        jsdb = sorted(jsdb_ids.values(), key=lambda x: x['date_utc'])
+        test_idx = -1
+        for k, g in itertools.groupby(jsdb, keyfnc):
+            test_idx += 1
+            group_recs = list(g)
+
+            if int(test_idx % self.args.proc_total) != int(self.args.proc_cur):
+                continue
+
+            test_name = '%s_%s_merge' % (k[0], k[1])
+            certfiles = utils.drop_nones([self._sonar_get_certrec(x) for x in group_recs])
+            hostfiles = utils.drop_nones([self._sonar_get_certrec(x) for x in group_recs])
+
+            certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
+            hostfiles = [self._sonar_augment_filepaths(x) for x in hostfiles]
+
+            certfile = input_obj.MergedInputObject([
+                self._iobj_fetchable(path=x['fpath'], url=x['href']) for x in certfiles
+            ])
+            hostfile = self._iobj_fetchable(path=hostfiles[0]['fpath'], url=hostfiles[0]['href'])
+
+            logger.info(
+                'Processing sonar dataset - merged %s, %s rec: %s' % (test_idx, test_name, json.dumps(group_recs)))
+            self.process_dataset(test_idx, test_name, certfile, hostfile)
+
+    def _sonar_get_filerec(self, rec, name):
+        """
+        Sonar record 
+        :param rec: 
+        :param name: 
+        :return: 
+        """
+        files = rec['files']
+        filerec = None
+        for tmprec in files:
+            if name in tmprec:
+                filerec = files[tmprec]
+                break
+        return filerec
+
+    def _sonar_get_certrec(self, rec):
+        """
+        Return cert file record
+        :param rec: 
+        :return: 
+        """
+        return self._sonar_get_filerec(rec, '_certs.gz')
+
+    def _sonar_get_hostrec(self, rec):
+        """
+        Return cert file record
+        :param rec: 
+        :return: 
+        """
+        return self._sonar_get_filerec(rec, '_hosts.gz')
+
+    def _sonar_get_filepath(self, filerec):
+        """
+        Returns file path on the storage for the file record
+        :param filerec: 
+        :return: 
+        """
+        fname = filerec['name']
+        fname_2 = os.path.basename(fname)
+        return os.path.join(self.args.datadir, fname_2)
+
+    def _sonar_augment_filepaths(self, filerec):
+        """
+        Augments a record with file path
+        :param lst: 
+        :return: 
+        """
+        filerec['fpath'] = self._sonar_get_filepath(filerec)
+        return filerec
+
+    def _sonar_get_certfile_hostfile(self, rec):
+        """
+        Returns certfile, hostfile, datepart tuple for the sonar record
+        :param rec: 
+        :return: 
+        """
+        filerec = self._sonar_get_hostrec(rec)
+        fname = filerec['name']
+
+        # 20131104/20131104_hosts.gz
+        fname_2 = os.path.basename(fname)
+        dateparts = fname_2.split('_')
+        datepart = dateparts[0]
+
+        certfile = os.path.join(self.args.datadir, '%s_certs.gz' % datepart)
+        hostfile = os.path.join(self.args.datadir, '%s_hosts.gz' % datepart)
+        return certfile, hostfile, datepart
 
     def load_host_sonar(self, hostfile):
         """
@@ -156,7 +301,13 @@ class SonarSSLProcess(object):
         :return: 
         """
         fprints_db = collections.defaultdict(list)
-        with gzip.open(hostfile) as cf:
+
+        # Input file may be input object - do nothing. Or simple case - a gzip file
+        if not isinstance(hostfile, input_obj.InputObject):
+            cf = gzip.open(hostfile)
+        else:
+            cf = hostfile
+        with cf:
             for line in cf:
                 linerec = line.strip().split(',')
                 ip = linerec[0]
@@ -173,7 +324,13 @@ class SonarSSLProcess(object):
         :return: 
         """
         fprints_db = collections.defaultdict(list)
-        with gzip.open(hostfile) as cf:
+
+        # Input file may be input object - do nothing. Or simple case - a gzip file
+        if not isinstance(hostfile, input_obj.InputObject):
+            cf = gzip.open(hostfile)
+        else:
+            cf = hostfile
+        with cf:
             for line in cf:
                 linerec = line.strip().split(',')
                 ip = linerec[0].strip()
@@ -225,7 +382,13 @@ class SonarSSLProcess(object):
         line_ctr = 0
         js_db = []
         nrsa = self.args.nrsa
-        with gzip.open(certfile) as cf:
+
+        # Input file may be input object - do nothing. Or simple case - a gzip file
+        if not isinstance(certfile, input_obj.InputObject):
+            cf = gzip.open(certfile)
+        else:
+            cf = certfile
+        with cf:
             for line in cf:
                 try:
                     line_ctr += 1
@@ -262,7 +425,7 @@ class SonarSSLProcess(object):
 
                         js['info'] = {'ip': []}
                         if fprint in fprints_db:
-                            js['info']['ip'] = fprints_db[fprint]
+                            js['info']['ip'] = list(set(fprints_db[fprint]))
 
                         if js['ca']:
                             js['raw'] = cert_b64
@@ -309,6 +472,28 @@ class SonarSSLProcess(object):
                 fh.write(json.dumps(js) + '\n')
 
         utils.try_touch(finishfile)
+
+    def _iobj_fetchable(self, path, url):
+        """
+        Returns new input object, either local or downloads to a local file
+        :param path: 
+        :param url: 
+        :return: 
+        """
+        if os.path.exists(path):
+            iobj = input_obj.FileInputObject(fname=path)
+        else:
+            hosth = open(path, 'wb')
+            iobj = input_obj.ReconnectingLinkInputObject(url=url, rec=path)
+            iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
+
+        gz = path is not None and (path.endswith('.gz') or path.endswith('.gzip'))
+        gz |= url is not None and (url.endswith('.gz') or url.endswith('.gzip'))
+        if gz:
+            iobj = input_obj.GzipInputObject(iobj)
+        iobj.rec = path
+
+        return iobj
 
 
 if __name__ == '__main__':
