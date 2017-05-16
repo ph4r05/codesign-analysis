@@ -71,6 +71,9 @@ class SonarSSLProcess(object):
         parser.add_argument('--proc-cur', dest='proc_cur', default=0, type=int,
                             help='ID of the current process')
 
+        parser.add_argument('--nrsa', dest='nrsa', default=False, action='store_const', const=True,
+                            help='Store also non-rsa intermediates')
+
         self.args = parser.parse_args()
         self.work()
 
@@ -215,11 +218,12 @@ class SonarSSLProcess(object):
 
         logger.info('Processed host file, db size: %s, ram: %s MB' % (len(fprints_db), utils.get_mem_mb()))
 
-        # Process
+        # Process certfile - all certificates from the file will be added to the result
         last_info_time = 0
         last_info_line = 0
         line_ctr = 0
         js_db = []
+        nrsa = self.args.nrsa
         with gzip.open(certfile) as cf:
             for line in cf:
                 try:
@@ -232,17 +236,29 @@ class SonarSSLProcess(object):
 
                     cert = utils.load_x509_der(cert_bin)
                     pub = cert.public_key()
-                    if isinstance(pub, RSAPublicKey):
+
+                    # Add to the dataset - either RSA key OR (isCA && take non-RSA keys)
+                    crt_is_ca = None
+                    crt_is_rsa = isinstance(pub, RSAPublicKey)
+                    if nrsa:
+                        crt_is_ca = utils.try_is_ca(cert)
+                    crt_add_to_js = crt_is_rsa or (nrsa and crt_is_ca)
+
+                    if crt_add_to_js:
                         not_before = cert.not_valid_before
                         cname = utils.try_get_cname(cert)
 
                         js['source'] = [cname, not_before.strftime('%Y-%m-%d')]
-                        js['ca'] = utils.try_is_ca(cert)
+                        js['ca'] = crt_is_ca if crt_is_ca is not None else utils.try_is_ca(cert)
                         js['ss'] = utils.try_is_self_signed(cert)
                         js['fprint'] = fprint
-                        js['e'] = '0x%x' % pub.public_numbers().e
-                        js['n'] = '0x%x' % pub.public_numbers().n
-                        js['nnum'] = pub.public_numbers().n
+                        if crt_is_rsa:
+                            js['e'] = '0x%x' % pub.public_numbers().e
+                            js['n'] = '0x%x' % pub.public_numbers().n
+                            js['nnum'] = pub.public_numbers().n
+                        else:
+                            js['nnum'] = 9e99
+
                         js['info'] = {'ip': []}
                         if fprint in fprints_db:
                             js['info']['ip'] = fprints_db[fprint]
