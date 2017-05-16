@@ -160,6 +160,9 @@ class IntermediateBuilder(object):
         with open(fname) as fh:
             for line in fh:
                 try:
+                    if '"ca": false' in line:
+                        continue
+                        
                     js = json.loads(line)
                     fprint = None
                     raw = None
