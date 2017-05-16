@@ -238,7 +238,7 @@ class SonarSSLProcess(object):
             certfile = input_obj.MergedInputObject([
                 self._iobj_fetchable(path=x['fpath'], url=x['href']) for x in certfiles
             ])
-            hostfile = self._iobj_fetchable(path=hostfiles[0]['fpath'], url=hostfiles[0]['href'])
+            hostfile = self._iobj_fetchable(path=hostfiles[-1]['fpath'], url=hostfiles[-1]['href'])
 
             logger.info(
                 'Processing sonar dataset - merged %s, %s rec: %s' % (test_idx, test_name, json.dumps(group_recs)))
