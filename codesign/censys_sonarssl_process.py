@@ -223,6 +223,7 @@ class SonarSSLProcess(object):
             certfiles = utils.drop_nones([self._sonar_get_certrec(x) for x in group_recs])
             hostfiles = utils.drop_nones([self._sonar_get_hostrec(x) for x in group_recs])
 
+            self._sonar_extend_certfiles(hostfiles=hostfiles, certfiles=certfiles)
             certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
             hostfiles = [self._sonar_augment_filepaths(x) for x in hostfiles]
 
@@ -284,6 +285,33 @@ class SonarSSLProcess(object):
         """
         filerec['fpath'] = self._sonar_get_filepath(filerec)
         return filerec
+
+    def _sonar_extend_certfiles(self, hostfiles, certfiles):
+        """
+        Extends certfiles with new certificates derived from hostfiles based on file existence check.
+        Links for old samples does not contain cert files but we generated them by recoding.
+        :param hostfiles: 
+        :param certfiles: 
+        :return: 
+        """
+        existing_names = set([os.path.basename(x['name']) for x in certfiles])
+        for rec in hostfiles:
+            name = rec['name']
+            bname = os.path.basename(name)
+            parts = bname.split('_', 1)
+            certfile_bname = '%s_certs.gz' % parts[0]
+            if certfile_bname in existing_names:
+                continue
+
+            certfile = os.path.join(self.args.datadir, certfile_bname)
+            if os.path.exists(certfile):
+                js = collections.OrderedDict()
+                js['name'] = certfile_bname
+                js['href'] = None
+                js['size'] = None
+                js['hash'] = None
+                certfiles.append(js)
+        return certfiles
 
     def _sonar_get_certfile_hostfile(self, rec):
         """
@@ -504,10 +532,12 @@ class SonarSSLProcess(object):
         """
         if os.path.exists(path):
             iobj = input_obj.FileInputObject(fname=path)
-        else:
+        elif url is not None:
             hosth = open(path, 'wb')
             iobj = input_obj.ReconnectingLinkInputObject(url=url, rec=path)
             iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
+        else:
+            return None
 
         gz = path is not None and (path.endswith('.gz') or path.endswith('.gzip'))
         gz |= url is not None and (url.endswith('.gz') or url.endswith('.gzip'))
