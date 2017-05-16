@@ -78,6 +78,20 @@ class NewlineIterator(object):
         return lines
 
 
+class ContextNewlineIterator(NewlineIterator):
+    """
+    Same as NewlineIterator but supports context manager with enter / exit on the fh
+    """
+    def __init__(self, fh):
+        super(ContextNewlineIterator, self).__init__(fh)
+
+    def __enter__(self):
+        self._fh.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._fh.__exit__(exc_type, exc_val, exc_tb)
+
+
 class NewlineReader(object):
     """
     Very simple newline separated JSON reader.
