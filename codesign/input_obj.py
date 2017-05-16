@@ -48,7 +48,7 @@ class InputObject(object):
         self._done = False
 
     def __enter__(self):
-        pass
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
@@ -214,6 +214,7 @@ class FileInputObject(InputObject):
     def __enter__(self):
         super(FileInputObject, self).__enter__()
         self.fh = open(self.fname, 'r')
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(FileInputObject, self).__exit__(exc_type, exc_val, exc_tb)
@@ -278,6 +279,7 @@ class FileLikeInputObject(InputObject):
             x = self.open_call(self)
             if x is not None:
                 self.fh = x
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(FileLikeInputObject, self).__exit__(exc_type, exc_val, exc_tb)
@@ -325,6 +327,7 @@ class LinkInputObject(InputObject):
         self.r = requests.get(self.url, stream=True, allow_redirects=True, headers=self.headers, auth=self.auth,
                               timeout=self.timeout,
                               **self.kwargs)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(LinkInputObject, self).__exit__(exc_type, exc_val, exc_tb)
@@ -566,6 +569,7 @@ class ReconnectingLinkInputObject(InputObject):
 
         # Initial request
         self._request()
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(ReconnectingLinkInputObject, self).__exit__(exc_type, exc_val, exc_tb)
@@ -673,6 +677,7 @@ class TeeInputObject(InputObject):
         super(TeeInputObject, self).__enter__()
         try:
             self.parent_fh.__enter__()
+            return self
         except Exception as e:
             logger.debug('Exception when entering to the parent fh %s' % e)
             logger.debug(traceback.format_exc())
@@ -751,6 +756,7 @@ class MergedInputObject(InputObject):
 
         try:
             self.iobjs[self.cur_iobj].__enter__()
+            return self
         except Exception as e:
             logger.debug('Exception when entering to the sub fh %s %s' % (self.cur_iobj, e))
             logger.debug(traceback.format_exc())
@@ -816,6 +822,7 @@ class GzipInputObject(InputObject):
         try:
             self.iobj.__enter__()
             self.gzip_fh = GzipInputStream(fileobj=self.iobj)
+            return self
         except Exception as e:
             logger.debug('Exception when entering to the parent fh %s' % e)
             logger.debug(traceback.format_exc())
