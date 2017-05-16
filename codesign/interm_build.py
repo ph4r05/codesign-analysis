@@ -114,10 +114,11 @@ class IntermediateBuilder(object):
         if ct - self.state_last_dump < self.state_time_dump:
             return
 
-        logger.debug('.. rsa: %s, non-rsa: %s, errs: %s, nofpr: %s, nor: %s, exp: %s, found: %s, mem: %s MB, '
-                     'depth: %s, cfile: %s'
+        logger.debug('.. rsa: %s, non-rsa: %s, errs: %s, nofpr: %s, nor: %s, exp: %s, found: %s, not CA:'
+                     ' %s, mem: %s MB, depth: %s, cfile: %s'
                      % (self.num_rsa, self.num_non_rsa, self.num_errs, self.num_no_fprint_raw, self.num_no_raw,
-                        self.num_expired, self.num_found, utils.get_mem_mb(), self.cur_depth, self.cur_file))
+                        self.num_expired, self.num_found, self.num_not_ca,
+                        utils.get_mem_mb(), self.cur_depth, self.cur_file))
         self.state_last_dump = ct
 
     def test_cert(self, cert, js=None, aux=None):
