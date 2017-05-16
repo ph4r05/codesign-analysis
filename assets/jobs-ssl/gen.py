@@ -39,7 +39,7 @@ for i in range(total_proc):
         fh.write('#!/bin/bash\n\n')
         for i in range(total_proc):
             fh.write('qsub -l select=1:ncpus=1:mem=24gb:scratch_local=1gb:brno=True -l walltime=24:00:00 '
-                     './sonar-eco-process-%02d.sh \n' % i)
+                     './sonar-ssl-process-%02d.sh \n' % i)
 
     os.system('chmod +x *.sh')
 
