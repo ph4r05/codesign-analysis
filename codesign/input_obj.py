@@ -19,6 +19,15 @@ import collections
 logger = logging.getLogger(__name__)
 
 
+def is_empty(x):
+    """
+    Returns true if string is None or empty
+    :param x: 
+    :return: 
+    """
+    return x is None or len(x) == 0
+
+
 class InputObject(object):
     """
     Input stream object.
@@ -632,4 +641,73 @@ class TeeInputObject(InputObject):
 
     def flush(self):
         self.copy_fh.flush()
+
+
+class MergedInputObject(InputObject):
+    """
+    Merges multiple file input objects into one. 
+    (e.g., a file)
+    """
+    def __init__(self, iobjs, *args, **kwargs):
+        super(MergedInputObject, self).__init__(*args, **kwargs)
+        self.iobjs = iobjs
+        self.cur_iobj = 0
+        self.finished = False
+
+    def __enter__(self):
+        super(MergedInputObject, self).__enter__()
+        if len(self.iobjs) == 0:
+            return
+
+        try:
+            self.iobjs[self.cur_iobj].__enter__()
+        except Exception as e:
+            logger.debug('Exception when entering to the sub fh %s %s' % (self.cur_iobj, e))
+            logger.debug(traceback.format_exc())
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(MergedInputObject, self).__exit__(exc_type, exc_val, exc_tb)
+        try:
+            self.iobjs[self.cur_iobj].__exit__(exc_type, exc_val, exc_tb)
+        except Exception as e:
+            logger.debug('Exception when exiting from the sub fh %s %s' % (self.cur_iobj, e))
+            logger.debug(traceback.format_exc())
+
+    def __repr__(self):
+        return 'MergedInputObject(iobjs=%r)' % (self.iobjs)
+
+    def __str__(self):
+        return self.__repr__()
+
+    def check(self):
+        return self.iobjs[self.cur_iobj].check()
+
+    def size(self):
+        return -1
+
+    def read(self, size=None):
+        while True:
+            data = self.iobjs[self.cur_iobj].read(size)
+            if is_empty(data):
+                if self.cur_iobj + 1 == len(self.iobjs):
+                    self.finished = True
+                    return data
+                self.cur_iobj += 1
+                continue
+
+            self.sha256.update(data)
+            self.data_read += len(data)
+            return data
+
+    def handle(self):
+        return self.iobjs[self.cur_iobj].handle()
+
+    def to_state(self):
+        js = collections.OrderedDict()
+        js['cur_iobj'] = self.cur_iobj
+        js['iobjs'] = [x.to_state() for x in self.iobjs]
+        return js
+
+    def flush(self):
+        self.iobjs[self.cur_iobj].flush()
 
