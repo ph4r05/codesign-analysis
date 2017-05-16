@@ -155,7 +155,6 @@ class IntermediateBuilder(object):
         :param fname: 
         :return: 
         """
-        logger.info('Reading file[%02d] %s' % (self.cur_depth, fname))
         self.cur_file = fname
         with open(fname) as fh:
             for line in fh:
@@ -288,7 +287,8 @@ class IntermediateBuilder(object):
             self.interms[cdepth] = []
             self.chain_cert_db = set()
 
-            for fname in root_files:
+            for fidx, fname in enumerate(root_files):
+                logger.info('Reading file[%02d][%02d/%02d] %s' % (self.cur_depth, fidx+1, len(root_files), fname))
                 self.roots(fname)
 
             self.cur_store = self.new_store()
