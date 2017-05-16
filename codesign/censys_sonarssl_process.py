@@ -51,7 +51,8 @@ class SonarSSLProcess(object):
         """
         utils.monkey_patch_asn1_time()
 
-        parser = argparse.ArgumentParser(description='Processes sonar ssl incremental cert files, generates json for classification')
+        parser = argparse.ArgumentParser(description='Processes Sonar/ECO SSL incremental cert files, '
+                                                     'generates json for classification')
 
         parser.add_argument('--url', dest='url', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='censys links')
@@ -185,10 +186,10 @@ class SonarSSLProcess(object):
     def process_dataset(self, test_idx, datepart, certfile, hostfile):
         """
         Processes single dataset, generates jsons
-        :param test_idx: 
-        :param datepart: 
-        :param certfile: 
-        :param hostfile: 
+        :param test_idx: test index
+        :param datepart: test name prefix, usually the date of the snapshot
+        :param certfile: file with the certificates to process.
+        :param hostfile: host IP -> fprint array mapping file name, snapshot in time.
         :return: 
         """
         logger.info('Test idx: %d date part: %s, ram: %s MB' % (test_idx, datepart, utils.get_mem_mb()))
