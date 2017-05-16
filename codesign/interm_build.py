@@ -156,6 +156,7 @@ class IntermediateBuilder(object):
         :return: 
         """
         self.cur_file = fname
+        before_file_certs_size = len(self.all_certs)
         with open(fname) as fh:
             for line in fh:
                 try:
@@ -232,6 +233,8 @@ class IntermediateBuilder(object):
                     logger.error('Exception in processing certs %s' % e)
                     self.trace_logger.log(e)
                     self.num_errs += 1
+        new_certs_size = len(self.all_certs) - before_file_certs_size
+        logger.info('File %s contributed with %s certificates' % (fname, new_certs_size))
 
     def work(self):
         """
