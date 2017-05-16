@@ -135,7 +135,7 @@ def main():
             iobj = input_obj.FileInputObject(fname=hostfile)
         else:
             hosth = open(hostfile, 'wb')
-            iobj = input_obj.ReconnectingLinkInputObject(flink, files)
+            iobj = input_obj.ReconnectingLinkInputObject(url=flink, rec=files)
             iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
 
         with iobj:

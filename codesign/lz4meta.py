@@ -291,7 +291,7 @@ class Lz4MetadataGenerator(object):
         iobjs = []
 
         for url in self.args.url:
-            iobjs.append(input_obj.ReconnectingLinkInputObject(url))
+            iobjs.append(input_obj.ReconnectingLinkInputObject(url=url))
 
         for file in self.args.file:
             iobjs.append(input_obj.FileInputObject(file))

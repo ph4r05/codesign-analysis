@@ -103,7 +103,7 @@ class EcoRecode(object):
         else:
             logger.info('Going to download certificate file')
             hosth = open(main_cert_file, 'wb')
-            iobj = input_obj.ReconnectingLinkInputObject(main_cert_link, main_cert_rec)
+            iobj = input_obj.ReconnectingLinkInputObject(url=main_cert_link, rec=main_cert_rec)
             iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
 
         # Big in memory hash table fprint -> certificate
@@ -191,7 +191,7 @@ class EcoRecode(object):
                 iobj = input_obj.FileInputObject(fname=hostfile)
             else:
                 hosth = open(hostfile, 'wb')
-                iobj = input_obj.ReconnectingLinkInputObject(flink, filerec)
+                iobj = input_obj.ReconnectingLinkInputObject(url=flink, rec=filerec)
                 iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
 
             # Processing ip -> fingerprints associations

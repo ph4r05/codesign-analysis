@@ -768,7 +768,7 @@ class CensysTls(object):
         :param rec: 
         :return: 
         """
-        return input_obj.ReconnectingLinkInputObject(url, rec=rec, timeout=5*60, max_reconnects=1000)
+        return input_obj.ReconnectingLinkInputObject(url=url, rec=rec, timeout=5*60, max_reconnects=1000)
 
     def generate_workset(self):
         """
