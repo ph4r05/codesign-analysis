@@ -618,9 +618,12 @@ class CensysTls(object):
         :param parsed: 
         :return: 
         """
-        mod16 = base64.b16encode(base64.b64decode(parsed['subject_key_info']['rsa_public_key']['modulus']))
-        ret['n'] = '0x%s' % mod16
-        ret['e'] = hex(int(parsed['subject_key_info']['rsa_public_key']['exponent']))
+        try:
+            mod16 = base64.b16encode(base64.b64decode(parsed['subject_key_info']['rsa_public_key']['modulus']))
+            ret['n'] = '0x%s' % mod16
+            ret['e'] = hex(int(parsed['subject_key_info']['rsa_public_key']['exponent']))
+        except Exception as e:
+            pass
 
     def fill_cn_src(self, ret, parsed):
         """
@@ -730,9 +733,9 @@ class CensysTls(object):
                     continue
 
                 ret = collections.OrderedDict()
-                if parsed['subject_key_info']['key_algorithm']['name'].lower() != 'rsa':
+                is_rsa = parsed['subject_key_info']['key_algorithm']['name'].lower() == 'rsa'
+                if not is_rsa:
                     self.not_rsa += 1
-                    return
 
                 ret['id'] = self.chain_ctr
                 ret['count'] = 1
@@ -741,9 +744,9 @@ class CensysTls(object):
                 ret['ssign'] = utils.defvalkeys(parsed, ['signature', 'self_signed'])
                 ret['fprint'] = fprint
                 self.fill_cn_src(ret, parsed)
-                self.fill_rsa_ne(ret, parsed)
-                if ret['valid']:
-                    ret['raw'] = cert['raw']
+                if is_rsa:
+                    self.fill_rsa_ne(ret, parsed)
+                ret['raw'] = cert['raw']
 
                 if not self.is_dry():
                     self.file_roots_fh.write(json.dumps(ret) + '\n')
