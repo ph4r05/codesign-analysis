@@ -158,6 +158,55 @@ class FileInputObject(InputObject):
         return js
 
 
+class FileLikeInputObject(InputObject):
+    """
+    Reads data from file like objects - e.g., stdout, sockets, ...
+    Does not close the handle on context exit.
+    open_call can define how the file-handle is opened.
+    """
+
+    def __init__(self, fh=None, desc=None, open_call=None, aux=None, *args, **kwargs):
+        super(FileLikeInputObject, self).__init__(*args, **kwargs)
+        self.fh = fh
+        self.desc = desc
+        self.aux = aux
+        self.open_call = open_call
+
+    def __enter__(self):
+        super(FileLikeInputObject, self).__enter__()
+        if self.fh is not None:
+            return
+        if self.open_call is not None:
+            self.open_call(self)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(FileLikeInputObject, self).__exit__(exc_type, exc_val, exc_tb)
+        try:
+            self.fh.close()
+        except:
+            logger.error('Error when closing url %s descriptor' % self.desc)
+
+    def __repr__(self):
+        return 'FileLikeInputObject()'
+
+    def __str__(self):
+        if self.desc is not None:
+            return '%s' % self.desc
+        return 'file-handle'
+
+    def size(self):
+        return -1
+
+    def read(self, size=None):
+        data = self.fh.read(size)
+        self.sha256.update(data)
+        self.data_read += len(data)
+        return data
+
+    def handle(self):
+        return self.fh
+
+
 class LinkInputObject(InputObject):
     """
     Input object using link - remote load
