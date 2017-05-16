@@ -14,6 +14,7 @@ import traceback
 import threading
 import time
 import collections
+import string
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,11 @@ class InputObject(object):
     def __init__(self, *args, **kwargs):
         self.sha256 = hashlib.sha256()
         self.data_read = 0
+
+        # readline iterators
+        self._data = ''
+        self._offset = 0  # position in the read stream
+        self._done = False
 
     def __enter__(self):
         pass
@@ -110,6 +116,86 @@ class InputObject(object):
         :return: 
         """
         pass
+
+    #
+    # Line reading
+    #
+
+    def __fill(self, num_bytes):
+        """
+        Fill the internal buffer with 'num_bytes' of data.
+        @param num_bytes: int, number of bytes to read in (0 = everything)
+        """
+        if self._done:
+            return
+
+        while not num_bytes or len(self._data) < num_bytes:
+            data = self.read(32768)  # generic read method
+            if not data:
+                self._done = True
+                break
+
+            self._data = self._data + data
+
+    def __iter__(self):
+        """
+        Line iterator = itself
+        :return: 
+        """
+        return self
+
+    def next(self):
+        """
+        Iterating line by line
+        :return: 
+        """
+        line = self.readline()
+        if not line:
+            raise StopIteration()
+        return line
+
+    def _read(self, size=0):
+        """
+        Sub read for line iterations - reading to the buffer
+        :param size: 
+        :return: 
+        """
+        self.__fill(size)
+        if size:
+            data = self._data[:size]
+            self._data = self._data[size:]
+        else:
+            data = self._data
+            self._data = ""
+        self._offset = self._offset + len(data)
+        return data
+
+    def readline(self):
+        """
+        Read a single line
+        :return: 
+        """
+        # make sure we have an entire line
+        while not self._done and "\n" not in self._data:
+            self.__fill(len(self._data) + 512)
+
+        pos = string.find(self._data, "\n") + 1
+        if pos <= 0:
+            return self._read()
+        return self._read(pos)
+
+    def readlines(self):
+        """
+        Return all lines as an array
+        :return: 
+        """
+        lines = []
+        while True:
+            line = self.readline()
+            if not line:
+                break
+            lines.append(line)
+        return lines
 
 
 class FileInputObject(InputObject):
