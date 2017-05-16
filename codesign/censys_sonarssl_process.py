@@ -174,6 +174,10 @@ class SonarSSLProcess(object):
             # hostfile = input_obj.MergedInputObject([
             #     input_obj.FileLikeInputObject(open_call=lambda x: gzip.open(x.desc), desc=ff) for ff in hostfiles
             # ])
+            if len(hostfiles) == 0:
+                logger.warning('Empty host files for %s %s' % (k, json.dumps(group_recs)))
+                continue
+
             hostfile = hostfiles[-1]  # take the last host file to make it simple
 
             logger.info('Processing eco dataset - merged %s, %s rec: %s' % (test_idx, test_name, json.dumps(group_recs)))
@@ -226,6 +230,10 @@ class SonarSSLProcess(object):
             self._sonar_extend_certfiles(hostfiles=hostfiles, certfiles=certfiles)
             certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
             hostfiles = [self._sonar_augment_filepaths(x) for x in hostfiles]
+
+            if len(hostfiles) == 0:
+                logger.warning('Empty host files for %s %s' % (k, json.dumps(group_recs)))
+                continue
 
             certfile = input_obj.MergedInputObject([
                 self._iobj_fetchable(path=x['fpath'], url=x['href']) for x in certfiles
