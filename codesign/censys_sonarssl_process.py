@@ -23,6 +23,8 @@ import input_obj
 import gzip
 import gzipinputstream
 from datetime import datetime
+from trace_logger import Tracelogger
+
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.DEBUG)
@@ -40,6 +42,7 @@ class SonarSSLProcess(object):
     def __init__(self):
         self.args = None
         self.is_eco = False
+        self.trace_logger = Tracelogger(logger=logger)
 
     def main(self):
         """
@@ -256,10 +259,11 @@ class SonarSSLProcess(object):
 
                 except ValueError as e:
                     logger.error('Exception in rec processing (ValueError): %s, line %9d' % (e, line_ctr))
+                    self.trace_logger.log(e)
 
                 except Exception as e:
                     logger.error('Exception in rec processing: %s' % e)
-                    logger.debug(traceback.format_exc())
+                    self.trace_logger.log(e)
 
         logger.info('Processed certificate file, size: %d, mem: %s MB' % (len(js_db), utils.get_mem_mb()))
 
