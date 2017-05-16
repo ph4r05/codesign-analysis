@@ -302,12 +302,7 @@ class SonarSSLProcess(object):
         """
         fprints_db = collections.defaultdict(list)
 
-        # Input file may be input object - do nothing. Or simple case - a gzip file
-        if not isinstance(hostfile, input_obj.InputObject):
-            cf = gzip.open(hostfile)
-        else:
-            cf = hostfile
-        with cf:
+        with self._open_file(hostfile) as cf:
             for line in cf:
                 linerec = line.strip().split(',')
                 ip = linerec[0]
@@ -326,11 +321,7 @@ class SonarSSLProcess(object):
         fprints_db = collections.defaultdict(list)
 
         # Input file may be input object - do nothing. Or simple case - a gzip file
-        if not isinstance(hostfile, input_obj.InputObject):
-            cf = gzip.open(hostfile)
-        else:
-            cf = hostfile
-        with cf:
+        with self._open_file(hostfile) as cf:
             for line in cf:
                 linerec = line.strip().split(',')
                 ip = linerec[0].strip()
@@ -349,6 +340,20 @@ class SonarSSLProcess(object):
         if isinstance(x, input_obj.InputObject):
             return True
         return os.path.exists(x)
+
+    def _open_file(self, x):
+        """
+        Returns readable file handle with context manager support
+        :param x: 
+        :return: 
+        """
+        if isinstance(x, input_obj.InputObject):
+            return x
+
+        if x.endswith('.gz') or x.endswith('.gzip'):
+            return gzip.open(x)
+
+        return open(x)
 
     def process_dataset(self, test_idx, datepart, certfile, hostfile):
         """
@@ -394,11 +399,7 @@ class SonarSSLProcess(object):
         nrsa = self.args.nrsa
 
         # Input file may be input object - do nothing. Or simple case - a gzip file
-        if not isinstance(certfile, input_obj.InputObject):
-            cf = gzip.open(certfile)
-        else:
-            cf = certfile
-        with cf:
+        with self._open_file(certfile) as cf:
             for line in cf:
                 try:
                     line_ctr += 1
