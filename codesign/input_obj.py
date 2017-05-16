@@ -372,7 +372,8 @@ class ReconnectingLinkInputObject(InputObject):
         # First - determine full length & partial request support
         while not self.stop_event.is_set():
             try:
-                r = requests.head(self.url, allow_redirects=True, headers=self.headers, auth=self.auth, timeout=self.timeout)
+                r = requests.head(self.url, allow_redirects=True, headers=self.headers, auth=self.auth,
+                                  timeout=self.timeout)
                 if r.status_code / 100 != 2:
                     logger.error('Link %s does not support head request or link is broken' % self.url)
                     return
