@@ -38,7 +38,7 @@ for i in range(total_proc):
 with open('enqueue.sh', 'w') as fh:
     fh.write('#!/bin/bash\n\n')
     for i in range(total_proc):
-        ram = 72 if i == 0 else 48
+        ram = 72 if i == 0 else 64
         fh.write('qsub -l select=1:ncpus=1:mem=%sgb:scratch_local=1gb:brno=True -l walltime=24:00:00 '
                  './sonar-eco-process-fullx-%02d.sh \n' % (ram, i))
 
