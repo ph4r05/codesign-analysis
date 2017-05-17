@@ -508,11 +508,12 @@ class SonarSSLProcess(object):
                         js['ss'] = utils.try_is_self_signed(cert)
                         js['fprint'] = fprint
                         if crt_is_rsa:
-                            js['e'] = '0x%x' % pub.public_numbers().e
-                            js['n'] = '0x%x' % pub.public_numbers().n
-                            js['nnum'] = pub.public_numbers().n
+                            pubnum = pub.public_numbers()
+                            js['e'] = '0x%x' % pubnum.e
+                            js['n'] = '0x%x' % pubnum.n
+                            js['nnum'] = pubnum.n
                             if self.fmagic is not None:
-                                js['sec'] = self.fmagic.test16('%x' % pub.public_numbers().n)
+                                js['sec'] = self.fmagic.test16('%x' % pubnum.n)
                         else:
                             js['nnum'] = 9e99
 
