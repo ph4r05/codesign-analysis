@@ -439,6 +439,7 @@ class SonarSSLProcess(object):
         logger.info('Test idx: %d date part: %s, ram: %s MB' % (test_idx, datepart, utils.get_mem_mb()))
         jsonfile = os.path.join(self.args.datadir, '%s_certs.json' % datepart)
         jsonufile = os.path.join(self.args.datadir, '%s_certs.uniq.json' % datepart)
+        jsoncafile = os.path.join(self.args.datadir, '%s_ca_certs.json' % datepart)
         finishfile = os.path.join(self.args.datadir, '%s_process.finished' % datepart)
 
         if not self._exists(certfile):
@@ -468,6 +469,8 @@ class SonarSSLProcess(object):
         last_info_line = 0
         line_ctr = 0
         js_db = []
+
+        jsoncafile_fh = open(jsoncafile, 'w')
 
         nrsa = self.args.nrsa
         months_full = self.args.months_full
@@ -519,7 +522,11 @@ class SonarSSLProcess(object):
 
                         if js['ca']:
                             js['raw'] = cert_b64
+
                         js_db.append(js)
+
+                        if crt_is_ca:
+                            jsoncafile_fh.write('%s\n' % json.dumps(js_db))
 
                         if line_ctr - last_info_line >= 1000 and time.time() - last_info_time >= 30:
                             logger.info('Progress, line: %9d, mem: %s MB, db size: %9d, from last: %5d, cname: %s'
@@ -536,6 +543,7 @@ class SonarSSLProcess(object):
                     self.trace_logger.log(e)
 
         logger.info('Processed certificate file, size: %d, mem: %s MB' % (len(js_db), utils.get_mem_mb()))
+        jsoncafile_fh.close()
 
         # Sort
         js_db.sort(key=lambda x: x['nnum'])
