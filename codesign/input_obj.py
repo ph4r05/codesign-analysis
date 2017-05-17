@@ -392,12 +392,13 @@ class ReconnectingLinkInputObject(InputObject):
     Link should support calling HEAD method and RangeBytes.
     If this is not supported no reconnection will be used.
     """
-    def __init__(self, url, headers=None, auth=None, timeout=None,
+    def __init__(self, url, rec=None, headers=None, auth=None, timeout=None,
                  max_reconnects=None, start_offset=0, pre_data_reconnect_hook=None, *args, **kwargs):
         super(ReconnectingLinkInputObject, self).__init__(*args, **kwargs)
         self.url = url
         self.headers = headers
         self.auth = auth
+        self.rec = rec
         self.timeout = timeout
         self.max_reconnects = max_reconnects
         self.start_offset = start_offset
