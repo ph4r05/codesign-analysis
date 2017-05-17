@@ -44,10 +44,17 @@ coloredlogs.install(level=logging.INFO)
 
 FMT_TLS = 1
 FMT_SON = 2
+FMT_ECO = 3
 
 
 def get_backend(backend=None):
     return default_backend() if backend is None else backend
+
+
+class Dataset(object):
+    def __init__(self, fname=None, fmt=None):
+        self.fname = fname
+        self.fmt = fmt
 
 
 class IntermediateBuilder(object):
