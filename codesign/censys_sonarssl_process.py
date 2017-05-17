@@ -97,6 +97,9 @@ class SonarSSLProcess(object):
         parser.add_argument('--months', dest='months', default=False, action='store_const', const=True,
                             help='Merge incremental snapshots on-per month basis')
 
+        parser.add_argument('--months-full', dest='months_full', default=False, action='store_const', const=True,
+                            help='One per month full snapshot')
+
         parser.add_argument('--sec', dest='sec', default=False, action='store_const', const=True,
                             help='Sec')
 
@@ -164,21 +167,26 @@ class SonarSSLProcess(object):
             if int(test_idx % self.args.proc_total) != int(self.args.proc_cur):
                 continue
 
-            test_name = '%s_%s_merge' % (k[0], k[1])
-            certfiles = [js_rec['certfile'] for js_rec in group_recs]
-            certfile = input_obj.MergedInputObject([
-                input_obj.FileLikeInputObject(open_call=lambda x: gzip.open(x.desc), desc=ff) for ff in certfiles
-            ])
+            if self.args.months_full:
+                test_name = '%s_%2d_fullmerge' % (k[0], k[1])
+            else:
+                test_name = '%s_%s_merge' % (k[0], k[1])
 
             hostfiles = [js_rec['hostfile'] for js_rec in group_recs]
-            # hostfile = input_obj.MergedInputObject([
-            #     input_obj.FileLikeInputObject(open_call=lambda x: gzip.open(x.desc), desc=ff) for ff in hostfiles
-            # ])
             if len(hostfiles) == 0:
                 logger.warning('Empty host files for %s %s' % (k, json.dumps(group_recs)))
                 continue
-
             hostfile = hostfiles[-1]  # take the last host file to make it simple
+
+            # month full - full snapshot, all certificates till now.
+            if self.args.months_full:
+                certfiles = [js_rec['certfile'] for js_rec in data if js_rec['date_utc'] <= hostfile['date_utc']]
+            else:
+                certfiles = [js_rec['certfile'] for js_rec in group_recs]
+
+            certfile = input_obj.MergedInputObject([
+                input_obj.FileLikeInputObject(open_call=lambda x: gzip.open(x.desc), desc=ff) for ff in certfiles
+            ])
 
             logger.info('Processing eco dataset - merged %s, %s rec: %s'
                         % (test_idx, test_name, json.dumps(group_recs)))
@@ -226,23 +234,36 @@ class SonarSSLProcess(object):
             if int(test_idx % self.args.proc_total) != int(self.args.proc_cur):
                 continue
 
-            test_name = '%s_%s_merge' % (k[0], k[1])
-            certfiles = utils.drop_nones([self._sonar_get_certrec(x) for x in group_recs])
+            if self.args.months_full:
+                test_name = '%s_%2d_fullmerge' % (k[0], k[1])
+            else:
+                test_name = '%s_%s_merge' % (k[0], k[1])
+
+            # load host files, prepare the last one
             hostfiles = utils.drop_nones([self._sonar_get_hostrec(x) for x in group_recs])
-
-            self._sonar_extend_certfiles(hostfiles=hostfiles, certfiles=certfiles)
-            certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
             hostfiles = [self._sonar_augment_filepaths(x) for x in hostfiles]
-
             if len(hostfiles) == 0:
                 logger.warning('Empty host files for %s %s' % (k, json.dumps(group_recs)))
                 continue
 
+            hostfile = self._iobj_fetchable(path=hostfiles[-1]['fpath'], url=hostfiles[-1]['href'])
+
+            # cert file loading - month / month full
+            if self.args.months_full:
+                certfiles = [self._sonar_get_certrec(x) for x in jsdb if x['date_utc'] <= group_recs[-1]['date_utc']]
+                hostfiles2 = [self._sonar_get_hostrec(x) for x in jsdb if x['date_utc'] <= group_recs[-1]['date_utc']]
+            else:
+                certfiles = [self._sonar_get_certrec(x) for x in group_recs]
+                hostfiles2 = hostfiles
+
+            certfiles = utils.drop_nones(certfiles)
+            self._sonar_extend_certfiles(hostfiles=hostfiles2, certfiles=certfiles)
+
+            certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
             certfile = input_obj.MergedInputObject([
                 self._iobj_fetchable(path=x['fpath'], url=x['href']) for x in certfiles
                 if '20131030-20150518' not in x['name']
             ])
-            hostfile = self._iobj_fetchable(path=hostfiles[-1]['fpath'], url=hostfiles[-1]['href'])
 
             logger.info('Processing sonar dataset - merged %s, %s rec: %s'
                         % (test_idx, test_name, json.dumps(group_recs)))
@@ -447,7 +468,9 @@ class SonarSSLProcess(object):
         last_info_line = 0
         line_ctr = 0
         js_db = []
+
         nrsa = self.args.nrsa
+        months_full = self.args.months_full
 
         # Input file may be input object - do nothing. Or simple case - a gzip file
         with self._open_file(certfile) as cf:
@@ -458,8 +481,11 @@ class SonarSSLProcess(object):
                     linerec = line.strip().split(',')
                     fprint = linerec[0]
                     cert_b64 = linerec[1]
-                    cert_bin = base64.b64decode(cert_b64)
 
+                    if months_full and fprint not in fprints_db:
+                        continue
+
+                    cert_bin = base64.b64decode(cert_b64)
                     cert = utils.load_x509_der(cert_bin)
                     pub = cert.public_key()
 
