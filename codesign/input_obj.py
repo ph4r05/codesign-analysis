@@ -15,6 +15,8 @@ import threading
 import time
 import collections
 import string
+import random
+import shutil
 from gzipinputstream import GzipInputStream
 
 
@@ -668,14 +670,23 @@ class TeeInputObject(InputObject):
     Tee input object - reading underlying data stream, with stream copy to a different file like object 
     (e.g., a file)
     """
-    def __init__(self, parent_fh, copy_fh, close_copy_on_exit=False, *args, **kwargs):
+    def __init__(self, parent_fh, copy_fh=None, close_copy_on_exit=False, copy_fname=None, *args, **kwargs):
         super(TeeInputObject, self).__init__(*args, **kwargs)
         self.parent_fh = parent_fh
         self.copy_fh = copy_fh
+        self.copy_fname = copy_fname
+        self.copy_fname_tmp = None
         self.close_copy_on_exit = close_copy_on_exit
 
     def __enter__(self):
         super(TeeInputObject, self).__enter__()
+
+        # Open temporary file, write to it, on finish rename
+        if self.copy_fh is None and self.copy_fname is not None:
+            self.copy_fname_tmp = '%s.%s.%s' % (self.copy_fname, int(time.time()*1000), random.randint(0, 1000))
+            self.copy_fh = open(self.copy_fname_tmp, 'w')
+            logger.debug('Tee to temp file %s' % self.copy_fname_tmp)
+
         try:
             self.parent_fh.__enter__()
             return self
@@ -697,6 +708,10 @@ class TeeInputObject(InputObject):
             except Exception as e:
                 logger.debug('Exception when closing copy fh%s' % e)
                 logger.debug(traceback.format_exc())
+
+        if self.copy_fname_tmp is not None:
+            logger.debug('Moving %s -> %s' % (self.copy_fname_tmp, self.copy_fname))
+            shutil.move(self.copy_fname_tmp, self.copy_fname)
 
     def __repr__(self):
         return 'TeeInputObject(parent_fh=%r, copy_fh=%r)' % (self.parent_fh, self.copy_fh)
