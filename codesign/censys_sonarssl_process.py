@@ -138,7 +138,7 @@ class SonarSSLProcess(object):
                 jsdb.append(js_rec)
 
         jsdb.sort(key=lambda x: x['date_utc'])
-        if self.args.months:
+        if self.args.months or self.args.months_full:
             self.work_eco_months(jsdb)
             return
 
@@ -207,7 +207,7 @@ class SonarSSLProcess(object):
             jsdb = json.load(fh)
 
         jsdb_ids = {x['id']: x for x in jsdb['data'] if x['id'] in testrng}
-        if self.args.months:
+        if self.args.months or self.args.months_full:
             self.work_sonar_months(jsdb_ids)
             return
 
