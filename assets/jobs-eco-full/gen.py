@@ -22,7 +22,7 @@ sleep 3
 
 echo "`hostname` starting..."
 
-exec stdbuf -eL python /storage/praha1/home/ph4r05/cas/codesign/censys_sonarssl_process.py \\
+exec stdbuf -eL python /storage/praha1/home/ph4r05/cas2/codesign/censys_sonarssl_process.py \\
     --datadir /storage/brno3-cerit/home/ph4r05/eco_full \\
     --eco-json /storage/brno3-cerit/home/ph4r05/eco_full/eco.json \\
     --proc-total %s --proc-cur %s --nrsa --months --sec $@ 2> /storage/praha1/home/ph4r05/logs/process_eco_fullmrg_%02d.log 
@@ -38,7 +38,7 @@ for i in range(total_proc):
 with open('enqueue.sh', 'w') as fh:
     fh.write('#!/bin/bash\n\n')
     for i in range(total_proc):
-        ram = 60 if i == 0 else 24
+        ram = 72 if i == 0 else 48
         fh.write('qsub -l select=1:ncpus=1:mem=%sgb:scratch_local=1gb:brno=True -l walltime=24:00:00 '
                  './sonar-eco-process-full-%02d.sh \n' % (ram, i))
 
