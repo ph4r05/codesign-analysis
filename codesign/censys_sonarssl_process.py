@@ -237,6 +237,7 @@ class SonarSSLProcess(object):
 
             certfile = input_obj.MergedInputObject([
                 self._iobj_fetchable(path=x['fpath'], url=x['href']) for x in certfiles
+                if '20131030-20150518' not in x['name']
             ])
             hostfile = self._iobj_fetchable(path=hostfiles[-1]['fpath'], url=hostfiles[-1]['href'])
 
