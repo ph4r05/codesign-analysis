@@ -168,7 +168,7 @@ class SonarSSLProcess(object):
                 continue
 
             if self.args.months_full:
-                test_name = '%s_%2d_fullmerge' % (k[0], k[1])
+                test_name = '%s_%02d_fullmerge' % (k[0], k[1])
             else:
                 test_name = '%s_%s_merge' % (k[0], k[1])
 
@@ -180,7 +180,7 @@ class SonarSSLProcess(object):
 
             # month full - full snapshot, all certificates till now.
             if self.args.months_full:
-                certfiles = [js_rec['certfile'] for js_rec in data if js_rec['date_utc'] <= hostfile['date_utc']]
+                certfiles = [js_rec['certfile'] for js_rec in data if js_rec['date_utc'] <= group_recs[-1]['date_utc']]
             else:
                 certfiles = [js_rec['certfile'] for js_rec in group_recs]
 
@@ -235,7 +235,7 @@ class SonarSSLProcess(object):
                 continue
 
             if self.args.months_full:
-                test_name = '%s_%2d_fullmerge' % (k[0], k[1])
+                test_name = '%s_%02d_fullmerge' % (k[0], k[1])
             else:
                 test_name = '%s_%s_merge' % (k[0], k[1])
 
