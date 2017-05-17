@@ -180,7 +180,10 @@ class SonarSSLProcess(object):
 
             hostfile = hostfiles[-1]  # take the last host file to make it simple
 
-            logger.info('Processing eco dataset - merged %s, %s rec: %s' % (test_idx, test_name, json.dumps(group_recs)))
+            logger.info('Processing eco dataset - merged %s, %s rec: %s'
+                        % (test_idx, test_name, json.dumps(group_recs)))
+            logger.info('certfiles: %s' % json.dumps(certfiles))
+            logger.info('hostfiles: %s' % json.dumps(hostfiles))
             self.process_dataset(test_idx, test_name, certfile, hostfile)
 
     def work_sonar(self):
@@ -241,8 +244,8 @@ class SonarSSLProcess(object):
             ])
             hostfile = self._iobj_fetchable(path=hostfiles[-1]['fpath'], url=hostfiles[-1]['href'])
 
-            logger.info(
-                'Processing sonar dataset - merged %s, %s rec: %s' % (test_idx, test_name, json.dumps(group_recs)))
+            logger.info('Processing sonar dataset - merged %s, %s rec: %s'
+                        % (test_idx, test_name, json.dumps(group_recs)))
             logger.info('certfiles: %s' % json.dumps(certfiles))
             logger.info('hostfiles: %s' % json.dumps(hostfiles))
             self.process_dataset(test_idx, test_name, certfile, hostfile)
