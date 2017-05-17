@@ -526,7 +526,7 @@ class SonarSSLProcess(object):
                         js_db.append(js)
 
                         if crt_is_ca:
-                            jsoncafile_fh.write('%s\n' % json.dumps(js_db))
+                            jsoncafile_fh.write('%s\n' % json.dumps(js))
 
                         if line_ctr - last_info_line >= 1000 and time.time() - last_info_time >= 30:
                             logger.info('Progress, line: %9d, mem: %s MB, db size: %9d, from last: %5d, cname: %s'
