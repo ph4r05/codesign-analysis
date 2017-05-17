@@ -797,7 +797,7 @@ class MergedInputObject(InputObject):
             self.sha256.update(data)
             self.data_read += len(data)
             return data
-        return ''
+        return None
 
     def handle(self):
         return self.iobjs[self.cur_iobj].handle()
@@ -855,6 +855,7 @@ class GzipInputObject(InputObject):
         data = self.gzip_fh.read(size)
         self.sha256.update(data)
         self.data_read += len(data)
+        return data
 
     def handle(self):
         return None
