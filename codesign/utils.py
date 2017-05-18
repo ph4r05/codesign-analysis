@@ -1072,3 +1072,28 @@ def drop_nones(lst):
     """
     return [x for x in lst if x is not None]
 
+
+def download_file(url, filename, attempts=3):
+    """
+    Downloads binary file, saves to the file
+    :param url:
+    :param filename:
+    :return:
+    """
+    for attempt in range(attempts):
+        try:
+            r = requests.get(url, stream=True, timeout=15)
+            with open(filename, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+
+            return filename
+
+        except Exception as e:
+            logger.debug('Exception when downloading: %s' % e)
+            if attempt + 1 >= attempts:
+                logger.error('Could not download %s' % url)
+                raise
+            else:
+                time.sleep(1)
+
+
