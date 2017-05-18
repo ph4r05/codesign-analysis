@@ -684,7 +684,7 @@ class TeeInputObject(InputObject):
         # Open temporary file, write to it, on finish rename
         if self.copy_fh is None and self.copy_fname is not None:
             self.copy_fname_tmp = '%s.%s.%s' % (self.copy_fname, int(time.time()*1000), random.randint(0, 1000))
-            self.copy_fh = open(self.copy_fname_tmp, 'w')
+            self.copy_fh = open(self.copy_fname_tmp, 'wb')
             logger.debug('Tee to temp file %s' % self.copy_fname_tmp)
 
         try:
