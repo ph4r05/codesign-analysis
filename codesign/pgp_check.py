@@ -274,6 +274,7 @@ class PGPCheck(object):
                 js['sub'] = int(idx != 0)
                 js['master_id'] = utils.format_pgp_key(master_key_id)
                 js['sec'] = int(tested[idx])
+                js['tot'] = len(flat_keys)
                 js['e'] = '0x%x' % self.key_exp(rec)
                 js['n'] = '0x%x' % self.key_mod(rec)
                 self.classif_file.write('%s\n' % json.dumps(js))
