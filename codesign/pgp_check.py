@@ -38,6 +38,7 @@ class PGPCheck(object):
         self.config = None
         self.config_file = None
         self.dump_file = None
+        self.classif_file = None
 
         self.last_report = 0
         self.last_report_idx = 0
@@ -59,6 +60,12 @@ class PGPCheck(object):
         self.num_sub_keys = 0
         self.num_master_keys_rsa = 0
         self.num_sub_keys_rsa = 0
+
+        self.num_total_keys_date = 0
+        self.num_total_master_keys_date = 0
+        self.num_rsa_keys_date = 0
+        self.num_rsa_master_keys_date = 0
+
         self.key_counts = defaultdict(lambda: 0)
         self.key_sizes = defaultdict(lambda: 0)
 
@@ -73,8 +80,12 @@ class PGPCheck(object):
         :return: 
         """
         logger.info('Starting...')
-        dump_file_path = os.path.join(self.args.data_dir, 'inter_keys.json')
+        dump_file_path = os.path.join(self.args.data_dir, 'pgp_inter_keys.json')
         self.dump_file = open(dump_file_path, 'w')
+
+        if self.args.classif:
+            classif_path = os.path.join(self.args.data_dir, 'pgp_classif_full.json')
+            self.classif_file = open(classif_path, 'w')
 
         # process PGP dump, fill in keys DB
         with open(self.args.json) as fh:
@@ -107,6 +118,11 @@ class PGPCheck(object):
         logger.info('Num master RSA keys: %s' % self.num_master_keys_rsa)
         logger.info('Num sub RSA keys: %s' % self.num_sub_keys_rsa)
 
+        logger.info('1.11.2015 - 19.4.2017 total keys: %s' % self.num_total_keys_date)
+        logger.info('1.11.2015 - 19.4.2017 master keys: %s' % self.num_total_master_keys_date)
+        logger.info('1.11.2015 - 19.4.2017 RSA total keys: %s' % self.num_rsa_keys_date)
+        logger.info('1.11.2015 - 19.4.2017 RSA master keys: %s' % self.num_rsa_master_keys_date)
+
         total_rsa = self.num_master_keys_rsa + self.num_sub_keys_rsa
         logger.info('Key count histogram')
         for cnt in sorted(self.key_counts.keys()):
@@ -131,7 +147,7 @@ class PGPCheck(object):
             if self.found > 0 else -1))
 
         logger.info('Found records data:')
-        records_path = os.path.join(self.args.data_dir, 'inter_keys.json')
+        records_path = os.path.join(self.args.data_dir, 'pgp_inter_keys.csv')
         with open(records_path, 'w') as fw:
             for x in self.found_info:
                 try:
@@ -140,10 +156,13 @@ class PGPCheck(object):
                     logger.error('Exception in dump, %s' % e)
                     logger.debug(traceback.format_exc())
 
-        keys_path = os.path.join(self.args.data_dir, 'inter_keys_ids.json')
+        keys_path = os.path.join(self.args.data_dir, 'pgp_inter_keys_ids.csv')
         with open(keys_path, 'w') as fw:
             for x in sorted(list(self.flat_key_ids)):
                 fw.write(utils.format_pgp_key(x) + '\n')
+
+        if self.classif_file is not None:
+            self.classif_file.close()
 
         if self.args.bench:
             logger.info('Benchmark start, total keys: %s' % len(self.bench_mods))
@@ -213,6 +232,7 @@ class PGPCheck(object):
         for x in key_sizes:
             self.key_sizes[x] += 1
 
+        # benchmarking
         if self.args.bench:
             for rec in flat_keys:
                 n = self.key_mod(rec)
@@ -221,7 +241,44 @@ class PGPCheck(object):
 
                 self.bench_mods.append('%x' % n)
 
+        # 1.11.2015 a 19.4.2017
+        bnd_a = datetime.datetime(year=2015, month=11, day=1)
+        bnd_b = datetime.datetime(year=2017, month=4, day=19, hour=23, minute=59, second=59)
+        in_time = ['creation_time' in rec and
+                   utils.time_between(datetime.datetime.utcfromtimestamp(rec['creation_time']), bnd_a, bnd_b)
+                   for rec in flat_keys]
+        rsa_in_time = ['n' in rec and len(rec['n']) > 0 and in_time[idx] for idx, rec in enumerate(flat_keys)]
+
+        self.num_total_keys_date += sum(in_time)
+        self.num_total_master_keys_date += in_time[0]
+        self.num_rsa_keys_date += sum(rsa_in_time)
+        self.num_rsa_master_keys_date += rsa_in_time[0]
+
+        # key testing
         tested = [self.test_key(x) for x in flat_keys]
+
+        # classification
+        if self.classif_file is not None:
+            for idx, rec in enumerate(flat_keys):
+                if 'n' not in rec:
+                    continue
+
+                js = OrderedDict()
+                ctime = datetime.datetime.utcfromtimestamp(rec['creation_time']).strftime('%Y-%m-%d') \
+                    if 'creation_time' in rec else ''
+                cname = user_names[0].encode('utf8').replace(';', '_') if len(user_names) > 0 else ''
+
+                js['source'] = [cname, ctime]
+                js['size'] = self.key_size(rec)
+                js['msb'] = '0x%x' % self.key_msb(rec)
+                js['sub'] = int(idx != 0)
+                js['master_id'] = utils.format_pgp_key(master_key_id)
+                js['sec'] = int(tested[idx])
+                js['e'] = '0x%x' % self.key_exp(rec)
+                js['n'] = '0x%x' % self.key_mod(rec)
+                self.classif_file.write('%s\n' % json.dumps(js))
+
+        # Key detection and store
         if any(tested):
             flat_key_ids = [int(utils.defvalkey(x, 'key_id', '0'), 16) for x in flat_keys]
             keys_hex = [utils.format_pgp_key(x) for x in flat_key_ids]
@@ -309,6 +366,23 @@ class PGPCheck(object):
         n = utils.strip_hex_prefix(n)
         return int(n, 16)
 
+    def key_exp(self, rec=None):
+        """
+        Returns exponent from the record
+        :param rec: 
+        :return: 
+        """
+        if rec is None:
+            return False
+
+        n = utils.defvalkey(rec, 'e')
+        if n is None:
+            return False
+
+        n = n.strip()
+        n = utils.strip_hex_prefix(n)
+        return int(n, 16)
+
     def key_size(self, rec=None, n=None):
         """
         Get key size from the modulus
@@ -357,6 +431,9 @@ class PGPCheck(object):
 
         parser.add_argument('--test', dest='test', default=False, action='store_const', const=True,
                             help='Test ')
+
+        parser.add_argument('--classif', dest='classif', default=False, action='store_const', const=True,
+                            help='Generate classification JSON with all records')
 
         parser.add_argument('--json', dest='json', default=None,
                             help='Big json file from pgp dump')
