@@ -567,7 +567,8 @@ class SonarSSLProcess(object):
                         if js['ca']:
                             js['raw'] = cert_b64
 
-                        js_db.append(js)
+                        if crt_is_rsa:
+                            js_db.append(js)
 
                         if crt_is_ca:
                             jsoncafile_fh.write('%s\n' % json.dumps(js))
