@@ -831,6 +831,7 @@ class MergedInputObject(InputObject):
         """
         if self._do_close[idx]:
             self.iobjs[idx].__exit__(None, None, None)
+            self._do_close[idx] = False
 
     def __repr__(self):
         return 'MergedInputObject(iobjs=%r)' % (self.iobjs)
