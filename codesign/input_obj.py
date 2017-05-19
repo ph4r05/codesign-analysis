@@ -938,7 +938,7 @@ class GzipInputObject(InputObject):
         return js
 
     def short_desc(self):
-        return 'GzipInputObject(data_read=%r, iobj=%s)' % (self.data_read, self.iobj.short_dec())
+        return 'GzipInputObject(data_read=%r, iobj=%s)' % (self.data_read, self.iobj.short_desc())
 
     def flush(self):
         self.iobj.flush()
