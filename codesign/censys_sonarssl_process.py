@@ -211,14 +211,9 @@ class SonarSSLProcess(object):
         with open(args.json, 'r') as fh:
             jsdb = json.load(fh)
 
-        if self.args.download_only:
-            jsdb_ids = {x['id']: x for x in jsdb['data']}  # if x['id'] in testrng
-            self.work_sonar_download(jsdb_ids)
-            return
-
         jsdb_ids = {x['id']: x for x in jsdb['data'] if x['id'] in testrng}
 
-        if self.args.months or self.args.months_full:
+        if self.args.months or self.args.months_full or self.args.download_only:
             self.work_sonar_months(jsdb_ids)
             return
 
@@ -229,48 +224,6 @@ class SonarSSLProcess(object):
             rec = jsdb_ids[test_idx]
             certfile, hostfile, datepart = self._sonar_get_certfile_hostfile(rec)
             self.process_dataset(test_idx, datepart, certfile, hostfile)
-
-    def work_sonar_download(self, jsdb_ids):
-        """
-        Downloads 
-        :param jsdb_ids: 
-        :return: 
-        """
-        jsdb = sorted(jsdb_ids.values(), key=lambda x: x['date_utc'])
-
-        for test_idx, rec in enumerate(jsdb):
-            if int(test_idx % self.args.proc_total) != int(self.args.proc_cur):
-                continue
-
-            to_download = []
-
-            hostrec = self._sonar_get_hostrec(rec)
-            hostrec = self._sonar_augment_filepaths(hostrec)
-            if hostrec is not None and not os.path.exists(hostrec['fpath']):
-                to_download.append((hostrec['href'], hostrec['fpath']))
-
-            certfiles = utils.drop_nones([self._sonar_augment_filepaths(self._sonar_get_certrec(rec))])
-            certfiles = self._sonar_extend_certfiles(hostfiles=utils.drop_nones([hostrec]), certfiles=certfiles)
-            certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
-            for certfile in certfiles:
-                if certfile is not None \
-                        and not os.path.exists(certfile['fpath'])\
-                        and '20131030-20150518' not in certfile['name']:
-                    to_download.append((certfile['href'], certfile['fpath']))
-
-            for down_rec in to_download:
-                logger.debug('Downloading: %s %s' % down_rec)
-                tmpfile = '%s.%s.%s' % (down_rec[1], int(time.time()*1000), random.randint(0, 10000))
-                try:
-                    utils.download_file(down_rec[0], tmpfile, 3)
-                    shutil.move(tmpfile, down_rec[1])
-
-                except Exception as e:
-                    logger.error('Exception when downloading %s : %s' % (down_rec, e))
-                    self.trace_logger.log(e)
-
-                finally:
-                    utils.safely_remove(tmpfile)
 
     def work_sonar_months(self, jsdb_ids):
         """
@@ -313,6 +266,11 @@ class SonarSSLProcess(object):
             self._sonar_extend_certfiles(hostfiles=hostfiles2, certfiles=certfiles)
 
             certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
+
+            if self.args.download_only:
+                self._sonar_download(certfiles, hostfiles)
+                continue
+
             certfile = input_obj.MergedInputObject([
                 self._iobj_fetchable(path=x['fpath'], url=x['href']) for x in certfiles
                 if '20131030-20150518' not in x['name']
@@ -323,6 +281,36 @@ class SonarSSLProcess(object):
             logger.info('certfiles: %s' % json.dumps(certfiles))
             logger.info('hostfiles: %s' % json.dumps(hostfiles))
             self.process_dataset(test_idx, test_name, certfile, hostfile)
+
+    def _sonar_download(self, certfiles, hostfiles):
+        """
+        Download all missing certfiles and the latest hostfile
+        :param certfiles: 
+        :param hostfiles: 
+        :return: 
+        """
+        to_download = []
+        files_to_check = certfiles + [hostfiles[-1]]
+
+        for cur in files_to_check:
+            if '20131030-20150518' in cur['name']:
+                continue
+            if cur is not None and not os.path.exists(cur['fpath']):
+                to_download.append((cur['href'], cur['fpath']))
+
+        for down_rec in to_download:
+            logger.debug('Downloading: %s %s' % down_rec)
+            tmpfile = '%s.%s.%s' % (down_rec[1], int(time.time() * 1000), random.randint(0, 10000))
+            try:
+                utils.download_file(down_rec[0], tmpfile, 3)
+                shutil.move(tmpfile, down_rec[1])
+
+            except Exception as e:
+                logger.error('Exception when downloading %s : %s' % (down_rec, e))
+                self.trace_logger.log(e)
+
+            finally:
+                utils.safely_remove(tmpfile)
 
     def _sonar_get_filerec(self, rec, name):
         """
