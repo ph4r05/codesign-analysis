@@ -471,6 +471,18 @@ class SonarSSLProcess(object):
 
         return open(x)
 
+    def _io_state(self, cf, hnd):
+        """
+        Map describing io state
+        :param cf: 
+        :param hnd: 
+        :return: 
+        """
+        if isinstance(cf, input_obj.InputObject):
+            return cf.short_desc()
+
+        return cf
+
     def process_dataset(self, test_idx, datepart, certfile, hostfile):
         """
         Processes single dataset, generates jsons
@@ -576,8 +588,10 @@ class SonarSSLProcess(object):
                             jsoncafile_fh.write('%s\n' % json.dumps(js))
 
                         if line_ctr - last_info_line >= 1000 and time.time() - last_info_time >= 30:
-                            logger.info('Progress, line: %9d, mem: %s MB, db size: %9d, from last: %5d, cname: %s'
-                                        % (line_ctr, utils.get_mem_mb(), len(js_db), line_ctr - last_info_line, cname))
+                            logger.info('Progress, line: %9d, mem: %s MB, db size: %9d, from last: %5d, cname: %s, '
+                                        'iostate: %s'
+                                        % (line_ctr, utils.get_mem_mb(), len(js_db), line_ctr - last_info_line, cname,
+                                           self._io_state(certfile, cf)))
                             last_info_time = time.time()
                             last_info_line = line_ctr
 
