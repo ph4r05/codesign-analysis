@@ -423,7 +423,8 @@ class SonarSSLProcess(object):
                 ip = linerec[0]
                 fprints = linerec[1:]
                 for fprint in fprints:
-                    lst = fprints_db[fprint]
+                    fprint_s = utils.strip_hex_prefix(fprint.strip()).lower()
+                    lst = fprints_db[fprint_s]
                     lst.append(ip)
         return fprints_db
 
@@ -440,7 +441,7 @@ class SonarSSLProcess(object):
             for line in cf:
                 linerec = line.strip().split(',')
                 ip = linerec[0].strip()
-                fprint = utils.strip_hex_prefix(linerec[2].strip())
+                fprint = utils.strip_hex_prefix(linerec[2].strip()).lower()
 
                 lst = fprints_db[fprint]
                 lst.append(ip)
@@ -525,10 +526,11 @@ class SonarSSLProcess(object):
                     line_ctr += 1
                     js = collections.OrderedDict()
                     linerec = line.strip().split(',')
-                    fprint = linerec[0]
+                    fprint = utils.strip_hex_prefix(linerec[0].strip()).lower()
                     cert_b64 = linerec[1]
+                    fprint_in_db = fprint in fprints_db
 
-                    if months_full and fprint not in fprints_db:
+                    if months_full and not fprint_in_db:
                         continue
 
                     cert_bin = base64.b64decode(cert_b64)
