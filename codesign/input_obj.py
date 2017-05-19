@@ -759,11 +759,13 @@ class MergedInputObject(InputObject):
     Merges multiple file input objects into one. 
     (e.g., a file)
     """
-    def __init__(self, iobjs, *args, **kwargs):
+    def __init__(self, iobjs, close_after_use=True, *args, **kwargs):
         super(MergedInputObject, self).__init__(*args, **kwargs)
         self.iobjs = iobjs
         self.cur_iobj = 0
         self.finished = False
+        self._close_after_use = close_after_use
+        self._do_close = [False] * len(self.iobjs)
 
     def __enter__(self):
         super(MergedInputObject, self).__enter__()
@@ -771,7 +773,7 @@ class MergedInputObject(InputObject):
             return
 
         try:
-            self.iobjs[self.cur_iobj].__enter__()
+            self._enter_sub(self.cur_iobj)
             return self
         except Exception as e:
             logger.debug('Exception when entering to the sub fh %s %s' % (self.cur_iobj, e))
@@ -781,10 +783,28 @@ class MergedInputObject(InputObject):
         super(MergedInputObject, self).__exit__(exc_type, exc_val, exc_tb)
         for idx in range(len(self.iobjs)):
             try:
-                self.iobjs[idx].__exit__(exc_type, exc_val, exc_tb)
+                self._close_sub(idx)
             except Exception as e:
                 logger.debug('Exception when exiting from the sub fh %s %s' % (self.cur_iobj, e))
                 logger.debug(traceback.format_exc())
+
+    def _enter_sub(self, idx):
+        """
+        Enter the sub data source with given index
+        :param idx: 
+        :return: 
+        """
+        self.iobjs[idx].__enter__()
+        self._do_close[idx] = True
+
+    def _close_sub(self, idx):
+        """
+        Close the source with the index if closable
+        :param idx: 
+        :return: 
+        """
+        if self._do_close[idx]:
+            self.iobjs[idx].__exit__(None, None, None)
 
     def __repr__(self):
         return 'MergedInputObject(iobjs=%r)' % (self.iobjs)
@@ -806,8 +826,10 @@ class MergedInputObject(InputObject):
                     self.finished = True
                     return data
 
+                if self._close_after_use:
+                    self._close_sub(self.cur_iobj)
                 self.cur_iobj += 1
-                self.iobjs[self.cur_iobj].__enter__()
+                self._enter_sub(self.cur_iobj)
                 continue
 
             self.sha256.update(data)
