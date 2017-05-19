@@ -269,6 +269,13 @@ class FileInputObject(InputObject):
         js['fname'] = self.fname
         return js
 
+    def short_desc(self):
+        """
+        Short description of the current state, for logging
+        :return: 
+        """
+        return 'FileInputObject(data_read=%r, file=%r)' % (self.data_read, self.fname)
+
 
 class FileLikeInputObject(InputObject):
     """
@@ -762,6 +769,13 @@ class TeeInputObject(InputObject):
         js['parent'] = self.parent_fh.to_state()
         return js
 
+    def short_desc(self):
+        """
+        Short description of the current state, for logging
+        :return: 
+        """
+        return 'TeeInputObject(parent=%s)' % (self.parent_fh.short_desc())
+
     def flush(self):
         self.copy_fh.flush()
 
@@ -862,7 +876,7 @@ class MergedInputObject(InputObject):
         return js
 
     def short_desc(self):
-        return 'MergedInputObject(data_read=%r, cur=%s)' % (self.data_read, self.iobjs[self.cur_iobj])
+        return 'MergedInputObject(data_read=%r, cur=%s)' % (self.data_read, self.iobjs[self.cur_iobj].short_desc())
 
     def flush(self):
         self.iobjs[self.cur_iobj].flush()
