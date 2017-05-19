@@ -265,16 +265,16 @@ class SonarSSLProcess(object):
             certfiles = utils.drop_nones(certfiles)
             self._sonar_extend_certfiles(hostfiles=hostfiles2, certfiles=certfiles)
 
-            certfiles = [self._sonar_augment_filepaths(x) for x in certfiles]
+            certfiles = [self._sonar_augment_filepaths(x) for x in certfiles if '20131030-20150518' not in x['name']]
+            certfiles = list(reversed(certfiles))
 
             if self.args.download_only:
                 self._sonar_download(certfiles, hostfiles)
                 continue
 
-            certfile = input_obj.MergedInputObject(list(reversed([
+            certfile = input_obj.MergedInputObject([
                 self._iobj_fetchable(path=x['fpath'], url=x['href']) for x in certfiles
-                if '20131030-20150518' not in x['name']
-            ])))
+            ])
 
             logger.info('Processing sonar dataset - merged %s, %s rec: %s'
                         % (test_idx, test_name, json.dumps(group_recs)))
