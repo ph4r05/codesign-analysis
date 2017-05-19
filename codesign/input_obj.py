@@ -56,7 +56,7 @@ class InputObject(object):
         pass
 
     def __repr__(self):
-        return 'InputObject()'
+        return 'InputObject(data_read=%r)' % self.data_read
 
     def check(self):
         """
@@ -79,6 +79,10 @@ class InputObject(object):
         """
         raise NotImplementedError('Not implemented - base class')
 
+    #
+    # Helper functions
+    #
+
     def handle(self):
         """
         Returns file like handle
@@ -99,8 +103,16 @@ class InputObject(object):
         :return: 
         """
         js = collections.OrderedDict()
+        js['type'] = 'InputObject'
         js['data_read'] = self.data_read
         return js
+
+    def short_desc(self):
+        """
+        Short description of the current state, for logging
+        :return: 
+        """
+        return self.__repr__()
 
     def tell(self):
         """
@@ -252,10 +264,9 @@ class FileInputObject(InputObject):
         Returns state dictionary for serialization
         :return: 
         """
-        js = collections.OrderedDict()
+        js = super(FileInputObject, self).to_state()
         js['type'] = 'FileInputObject'
         js['fname'] = self.fname
-        js['data_read'] = self.data_read
         return js
 
 
@@ -370,10 +381,9 @@ class LinkInputObject(InputObject):
         Returns state dictionary for serialization
         :return: 
         """
-        js = collections.OrderedDict()
+        js = super(LinkInputObject, self).to_state()
         js['type'] = 'LinkInputObject'
         js['url'] = self.url
-        js['data_read'] = self.data_read
         js['headers'] = self.headers
         js['timeout'] = self.timeout
         js['rec'] = self.rec
@@ -645,11 +655,10 @@ class ReconnectingLinkInputObject(InputObject):
         Returns state dictionary for serialization
         :return: 
         """
-        js = collections.OrderedDict()
+        js = super(ReconnectingLinkInputObject, self).to_state()
         js['type'] = 'ReconnectingLinkInputObject'
         js['url'] = self.url
         js['start_offset'] = self.start_offset
-        js['data_read'] = self.data_read
         js['headers'] = dict(self.headers) if self.headers is not None else None
         js['timeout'] = self.timeout
         js['rec'] = self.rec
@@ -748,7 +757,10 @@ class TeeInputObject(InputObject):
         return self.parent_fh.handle()
 
     def to_state(self):
-        return self.parent_fh.to_state()
+        js = super(TeeInputObject, self).to_state()
+        js['type'] = 'TeeInputObject'
+        js['parent'] = self.parent_fh.to_state()
+        return js
 
     def flush(self):
         self.copy_fh.flush()
@@ -841,10 +853,15 @@ class MergedInputObject(InputObject):
         return self.iobjs[self.cur_iobj].handle()
 
     def to_state(self):
-        js = collections.OrderedDict()
+        js = super(MergedInputObject, self).to_state()
+        js['type'] = 'MergedInputObject'
         js['cur_iobj'] = self.cur_iobj
+        js['do_close'] = self._do_close
         js['iobjs'] = [x.to_state() for x in self.iobjs]
         return js
+
+    def short_desc(self):
+        return 'MergedInputObject(data_read=%r, cur=%s)' % (self.data_read, self.iobjs[self.cur_iobj])
 
     def flush(self):
         self.iobjs[self.cur_iobj].flush()
@@ -899,9 +916,13 @@ class GzipInputObject(InputObject):
         return None
 
     def to_state(self):
-        js = collections.OrderedDict()
+        js = super(GzipInputObject, self).to_state()
+        js['type'] = 'GzipInputObject'
         js['iobj'] = self.iobj.to_state()
         return js
+
+    def short_desc(self):
+        return 'GzipInputObject(data_read=%r, iobj=%s)' % (self.data_read, self.iobj.short_dec())
 
     def flush(self):
         self.iobj.flush()
