@@ -855,8 +855,9 @@ class MergedInputObject(InputObject):
     def to_state(self):
         js = super(MergedInputObject, self).to_state()
         js['type'] = 'MergedInputObject'
-        js['cur_iobj'] = self.cur_iobj
+        js['cur_iobj_idx'] = self.cur_iobj
         js['do_close'] = self._do_close
+        js['cur_iobj'] = self.iobjs[self.cur_iobj].to_state()
         js['iobjs'] = [x.to_state() for x in self.iobjs]
         return js
 
