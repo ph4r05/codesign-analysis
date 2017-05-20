@@ -65,6 +65,11 @@ class GzipInputStream(object):
     def tell(self):
         return self._offset
 
+    def close(self):
+        self._data = ""
+        self._file = None
+        self._zip = None
+
     def read(self, size=0):
         self.__fill(size)
         if size:
