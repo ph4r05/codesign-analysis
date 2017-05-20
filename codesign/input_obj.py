@@ -906,6 +906,7 @@ class GzipInputObject(InputObject):
         super(GzipInputObject, self).__exit__(exc_type, exc_val, exc_tb)
         try:
             self.iobj.__exit__(exc_type, exc_val, exc_tb)
+            self.gzip_fh.close()
         except Exception as e:
             logger.debug('Exception when exiting to the parent fh %s' % e)
             logger.debug(traceback.format_exc())
