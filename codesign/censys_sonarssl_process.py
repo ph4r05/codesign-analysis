@@ -570,7 +570,7 @@ class SonarSSLProcess(object):
                             js['n'] = '0x%x' % pubnum.n
                             js['nnum'] = pubnum.n
                             if self.fmagic is not None:
-                                js['sec'] = self.fmagic.test16('%x' % pubnum.n)
+                                js['sec'] = self.fmagic.test(pubnum.n)
                         else:
                             js['nnum'] = 9e99
 
