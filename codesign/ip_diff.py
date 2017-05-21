@@ -72,11 +72,11 @@ def main():
 
     logger.info('Loading first file...')
     load_set(args.files[0], ip_first)
-    logger.info('File loaded, #of ip addresses: %s' % len(ip_first))
+    logger.info('File loaded, #of ip addresses: %s, mem: %s MB' % (len(ip_first), utils.get_mem_mb()))
 
     logger.info('Loading second file...')
     load_set(args.files[1], ip_second)
-    logger.info('File loaded, #of ip addresses: %s' % len(ip_second))
+    logger.info('File loaded, #of ip addresses: %s, mem: %s MB' % (len(ip_second), utils.get_mem_mb()))
 
     path_ab = os.path.join(args.datadir, 'a_min_b.csv')
     path_ba = os.path.join(args.datadir, 'b_min_a.csv')
@@ -84,26 +84,31 @@ def main():
     path_int = os.path.join(args.datadir, 'a_intersection_b.csv')
     path_uni = os.path.join(args.datadir, 'a_union_b.csv')
 
+    logger.info('Dumping a - b')
     with open(path_ab, 'w') as fh:
         res_set = sorted(list(ip_first - ip_second))
         for x in res_set:
             fh.write('%s\n' % x)
 
+    logger.info('Dumping b - a')
     with open(path_ba, 'w') as fh:
         res_set = sorted(list(ip_second - ip_first))
         for x in res_set:
             fh.write('%s\n' % x)
 
+    logger.info('Dumping a ^ b')
     with open(path_sym, 'w') as fh:
         res_set = sorted(list(ip_first ^ ip_second))
         for x in res_set:
             fh.write('%s\n' % x)
 
+    logger.info('Dumping a & b')
     with open(path_int, 'w') as fh:
         res_set = sorted(list(ip_first & ip_second))
         for x in res_set:
             fh.write('%s\n' % x)
 
+    logger.info('Dumping a | b')
     with open(path_uni, 'w') as fh:
         res_set = sorted(list(ip_first | ip_second))
         for x in res_set:
