@@ -65,7 +65,7 @@ class Recode(object):
 
         # Big in memory hash table fprint -> certificate
         bigdb = {}
-        testrng = range(10, 93)
+        testrng = range(10, 181)
 
         # fprints seen
         fprints_seen_set = set()
