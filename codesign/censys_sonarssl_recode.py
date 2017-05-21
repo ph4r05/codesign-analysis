@@ -21,7 +21,7 @@ import input_obj
 import gzip
 import gzipinputstream
 from datetime import datetime
-
+from trace_logger import Tracelogger
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.DEBUG)
@@ -29,7 +29,7 @@ coloredlogs.install(level=logging.DEBUG)
 
 class Recode(object):
     def __init__(self):
-        pass
+        self.trace_logger = Tracelogger()
 
     def main(self):
         """
@@ -54,6 +54,9 @@ class Recode(object):
         parser.add_argument('--fprint-only', dest='fprint_only', default=False, action='store_const', const=True,
                             help='Only fprint gen')
 
+        parser.add_argument('--base-only', dest='base_only', default=False, action='store_const', const=True,
+                            help='Chunk only one big dataset sample')
+
         parser.add_argument('file', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='censys link file')
 
@@ -65,7 +68,7 @@ class Recode(object):
 
         # Big in memory hash table fprint -> certificate
         bigdb = {}
-        testrng = range(10, 181)
+        testrng = range(10, 93) if args.base_only else range(10, 181)
 
         # fprints seen
         fprints_seen_set = set()
@@ -73,7 +76,6 @@ class Recode(object):
 
         if not args.fprint_only:
             self.load_cert_db(main_file, bigdb)
-            logger.info('Uff... big DB loaded, num entries: %s' % len(bigdb))
 
         jsdb = None
         with open(args.json, 'r') as fh:
@@ -127,13 +129,14 @@ class Recode(object):
                 iobj = input_obj.ReconnectingLinkInputObject(url=flink, rec=files)
                 iobj = input_obj.TeeInputObject(parent_fh=iobj, copy_fh=hosth, close_copy_on_exit=True)
 
+            # Reading host file, ip -> fprints associations
             with iobj:
                 fh = gzipinputstream.GzipInputStream(fileobj=iobj)
                 for rec_idx, rec in enumerate(fh):
                     try:
 
                         linerec = rec.strip().split(',')
-                        ip = linerec[0]
+                        ip = linerec[0].strip()
                         fprints = linerec[1:]
                         for fprint in fprints:
                             fprint = utils.strip_hex_prefix(fprint.strip()).lower()
@@ -150,7 +153,7 @@ class Recode(object):
                         logger.debug(traceback.format_exc())
 
             fprints_len = len(fprints_set)
-            logger.info('File processed, fprint db size: %d' % fprints_len)
+            logger.info('File processed, fprint db size: %d. Mem: %s MB' % (fprints_len, utils.get_mem_mb()))
 
             # Only fingerprints
             logger.info('Going to sort fprints...')
@@ -231,6 +234,12 @@ class Recode(object):
             fprints_previous = set(fprints_set)
 
     def load_cert_db(self, main_file, bigdb):
+        """
+        Loads big fprint -> certificate database to memory
+        :param main_file: 
+        :param bigdb: 
+        :return: 
+        """
         counter = 0
         # Open the main file, gziped or not
         if main_file.endswith('gz'):
@@ -238,11 +247,13 @@ class Recode(object):
         else:
             fh = open(main_file, 'rb')
 
+        errors = 0
         with fh:
             for idx, line in enumerate(fh):
                 try:
-                    fprint, cert = line.split(',', 2)
+                    fprint, cert = line.split(',', 1)
                     cert = cert.strip()
+                    fprint = utils.strip_hex_prefix(fprint.strip()).lower()
 
                     certbin = base64.b64decode(cert)
                     bigdb[fprint] = certbin
@@ -253,8 +264,12 @@ class Recode(object):
                                      % (counter, fprint, utils.get_mem_usage() / 1024.0))
 
                 except Exception as e:
+                    errors += 1
                     logger.error('Error in processing %s' % e)
-                    logger.debug(traceback.format_exc())
+                    self.trace_logger.log(e)
+
+        logger.info('Uff... big DB loaded, num entries: %s, errors: %s, memory: %s MB'
+                    % (len(bigdb), errors, utils.get_mem_mb()))
 
 
 if __name__ == '__main__':
