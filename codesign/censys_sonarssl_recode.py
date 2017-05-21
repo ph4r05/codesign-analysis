@@ -61,10 +61,6 @@ class Recode(object):
                             help='censys link file')
 
         args = parser.parse_args()
-        if len(args.file) == 0:
-            return
-
-        main_file = args.file[0]
 
         # Big in memory hash table fprint -> certificate
         bigdb = {}
@@ -75,6 +71,9 @@ class Recode(object):
         fprints_previous = set()
 
         if not args.fprint_only:
+            if len(args.file) == 0:
+                return
+            main_file = args.file[0]
             self.load_cert_db(main_file, bigdb)
 
         jsdb = None
