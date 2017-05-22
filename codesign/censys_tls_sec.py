@@ -507,17 +507,27 @@ class CensysTlsSec(object):
         not_before = not_before[:not_before.find('T')]
         ret['source'] = [ret['cn'], not_before]
 
-    def fill_cert_info(self, ret, parsed):
+    def fill_cert_info(self, ret, parsed, rec):
         """
         isCA and other.
         :param ret: 
         :param parsed: 
+        :param rec: 
         :return: 
         """
         ret['ca'] = utils.defvalkeys(parsed, ['extensions', 'basic_constraints', 'is_ca'])
         issuer = utils.defvalkey(parsed, 'issuer')
         subject = utils.defvalkey(parsed, 'subject')
         ret['ss'] = issuer == subject
+        ret['subject_dn'] = utils.defvalkey(parsed, 'subject_dn')
+        ret['issuer_dn'] = utils.defvalkey(parsed, 'issuer_dn')
+        ret['parents'] = utils.defvalkey(rec, 'parents')
+
+        ret['crt_src'] = utils.defvalkey(rec, 'source')
+        ret['seen_in_scan'] = utils.defvalkey(rec, 'seen_in_scan')
+        ret['valid_nss'] = utils.defvalkey(rec, 'valid_nss')
+        ret['was_valid_nss'] = utils.defvalkey(rec, 'was_valid_nss')
+        ret['current_valid_nss'] = utils.defvalkey(rec, 'current_valid_nss')
 
     def process_record(self, idx, record):
         """
@@ -550,10 +560,9 @@ class CensysTlsSec(object):
             self.num_found += 1
             ret['id'] = self.ctr
             ret['fprint256'] = utils.defvalkey(parsed, 'fingerprint_sha256')
-            ret['source'] = utils.defvalkey(record, 'source')
             self.fill_cn_src(ret, parsed)
             self.fill_rsa_ne(ret, parsed)
-            self.fill_cert_info(ret, parsed)
+            self.fill_cert_info(ret, parsed, record)
 
             if raw is not None:
                 rawb = base64.b64decode(raw)
