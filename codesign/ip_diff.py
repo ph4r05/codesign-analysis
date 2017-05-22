@@ -58,6 +58,9 @@ def main():
     parser.add_argument('--datadir', dest='datadir', default='.',
                         help='datadir')
 
+    parser.add_argument('--test', dest='test', default='',
+                        help='test name')
+
     parser.add_argument('files', nargs=argparse.ZERO_OR_MORE, default=[],
                         help='files')
 
@@ -78,11 +81,11 @@ def main():
     load_set(args.files[1], ip_second)
     logger.info('File loaded, #of ip addresses: %s, mem: %s MB' % (len(ip_second), utils.get_mem_mb()))
 
-    path_ab = os.path.join(args.datadir, 'a_min_b.csv')
-    path_ba = os.path.join(args.datadir, 'b_min_a.csv')
-    path_sym = os.path.join(args.datadir, 'a_sym_b.csv')
-    path_int = os.path.join(args.datadir, 'a_intersection_b.csv')
-    path_uni = os.path.join(args.datadir, 'a_union_b.csv')
+    path_ab = os.path.join(args.datadir, '%s_a_min_b.csv' % args.test)
+    path_ba = os.path.join(args.datadir, '%s_b_min_a.csv' % args.test)
+    path_sym = os.path.join(args.datadir, '%s_a_sym_b.csv' % args.test)
+    path_int = os.path.join(args.datadir, '%s_a_intersection_b.csv' % args.test)
+    path_uni = os.path.join(args.datadir, '%s_a_union_b.csv' % args.test)
 
     logger.info('Dumping a - b')
     with open(path_ab, 'w') as fh:
