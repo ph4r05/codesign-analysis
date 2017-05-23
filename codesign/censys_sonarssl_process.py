@@ -425,17 +425,20 @@ class SonarSSLProcess(object):
         :return: 
         """
         fprints_db = collections.defaultdict(list)
+        ip_db = set()
 
         with self._open_file(hostfile) as cf:
             for line in cf:
                 linerec = line.strip().split(',')
-                ip = linerec[0]
+                ip = linerec[0].strip()
                 fprints = linerec[1:]
+                ip_db.add(ip)
+
                 for fprint in fprints:
                     fprint_s = utils.strip_hex_prefix(fprint.strip()).lower()
                     lst = fprints_db[fprint_s]
                     lst.append(ip)
-        return fprints_db
+        return fprints_db, len(ip_db)
 
     def load_host_eco(self, hostfile):
         """
@@ -444,6 +447,7 @@ class SonarSSLProcess(object):
         :return: 
         """
         fprints_db = collections.defaultdict(list)
+        ip_db = set()
 
         # Input file may be input object - do nothing. Or simple case - a gzip file
         with self._open_file(hostfile) as cf:
@@ -454,7 +458,10 @@ class SonarSSLProcess(object):
 
                 lst = fprints_db[fprint]
                 lst.append(ip)
-        return fprints_db
+
+                ip_db.add(ip)
+
+        return fprints_db, len(ip_db)
 
     def _exists(self, x):
         """
@@ -522,10 +529,11 @@ class SonarSSLProcess(object):
         # Load host file, ip->fprint associations.
         logger.info('Building fprint database ram: %s MB' % utils.get_mem_mb())
         fprints_db = {}
+        num_uniq_ip = 0
         if self.is_eco:
-            fprints_db = self.load_host_eco(hostfile)
+            fprints_db, num_uniq_ip = self.load_host_eco(hostfile)
         else:
-            fprints_db = self.load_host_sonar(hostfile)
+            fprints_db, num_uniq_ip = self.load_host_sonar(hostfile)
 
         logger.info('Processed host file, db size: %s, ram: %s MB' % (len(fprints_db), utils.get_mem_mb()))
 
