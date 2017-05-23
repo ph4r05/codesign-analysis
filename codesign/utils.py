@@ -1097,3 +1097,13 @@ def download_file(url, filename, attempts=3):
                 time.sleep(1)
 
 
+def nint(x):
+    """
+    None -> 0
+    :param x: 
+    :return: 
+    """
+    if x is None:
+        return 0
+    return int(x)
+
