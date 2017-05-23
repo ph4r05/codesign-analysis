@@ -289,7 +289,7 @@ class SonarSSLProcess(object):
                         % (test_idx, test_name, json.dumps(group_recs)))
             logger.info('certfiles: %s' % json.dumps(certfiles))
             logger.info('hostfiles: %s' % json.dumps(hostfiles))
-            self.process_dataset(test_idx, test_name, certfile, hostfile)
+            self.process_dataset(test_idx, test_name, certfile, hostfile, aux={'k': list(k), 'grp': group_recs})
 
     def _sonar_download(self, certfiles, hostfiles):
         """
@@ -499,19 +499,34 @@ class SonarSSLProcess(object):
 
         return cf
 
-    def process_dataset(self, test_idx, datepart, certfile, hostfile):
+    def _to_state(self, cf):
+        """
+        input object to state
+        :param cf: 
+        :return: 
+        """
+        if isinstance(cf, input_obj.InputObject):
+            return cf.to_state()
+
+        return '%s' % cf
+
+    def process_dataset(self, test_idx, datepart, certfile, hostfile, aux=None):
         """
         Processes single dataset, generates jsons
         :param test_idx: test index
         :param datepart: test name prefix, usually the date of the snapshot
         :param certfile: file with the certificates to process.
         :param hostfile: host IP -> fprint array mapping file name, snapshot in time.
+        :param aux: additional info for logging
         :return: 
         """
         logger.info('Test idx: %d date part: %s, ram: %s MB' % (test_idx, datepart, utils.get_mem_mb()))
         jsonfile = os.path.join(self.odatadir, '%s_certs.json' % datepart)
         jsonufile = os.path.join(self.odatadir, '%s_certs.uniq.json' % datepart)
+        jsonmufile = os.path.join(self.odatadir, '%s_certs.muniq.json' % datepart)
         jsoncafile = os.path.join(self.odatadir, '%s_ca_certs.json' % datepart)
+        jsoncanssfile = os.path.join(self.odatadir, '%s_ca_nss_certs.json' % datepart)
+        statsfile = os.path.join(self.odatadir, '%s_stats.json' % datepart)
         finishfile = os.path.join(self.odatadir, '%s_process.finished' % datepart)
 
         if not self._exists(certfile):
@@ -530,12 +545,16 @@ class SonarSSLProcess(object):
         logger.info('Building fprint database ram: %s MB' % utils.get_mem_mb())
         fprints_db = {}
         num_uniq_ip = 0
+        time_start = time.time()
+        memory_start = utils.get_mem_mb()
+
         if self.is_eco:
             fprints_db, num_uniq_ip = self.load_host_eco(hostfile)
         else:
             fprints_db, num_uniq_ip = self.load_host_sonar(hostfile)
 
-        logger.info('Processed host file, db size: %s, ram: %s MB' % (len(fprints_db), utils.get_mem_mb()))
+        logger.info('Processed host file, db size: %s, uniq IP: %s, ram: %s MB'
+                    % (len(fprints_db), num_uniq_ip, utils.get_mem_mb()))
 
         # Process certfile - all certificates from the file will be added to the result
         last_info_time = 0
@@ -544,11 +563,27 @@ class SonarSSLProcess(object):
         js_db = []
 
         jsoncafile_fh = open(jsoncafile, 'w')
+        jsoncanssfile_fh = open(jsoncanssfile, 'w')
 
         nrsa = self.args.nrsa
         months_full = self.args.months_full
+        max_nnum_size = 2 ** 65536  # maximal nnum for sorting, none RSA modulus should be larger than this.
+
+        set_certs_fprints = set()
+        total_certs_count = len(fprints_db)
+
+        num_certs_matched = 0
+        num_rsa = 0
+        num_ca = 0
+        num_rsa_ca = 0
+        num_ss = 0
+        num_rsa_ss = 0
+        num_ca_nss = 0
+        num_sec = 0
+        num_error = 0
 
         # Input file may be input object - do nothing. Or simple case - a gzip file
+        # Read all provided certfiles, if fprint is present in the host snapshot, add certificate to the result.
         with self._open_file(certfile) as cf:
             for line in cf:
                 try:
@@ -557,29 +592,47 @@ class SonarSSLProcess(object):
                     linerec = line.strip().split(',')
                     fprint = utils.strip_hex_prefix(linerec[0].strip()).lower()
                     cert_b64 = linerec[1]
-                    fprint_in_db = fprint in fprints_db
 
+                    if months_full and num_certs_matched >= total_certs_count:
+                        logger.info('All certs found: %s' % total_certs_count)
+                        break
+
+                    fprint_in_db = fprint in fprints_db
                     if months_full and not fprint_in_db:
                         continue
 
+                    if fprint in set_certs_fprints:
+                        continue
+
+                    # this cert fprint was not seen before
+                    num_certs_matched += 1
+                    set_certs_fprints.add(fprint)
+
+                    # certificate processing - b64decode, load der, get public key
                     cert_bin = base64.b64decode(cert_b64)
                     cert = utils.load_x509_der(cert_bin)
                     pub = cert.public_key()
 
                     # Add to the dataset - either RSA key OR (isCA && take non-RSA keys)
-                    crt_is_ca = None
                     crt_is_rsa = isinstance(pub, RSAPublicKey)
-                    if nrsa:
-                        crt_is_ca = utils.try_is_ca(cert)
+                    crt_is_ca = utils.try_is_ca(cert)
+                    crt_is_ss = utils.try_is_self_signed(cert)
                     crt_add_to_js = crt_is_rsa or (nrsa and crt_is_ca)
+
+                    num_rsa += int(crt_is_rsa)
+                    num_ca += utils.nint(crt_is_ca)
+                    num_ss += utils.nint(crt_is_ss)
+                    num_rsa_ca += int(crt_is_rsa) & utils.nint(crt_is_ca)
+                    num_rsa_ss += int(crt_is_rsa) & utils.nint(crt_is_ss)
+                    num_ca_nss += utils.nint(crt_is_ca) & (not utils.nint(crt_is_ss))
 
                     if crt_add_to_js:
                         not_before = cert.not_valid_before
                         cname = utils.try_get_cname(cert)
 
                         js['source'] = [cname, not_before.strftime('%Y-%m-%d')]
-                        js['ca'] = crt_is_ca if crt_is_ca is not None else utils.try_is_ca(cert)
-                        js['ss'] = utils.try_is_self_signed(cert)
+                        js['ca'] = crt_is_ca
+                        js['ss'] = crt_is_ss
                         js['fprint'] = fprint
                         if crt_is_rsa:
                             pubnum = pub.public_numbers()
@@ -587,15 +640,17 @@ class SonarSSLProcess(object):
                             js['n'] = '0x%x' % pubnum.n
                             js['nnum'] = pubnum.n
                             if self.fmagic is not None:
-                                js['sec'] = self.fmagic.test(pubnum.n)
+                                xsec = self.fmagic.test(pubnum.n)
+                                js['sec'] = xsec
+                                num_sec += int(xsec)
                         else:
-                            js['nnum'] = 9e99
+                            js['nnum'] = max_nnum_size + line_ctr
 
                         js['info'] = {'ip': []}
                         if fprint in fprints_db:
                             js['info']['ip'] = list(set(fprints_db[fprint]))
 
-                        if js['ca']:
+                        if crt_is_ca:
                             js['raw'] = cert_b64
 
                         if crt_is_rsa:
@@ -604,49 +659,110 @@ class SonarSSLProcess(object):
                         if crt_is_ca:
                             jsoncafile_fh.write('%s\n' % json.dumps(js))
 
+                        if crt_is_ca and not crt_is_ss:
+                            jsoncanssfile_fh.write('%s\n' % json.dumps(js))
+
                         if line_ctr - last_info_line >= 1000 and time.time() - last_info_time >= 30:
                             logger.info('Progress, line: %9d, mem: %s MB, db size: %9d, from last: %5d, cname: %s, '
-                                        'iostate: %s'
-                                        % (line_ctr, utils.get_mem_mb(), len(js_db), line_ctr - last_info_line, cname,
-                                           self._io_state(certfile, cf)))
+                                        'iostate: %s, '
+                                        'cert_matched: %s, rsa: %s, ca: %s, ss: %s, canss: %s, sec: %s, error: %s'
+                                        % (line_ctr, utils.get_mem_mb(), total_certs_count, line_ctr - last_info_line,
+                                           cname, self._io_state(certfile, cf),
+                                           num_certs_matched, num_rsa, num_ca, num_ss, num_ca_nss, num_sec, num_error))
+
                             last_info_time = time.time()
                             last_info_line = line_ctr
 
                 except ValueError as e:
+                    num_error += 1
                     logger.error('Exception in rec processing (ValueError): %s, line %9d' % (e, line_ctr))
                     self.trace_logger.log(e)
 
                 except Exception as e:
+                    num_error += 1
                     logger.error('Exception in rec processing: %s' % e)
                     self.trace_logger.log(e)
 
         logger.info('Processed certificate file, size: %d, mem: %s MB' % (len(js_db), utils.get_mem_mb()))
         jsoncafile_fh.close()
+        jsoncanssfile_fh.close()
 
         # Sort
         js_db.sort(key=lambda x: x['nnum'])
         logger.info('Sorted, mem: %s MB' % utils.get_mem_mb())
 
-        with open(jsonfile, 'w') as fh:
-            for rec in js_db:
-                del rec['nnum']
-                fh.write(json.dumps(rec) + '\n')
-
-        logger.info('JSON file produced, mem: %s MB' % utils.get_mem_mb())
-
-        # Duplicate removal
-        js_db.sort(key=lambda x: x['fprint'])
-        with open(jsonufile, 'w') as fh:
-            for k, g in itertools.groupby(js_db, key=lambda x: x['fprint']):
+        # Duplicate removal - moduli
+        num_uniq_mod = 0
+        with open(jsonmufile, 'w') as fh:
+            for k, g in itertools.groupby(js_db, key=lambda x: x['nnum']):
+                num_uniq_mod += 1
                 grp = [x for x in g]
                 g0 = grp[0]
-                js = collections.OrderedDict(g0)
+                js = collections.OrderedDict(g0)  # copy of the representant
                 js['count'] = len(grp)
+                del js['nnum']
                 ips = []
                 for rec in grp:
                     ips += rec['info']['ip']
                 js['info']['ip'] = ips
                 fh.write(json.dumps(js) + '\n')
+        logger.info('Mod unique JSON file produced, mem: %s MB' % utils.get_mem_mb())
+
+        # Statistics file
+        with open(statsfile, 'w') as fh:
+            cjs = collections.OrderedDict()
+            cjs['test_idx'] = test_idx
+            cjs['test_name'] = datepart
+            cjs['test_start'] = time_start
+            cjs['test_gen'] = time.time()
+            cjs['time_elapsed'] = time.time() - time_start
+            cjs['mem_start'] = memory_start
+            cjs['mem_now'] = utils.get_mem_mb()
+            cjs['mem_consumed'] = utils.get_mem_mb() - memory_start
+            cjs['total_certs'] = total_certs_count
+            cjs['num_uniq_ips'] = num_uniq_ip
+            cjs['num_uniq_mod'] = num_uniq_mod
+            cjs['num_certs_matched'] = num_certs_matched
+            cjs['num_certs_missed'] = total_certs_count - num_certs_matched
+            cjs['num_rsa'] = num_rsa
+            cjs['num_ca'] = num_ca
+            cjs['num_rsa_ca'] = num_rsa_ca
+            cjs['num_ss'] = num_ss
+            cjs['num_rsa_ss'] = num_rsa_ss
+            cjs['num_ca_nss'] = num_ca_nss
+            cjs['num_sec'] = num_sec
+            cjs['num_error'] = num_error
+            cjs['test_aux'] = aux
+            cjs['hostfile'] = self._to_state(hostfile)
+            cjs['certfile'] = self._to_state(certfile)
+            fh.write(json.dumps(cjs, indent=4) + '\n')
+
+        # Main certificates file, removes nnum field
+        with open(jsonfile, 'w') as fh:
+            for rec in js_db:
+                del rec['nnum']
+                fh.write(json.dumps(rec) + '\n')
+
+        logger.info('Main certs JSON file produced, mem: %s MB' % utils.get_mem_mb())
+
+        # Duplicate removal - fprint
+        # For some scanning strategy frints may be already filtered out - e.g., month snapshot
+        def uniq_fprint():
+            js_db.sort(key=lambda x: x['fprint'])
+            with open(jsonufile, 'w') as fh:
+                for k, g in itertools.groupby(js_db, key=lambda x: x['fprint']):
+                    grp = [x for x in g]
+                    g0 = grp[0]
+                    js = collections.OrderedDict(g0)
+                    js['count'] = len(grp)
+                    ips = []
+                    for rec in grp:
+                        ips += rec['info']['ip']
+                    js['info']['ip'] = ips
+                    fh.write(json.dumps(js) + '\n')
+
+        if not months_full:
+            uniq_fprint()
 
         utils.try_touch(finishfile)
 
