@@ -133,6 +133,9 @@ class SonarSSLProcess(object):
         if self.args.outputdir is not None:
             self.odatadir = self.args.outputdir
 
+        if not os.path.exists(self.odatadir):
+            utils.make_or_verify_dir(self.odatadir)
+
         if self.is_eco:
             logger.info('Processing ECO dataset')
             self.work_eco()
