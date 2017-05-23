@@ -677,6 +677,12 @@ class SonarSSLProcess(object):
                             last_info_time = time.time()
                             last_info_line = line_ctr
 
+                            try:
+                                jsoncafile_fh.flush()
+                                jsoncanssfile_fh.flush()
+                            except Exception as e:
+                                logger.error('Flush error %s' % e)
+
                 except ValueError as e:
                     num_error += 1
                     logger.error('Exception in rec processing (ValueError): %s, line %9d' % (e, line_ctr))
