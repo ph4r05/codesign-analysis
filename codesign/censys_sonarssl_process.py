@@ -65,6 +65,8 @@ class SonarSSLProcess(object):
         self.trace_logger = Tracelogger(logger=logger)
         self.fmagic = None
 
+        self.odatadir = None
+
     def main(self):
         """
         Main entry point, argument processing
@@ -86,6 +88,9 @@ class SonarSSLProcess(object):
 
         parser.add_argument('--datadir', dest='datadir', default='.',
                             help='datadir')
+
+        parser.add_argument('--output-dir', dest='outputdir', default=None,
+                            help='Dir with output data')
 
         parser.add_argument('--proc-total', dest='proc_total', default=1, type=int,
                             help='Total number of processes to run')
@@ -123,6 +128,10 @@ class SonarSSLProcess(object):
         """
         args = self.args
         self.is_eco = args.eco_json is not None
+
+        self.odatadir = self.args.datadir
+        if self.args.outputdir is not None:
+            self.odatadir = self.args.outputdir
 
         if self.is_eco:
             logger.info('Processing ECO dataset')
@@ -493,10 +502,10 @@ class SonarSSLProcess(object):
         :return: 
         """
         logger.info('Test idx: %d date part: %s, ram: %s MB' % (test_idx, datepart, utils.get_mem_mb()))
-        jsonfile = os.path.join(self.args.datadir, '%s_certs.json' % datepart)
-        jsonufile = os.path.join(self.args.datadir, '%s_certs.uniq.json' % datepart)
-        jsoncafile = os.path.join(self.args.datadir, '%s_ca_certs.json' % datepart)
-        finishfile = os.path.join(self.args.datadir, '%s_process.finished' % datepart)
+        jsonfile = os.path.join(self.odatadir, '%s_certs.json' % datepart)
+        jsonufile = os.path.join(self.odatadir, '%s_certs.uniq.json' % datepart)
+        jsoncafile = os.path.join(self.odatadir, '%s_ca_certs.json' % datepart)
+        finishfile = os.path.join(self.odatadir, '%s_process.finished' % datepart)
 
         if not self._exists(certfile):
             logger.error('Cert file does not exist %s' % certfile)
