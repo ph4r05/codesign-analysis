@@ -584,6 +584,7 @@ class SonarSSLProcess(object):
         num_ca_nss = 0
         num_sec = 0
         num_error = 0
+        num_uniq_mod = 0
 
         # Input file may be input object - do nothing. Or simple case - a gzip file
         # Read all provided certfiles, if fprint is present in the host snapshot, add certificate to the result.
@@ -695,7 +696,6 @@ class SonarSSLProcess(object):
         logger.info('Sorted, mem: %s MB' % utils.get_mem_mb())
 
         # Duplicate removal - moduli
-        num_uniq_mod = 0
         with open(jsonmufile, 'w') as fh:
             for k, g in itertools.groupby(js_db, key=lambda x: x['nnum']):
                 num_uniq_mod += 1
