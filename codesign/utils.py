@@ -13,6 +13,7 @@ import decimal
 import requests
 import math
 import json
+import base64
 import shutil
 
 from lxml import html
@@ -853,6 +854,32 @@ def try_parse_timestamp(x):
     """
     try:
         return dateutil.parser.parse(x)
+    except:
+        pass
+    return None
+
+
+def try_get_fprint_sha1(x):
+    """
+    Makes SHA1 fingerprint
+    :param x: 
+    :return: 
+    """
+    try:
+        return base64.b16encode(x.fingerprint(hashes.SHA1()))
+    except:
+        pass
+    return None
+
+
+def try_get_fprint_sha256(x):
+    """
+    Makes SHA1 fingerprint
+    :param x: 
+    :return: 
+    """
+    try:
+        return base64.b16encode(x.fingerprint(hashes.SHA256()))
     except:
         pass
     return None
