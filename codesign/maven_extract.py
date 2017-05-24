@@ -454,6 +454,8 @@ class MavenKeyExtract(object):
     def work(self):
         """
         Entry point after argument processing.
+        Used to dump database, create found and non-found keys json files 
+        :deprecated: see work_db
         :return: 
         """
         logger.info('Generating keyset')
