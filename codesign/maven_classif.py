@@ -86,7 +86,11 @@ class MavenClassif(object):
         self.init_db()
         logger.info('Database initialized')
 
+        num_total_db = 0
+        num_keys = 0
         non_rsa = 0
+        non_master = 0
+        non_master_rsa = 0
 
         resfile = os.path.join(self.args.data_dir, 'maven-dataset.json')
         with open(resfile, 'w') as resfw:
@@ -97,11 +101,18 @@ class MavenClassif(object):
             existing_keys = sess.query(PGPKey).all()
             for idx, rec in enumerate(existing_keys):
                 key_id = int(rec.key_id, 16)
+                num_total_db += 1
 
                 # Load all deps.
-                deps = sess.query(MavenSignature) \
-                    .filter(MavenSignature.sig_key_id == utils.format_pgp_key(key_id)) \
-                    .all()
+                if self.args.no_deps:
+                    deps = []
+                else:
+                    deps = sess.query(MavenSignature) \
+                        .filter(MavenSignature.sig_key_id == utils.format_pgp_key(key_id)) \
+                        .all()
+
+                if rec.master_key_id is not None:
+                    non_master += 1
 
                 if rec.key_modulus is None:
                     non_rsa += 1
@@ -120,12 +131,19 @@ class MavenClassif(object):
                     js['e'] = '0x' + rec.key_exponent
                     js['n'] = '0x' + rec.key_modulus
 
+                    if self.fmagic is not None:
+                        js['sec'] = self.fmagic.test16(rec.key_modulus)
+
+                    if rec.master_key_id is not None:
+                        non_master_rsa += 1
+
                     sigs = []
                     for dep in deps:
                         sigs.append(utils.maven_package_id(dep.group_id, dep.artifact_id, dep.version_id))
 
                     js['pkgs_cnt'] = len(sigs)
                     js['info'] = {'pkgs': sigs}
+                    num_keys += 1
                     resfw.write(json.dumps(js, ensure_ascii=True) + '\n')
                     resfw.flush()
 
@@ -138,7 +156,8 @@ class MavenClassif(object):
                     logger.debug(' .. report key idx: %s, key id: %016x' % (idx, key_id))
                     self.last_report = time.time()
 
-        logger.info('Non-rsa keys: %s' % non_rsa)
+        logger.info('Non-rsa keys: %s, non-master: %s, non-master rsa: %s, total saved: %s, total db: %s'
+                    % (non_rsa, non_master, non_master_rsa, num_keys, num_total_db))
 
     def main(self):
         """
@@ -156,12 +175,22 @@ class MavenClassif(object):
         parser.add_argument('--debug', dest='debug', default=False, action='store_const', const=True,
                             help='Debugging logging')
 
+        parser.add_argument('--sec', dest='sec', default=False, action='store_const', const=True,
+                            help='sec')
+
+        parser.add_argument('--no-deps', dest='no_deps', default=False, action='store_const', const=True,
+                            help='No dependency load')
+
         self.args = parser.parse_args()
         self.config_file = self.args.config
         self.sqlite_file = None
 
         if self.args.debug:
             coloredlogs.install(level=logging.DEBUG)
+
+        if self.args.sec:
+            import sec
+            self.fmagic = sec.Fprinter()
 
         self.work_db()
 
