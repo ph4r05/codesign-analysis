@@ -323,7 +323,8 @@ class IntermediateBuilder(object):
             logger.info('New certificates added: %s' % ln)
             dpath = os.path.join(self.args.data_dir, 'interm-lvl%02d.json' % cdepth)
             with open(dpath, 'w') as fh:
-                json.dump(self.interms[cdepth], fh)
+                for rec in self.interms[cdepth]:
+                    fh.write('%s\n' % json.dumps(rec))
 
     def main(self):
         """
