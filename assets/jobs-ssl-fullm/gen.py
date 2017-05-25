@@ -39,7 +39,7 @@ for i in range(total_proc):
     with open('enqueue.sh', 'w') as fh:
         fh.write('#!/bin/bash\n\n')
         for i in range(total_proc):
-            ram = 72
+            ram = 112
             fh.write('qsub -l select=1:ncpus=1:mem=%sgb:scratch_local=1gb -l walltime=24:00:00 '
                      './sonar-ssl-process-fullx-%02d.sh \n' % (ram, i))
 
