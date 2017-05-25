@@ -90,7 +90,7 @@ def main():
                 logger.error('Parsing problems, no tables given (probably not logged in)')
                 continue
 
-            for tbl_idx, table in enumerate(tables):
+            for tbl_idx, table in enumerate(reversed(tables)):
                 rows = table[0]
                 rows_cnt = len(rows)
                 if rows_cnt < 2:
