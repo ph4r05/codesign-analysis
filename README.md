@@ -19,7 +19,12 @@ pyenv local 2.7.13
 mkdir -p jobs
 cd jobs
 
-python ../cas/codesign/censys_gen_jobs.py --home=$HOMEDIR --data=$DATADIR --wrapper ${HOMEDIR}/cas/censys_tls_wrapper.sh ${HOMEDIR}/cas/tls_ipv4_history.json
+python cas/codesign/censys_gen_jobs.py \
+    --home=$HOMEDIR \
+    --wrapper ${HOMEDIR}/cas/censys_tls_wrapper.sh \
+    --data=$DATADIR \
+    --jobs-dir=jobs \
+    ${HOMEDIR}/cas/tls_ipv4_history.json
 
 # or
 python ../cas/codesign/censys_gen_jobs.py \
