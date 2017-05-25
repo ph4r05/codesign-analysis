@@ -212,8 +212,10 @@ class PgpClassification(object):
                 fh = sys.stdin
             elif fname.endswith('.tar') or fname.endswith('.tar.gz'):
                 self.process_tar(fname)
+                continue
             elif not os.path.isfile(fname):
                 self.process_dir(fname)
+                continue
             else:
                 fh = open(fname, 'r')
 
