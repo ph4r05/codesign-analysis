@@ -16,6 +16,7 @@ import math
 import utils
 import coloredlogs
 import time
+import input_obj
 from lxml import html
 from datetime import datetime
 
@@ -56,29 +57,38 @@ def main():
     """
     parser = argparse.ArgumentParser(description='Processes Censys links from the page, generates json')
 
+    parser.add_argument('--url', dest='url', nargs=argparse.ZERO_OR_MORE, default=[],
+                        help='censys links')
+
     parser.add_argument('file', nargs=argparse.ZERO_OR_MORE, default=[],
                         help='censys link file')
 
     args = parser.parse_args()
 
-    # Process the input
-    if len(args.file) == 0:
-        print('Error; no input given')
-        sys.exit(1)
-
     dataset_idx = 10
     datasets = []
 
+    input_objects = []
     for file_name in args.file:
-        logger.info('Processing %s' % file_name)
+        input_objects.append(input_obj.FileInputObject(file_name))
+    for url in args.url:
+        input_objects.append(input_obj.LinkInputObject(url))
 
-        with open(file_name, 'r') as fh:
-            data = fh.read()
+    if len(input_objects) == 0:
+        print('Error; no input given')
+        sys.exit(1)
+
+    for iobj in input_objects:
+        logger.info('Processing %s' % iobj)
+
+        with iobj:
+            data = iobj.text()
+            print(data)
             tree = html.fromstring(data)
             tables = tree.xpath('//table')
 
             if len(tables) == 0:
-                logger.error('Parsing problems, no tables given')
+                logger.error('Parsing problems, no tables given (probably not logged in)')
                 continue
 
             for tbl_idx, table in enumerate(tables):

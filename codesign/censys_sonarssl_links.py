@@ -50,7 +50,7 @@ def main():
     https://scans.io/study/sonar.ssl
     :return:
     """
-    parser = argparse.ArgumentParser(description='Processes Censys links from the page, generates json')
+    parser = argparse.ArgumentParser(description='Processes SonarSSL links from the page, generates json')
 
     parser.add_argument('--url', dest='url', nargs=argparse.ZERO_OR_MORE, default=[],
                         help='censys links')
