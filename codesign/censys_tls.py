@@ -76,6 +76,7 @@ class CensysTls(object):
 
     def __init__(self):
         self.args = None
+        self.fmagic = None
         self.chain_cert_db = {}
 
         self.link_idx_offset = 0
@@ -622,6 +623,8 @@ class CensysTls(object):
             mod16 = base64.b16encode(base64.b64decode(parsed['subject_key_info']['rsa_public_key']['modulus']))
             ret['n'] = '0x%s' % mod16
             ret['e'] = hex(int(parsed['subject_key_info']['rsa_public_key']['exponent']))
+            if self.fmagic:
+                ret['sec'] = self.fmagic.test16(mod16)
         except Exception as e:
             pass
 
@@ -858,10 +861,17 @@ class CensysTls(object):
         parser.add_argument('--mpi', dest='mpi', default=False, action='store_const', const=True,
                             help='Use MPI distribution')
 
+        parser.add_argument('--sec', dest='sec', default=False, action='store_const', const=True,
+                            help='Use sec')
+
         self.args = parser.parse_args()
 
         if self.args.debug:
             coloredlogs.install(level=logging.DEBUG)
+
+        if self.args.sec:
+            import sec
+            self.fmagic = sec.Fprinter()
 
         self.work()
 
