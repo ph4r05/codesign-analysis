@@ -22,7 +22,7 @@ coloredlogs.install(level=logging.INFO)
 
 class PgpDump(object):
     """
-    PGP dump
+    PGP dump - reads ASCII armored PGP key, dumps info on stdout
     """
 
     def __init__(self):
@@ -38,7 +38,7 @@ class PgpDump(object):
         """
         if self.args.sec:
             import sec
-            self.fmagic = sec.Fprinter(167)
+            self.fmagic = sec.Fprinter()
 
         keys_data = []
 

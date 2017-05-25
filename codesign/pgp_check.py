@@ -28,7 +28,7 @@ coloredlogs.install(level=logging.INFO)
 
 class PGPCheck(object):
     """
-    PGP keys checking
+    PGP keys checking - processes PGP json with already parsed keys.
     """
 
     def __init__(self):
