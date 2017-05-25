@@ -667,6 +667,17 @@ def strip(x):
         return x.strip()
 
 
+def lower(x):
+    """
+    None tolerant lower
+    :param x: 
+    :return: 
+    """
+    if x is None:
+        return x
+    return x.lower()
+
+
 def defval(val, default=None):
     """
     Returns val if is not None, default instead
