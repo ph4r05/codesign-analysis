@@ -251,6 +251,8 @@ class FileInputObject(InputObject):
         return os.path.getsize(self.fname)
 
     def read(self, size=None):
+        if size is None:
+            size = -1
         data = self.fh.read(size)
         self.sha256.update(data)
         self.data_read += len(data)
