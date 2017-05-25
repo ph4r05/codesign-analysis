@@ -83,7 +83,6 @@ def main():
 
         with iobj:
             data = iobj.text()
-            print(data)
             tree = html.fromstring(data)
             tables = tree.xpath('//table')
 
