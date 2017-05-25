@@ -552,7 +552,7 @@ class CensysTls(object):
                     if self.read_data - self.last_report >= 1024*1024*1024 and self.processor.step_cur_last_element:
                         logger.info('...progress: %s GB, idx: %s, pos: %s GB, mem: %04.8f MB, readpos: %s (%4.6f GB)'
                                     % (self.read_data/1024.0/1024.0/1024.0, idx, self.read_data,
-                                       utils.get_mem_usage()/1024.0, iobj.tell(), iobj.tell()/1024.0/1024.0/1024.0))
+                                       utils.get_mem_mb(), iobj.tell(), iobj.tell()/1024.0/1024.0/1024.0))
 
                         self.last_report = self.read_data
                         self.try_store_checkpoint(iobj=iobj, idx=idx, resume_idx=resume_idx, resume_token=resume_token)
