@@ -217,7 +217,7 @@ class SonarSSLProcess(object):
         :return: 
         """
         args = self.args
-        testrng = range(10, 181)
+        testrng = range(10, 192)
 
         jsdb = None
         with open(args.json, 'r') as fh:
