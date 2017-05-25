@@ -689,6 +689,7 @@ class CensysTls(object):
             ret['ip'] = ip
             ret['count'] = 1
             ret['fprint'] = utils.defvalkey(parsed, 'fingerprint_sha256')
+            ret['fprint1'] = utils.defvalkey(parsed, 'fingerprint_sha1')
             utils.set_nonempty(ret, 'dom', domain)
 
             tstamp = utils.try_parse_timestamp(timestamp_fmt)
@@ -746,6 +747,7 @@ class CensysTls(object):
                 ret['valid'] = utils.defvalkeys(parsed, ['signature', 'valid'])
                 ret['ssign'] = utils.defvalkeys(parsed, ['signature', 'self_signed'])
                 ret['fprint'] = fprint
+                ret['fprint1'] = utils.defvalkey(parsed, 'fingerprint_sha1')
                 self.fill_cn_src(ret, parsed)
                 if is_rsa:
                     self.fill_rsa_ne(ret, parsed)
