@@ -16,7 +16,6 @@ import math
 import utils
 import coloredlogs
 import time
-from lxml import html
 from datetime import datetime
 
 
@@ -37,7 +36,10 @@ def main():
                         help='homedir')
 
     parser.add_argument('--data', dest='data',
-                        help='data dir')
+                        help='data dir for the job')
+
+    parser.add_argument('--jobs-dir', dest='jobsdir', default='.',
+                        help='dir to put jobs to')
 
     parser.add_argument('--wrapper', dest='wrapper',
                         help='python script wrapper')
@@ -51,6 +53,9 @@ def main():
     if len(args.file) == 0:
         print('Error; no input given')
         sys.exit(1)
+
+    if not os.path.exists(args.jobsdir):
+        utils.make_or_verify_dir(args.jobsdir)
 
     dataset_idx = 10
     datasets = []
@@ -70,14 +75,16 @@ def main():
             js = json.load(fh)
             for dataset in js['data']:
                 id = dataset['id']
-                log_file = os.path.join(logdir, '%s_%03d.log' % (os.getpid(), int(id)))
+                log_file = os.path.abspath(os.path.join(logdir, '%s_%s_%03d.log' % (os.getpid(), code, int(id))))
 
                 job = '#!/bin/bash\n'
                 job += 'cd %s\n' % args.home
-                job += 'stdbuf -eL %s --debug --link-file "%s" --link-idx %d --data "%s" --continue 2> "%s" \n' \
-                       % (args.wrapper, file_name, id, args.data, log_file)
+                job += 'stdbuf -eL %s --debug --link-file "%s" --link-idx %d --data "%s" --continue --sec 2> "%s" \n' \
+                       % (os.path.abspath(args.wrapper),
+                          os.path.abspath(file_name), id, args.data, log_file)
 
-                with open('%s-%05d.sh' % (code, id), 'w') as jh:
+                jobfile_path = os.path.join(args.jobsdir, '%s-%05d.sh' % (code, id))
+                with open(jobfile_path, 'w') as jh:
                     jh.write(job)
 
 
