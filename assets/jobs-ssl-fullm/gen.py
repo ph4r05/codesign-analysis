@@ -25,7 +25,7 @@ echo "`hostname` starting..."
 exec stdbuf -eL python /storage/praha1/home/ph4r05/cas2/codesign/censys_sonarssl_process.py \\
     --datadir /storage/brno3-cerit/home/ph4r05/sonarssl \\
     --output-dir /storage/brno3-cerit/home/ph4r05/sonarssl_new \\
-    --json /storage/praha1/home/ph4r05/cas/tls_sonar.ssl.json \\
+    --json /storage/praha1/home/ph4r05/cas/tls_sonar.ssl_new.json \\
     --proc-total %s --proc-cur %s --nrsa --months-full --sec $@ 2> /storage/praha1/home/ph4r05/logs/process_ssl_fullx_%02d.log 
 
 '''
