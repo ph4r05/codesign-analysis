@@ -122,13 +122,13 @@ def main():
             # commits, first & last
             res = requests.get(commits_url, timeout=10, auth=random.choice(auths))
             cjs = res.json()
-            first_commit = commit_time(cjs[0])
+            last_commit = commit_time(cjs[0])
 
             if 'Link' in res.headers:
                 last_commit_page_url = get_last_link(res.headers['Link'])
                 res = requests.get(last_commit_page_url, timeout=10, auth=random.choice(auths))
                 cjs = res.json()
-            last_commit = commit_time(cjs[-1])
+            first_commit = commit_time(cjs[-1])
 
             # pull requests
             res = requests.get(pulls_url, timeout=10)
