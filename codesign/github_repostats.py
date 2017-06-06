@@ -37,9 +37,13 @@ def get_last_link(x):
 
 
 def label_num(tree, idx):
-    sub = tree.xpath('//div[@class="table-list-header-toggle states float-left pl-3"]')[0][idx]
-    txt = sub.xpath('text()')[1].strip()
-    return int(txt[:txt.find(' ')])
+    try:
+        sub = tree.xpath('//div[@class="table-list-header-toggle states float-left pl-3"]')[0][idx]
+        txt = sub.xpath('text()')[1].strip()
+        return int(txt[:txt.find(' ')])
+    except:
+        logger.debug('No num')
+        return 0
 
 
 def main():
