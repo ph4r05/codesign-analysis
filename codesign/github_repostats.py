@@ -55,13 +55,13 @@ def main():
     config_file = args.config
 
     # load config with access tokens
+    auths=[]
     with open(config_file, 'r') as fh:
         config = json.load(fh, object_pairs_hook=collections.OrderedDict)
         res_tmp = config['res']
         random.shuffle(res_tmp)
-        user = res_tmp[0]
-        auth = HTTPBasicAuth(user['usr'], user['token'])
-        logger.info('Going to use %s' % user['usr'])
+        for user in res_tmp:
+            auths.append(HTTPBasicAuth(user['usr'], user['token']))
 
     print('repo;stars;watchers;forks;open_issues;subscribers_count;network_count;size;language;'
           'created_at;updated_at;pushed_at;owner;commits;branches;releases;contributors;closed_issues;'
@@ -86,7 +86,7 @@ def main():
                 continue
 
             already_loaded.add(url)
-            res = requests.get(url, timeout=10, auth=auth)
+            res = requests.get(url, timeout=10, auth=random.choice(auths))
             js = res.json()
             if js is None or 'stargazers_count' not in js:
                 not_found.append(url)
@@ -109,7 +109,7 @@ def main():
             # contributors load
             if lidata[3] == -1:
                 url_contrib = js['contributors_url']
-                res = requests.get(url_contrib)
+                res = requests.get(url_contrib, timeout=10, auth=random.choice(auths))
                 jsc = res.json()
                 if jsc is not None:
                     lidata[3] = len(jsc)
@@ -120,13 +120,13 @@ def main():
             js['closed'] = label_num(tree, 1)
 
             # commits, first & last
-            res = requests.get(commits_url, timeout=10)
+            res = requests.get(commits_url, timeout=10, auth=random.choice(auths))
             cjs = res.json()
             first_commit = commit_time(cjs[0])
 
             if 'Link' in res.headers:
                 last_commit_page_url = get_last_link(res.headers['Link'])
-                res = requests.get(last_commit_page_url, timeout=10)
+                res = requests.get(last_commit_page_url, timeout=10, auth=random.choice(auths))
                 cjs = res.json()
             last_commit = commit_time(cjs[-1])
 
