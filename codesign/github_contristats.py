@@ -50,11 +50,15 @@ def main():
 
     print('login;contribs;repos;avg')
 
-    def_info = collections.OrderedDict()
-    def_info['contribs'] = 0
-    def_info['repos'] = 0
-    def_info['cons'] = []
-    contribs = collections.defaultdict(lambda: collections.OrderedDict(def_info))
+    def newrec():
+        def_info = collections.OrderedDict()
+        def_info['contribs'] = 0
+        def_info['repos'] = 0
+        def_info['cons'] = []
+        def_info['repolist'] = []
+        return def_info
+
+    contribs = collections.defaultdict(newrec)
 
     already_loaded = set()
     not_found = []
@@ -84,6 +88,7 @@ def main():
                 usr['contribs'] += contrib['contributions']
                 usr['repos'] += 1
                 usr['cons'].append(contrib['contributions'])
+                usr['repolist'].append('%s/%s' % (author, repo_name))
 
     for login in contribs:
         rec = contribs[login]
@@ -91,7 +96,8 @@ def main():
             login,
             rec['contribs'],
             rec['repos'],
-            float(rec['contribs']) / float(rec['repos'])
+            float(rec['contribs']) / float(rec['repos']),
+            '|'.join(rec['repolist'])
         ]
 
         print(';'.join([str(x) for x in rdat]))
