@@ -135,6 +135,7 @@ class IontFingerprinter(object):
         self.num_pgp_masters = 0
         self.num_pgp_total = 0
         self.num_ssh = 0
+        self.num_json = 0
         self.found = 0
 
     def has_fingerprint_test(self, modulus):
@@ -250,7 +251,10 @@ class IontFingerprinter(object):
         is_mod |= not is_pem and not is_der and not is_pgp and not is_ssh_file
         is_mod |= self.args.file_mod
 
-        det = is_pem or is_der or is_pgp or is_ssh or is_mod
+        is_json = self.file_matches_extensions(name, ['json', 'js']) or data.startswith('{') or data.startswith('[')
+        is_json |= self.args.file_json
+
+        det = is_pem or is_der or is_pgp or is_ssh or is_mod or is_json
         if is_pem:
             logger.debug('processing %s as PEM' % name)
             self.process_pem(data, name)
@@ -266,6 +270,10 @@ class IontFingerprinter(object):
         if is_ssh:
             logger.debug('processing %s as SSH' % name)
             self.process_ssh(data, name)
+
+        if is_json:
+            logger.debug('processing %s as JSON' % name)
+            self.process_json(data, name)
 
         if is_mod:
             logger.debug('processing %s as MOD' % name)
@@ -558,6 +566,93 @@ class IontFingerprinter(object):
             logger.debug('Exception in processing SSH public key %s idx %s : %s' % (name, idx, e))
             self.trace_logger.log(e)
 
+    def process_json(self, data, name):
+        """
+        Processes as a JSON
+        :param data:
+        :param name:
+        :return:
+        """
+        if data is None or len(data) == 0:
+            return
+
+        try:
+            lines = [x.strip() for x in data.split('\n')]
+            for idx, line in enumerate(lines):
+                self.process_json_line(line, name, idx)
+
+        except Exception as e:
+            logger.debug('Exception in processing JSON %s : %s' % (name, e))
+            self.trace_logger.log(e)
+
+    def process_json_line(self, data, name, idx):
+        """
+        Processes single json line
+        :param data:
+        :param name:
+        :param idx:
+        :return:
+        """
+        data = data.strip()
+        if len(data) == 0:
+            return
+
+        try:
+            js = json.loads(data)
+            self.num_json += 1
+            self.process_json_rec(js, name, idx, [])
+
+        except Exception as e:
+            logger.debug('Exception in processing JSON %s idx %s : %s' % (name, idx, e))
+            self.trace_logger.log(e)
+
+    def process_json_rec(self, data, name, idx, sub_idx):
+        """
+        Processes json rec - json object
+        :param data:
+        :param name:
+        :param idx:
+        :param sub_idx:
+        :return:
+        """
+        if isinstance(data, types.ListType):
+            for kidx, rec in enumerate(data):
+                self.process_json_rec(rec, name, idx, list(sub_idx + [kidx]))
+            return
+
+        if isinstance(data, types.DictionaryType):
+            for key in data:
+                rec = data[key]
+                self.process_json_rec(rec, name, idx, list(sub_idx + [rec]))
+
+            if 'n' in data:
+                self.process_js_mod(data['n'], name, idx, sub_idx)
+            if 'mod' in data:
+                self.process_js_mod(data['mod'], name, idx, sub_idx)
+
+    def process_js_mod(self, data, name, idx, sub_idx):
+        """
+        Processes one moduli from JS
+        :param data:
+        :param name:
+        :param idx:
+        :param sub_idx:
+        :return:
+        """
+        if isinstance(data, types.IntType):
+            if self.has_fingerprint(data):
+                logger.warning('Fingerprint found in json int modulus %s idx %s %s' % (name, idx, sub_idx))
+                js = collections.OrderedDict()
+                js['type'] = 'js-mod-num'
+                js['fname'] = name
+                js['idx'] = idx
+                js['sub_idx'] = sub_idx
+                js['mod'] = '%x' % data
+                print(json.dumps(js))
+            return
+
+        self.process_mod_line(data, name, idx, aux={'stype': 'json', 'sub_idx': sub_idx})
+
     def process_mod(self, data, name):
         """
         Processing one modulus per line
@@ -574,37 +669,39 @@ class IontFingerprinter(object):
             logger.debug('Error in line mod file processing %s : %s' % (name, e))
             self.trace_logger.log(e)
 
-    def process_mod_line(self, data, name, idx):
+    def process_mod_line(self, data, name, idx, aux=None):
         """
         Processes one line mod
         :param data:
         :param name:
         :param idx:
+        :param aux:
         :return:
         """
         if data is None or len(data) == 0:
             return
         try:
             if self.args.key_fmt_base64 or re.match(r'^[a-zA-Z0-9+/=]+$', data):
-                self.process_mod_line_num(data, name, idx, 'base64')
+                self.process_mod_line_num(data, name, idx, 'base64', aux)
 
             if self.args.key_fmt_hex or re.match(r'^(0x)?[a-fA-F0-9]+$', data):
-                self.process_mod_line_num(data, name, idx, 'hex')
+                self.process_mod_line_num(data, name, idx, 'hex', aux)
 
             if self.args.key_fmt_dec or re.match(r'^[0-9]+$', data):
-                self.process_mod_line_num(data, name, idx, 'dec')
+                self.process_mod_line_num(data, name, idx, 'dec', aux)
 
         except Exception as e:
             logger.debug('Error in line mod processing %s idx %s : %s' % (name, idx, e))
             self.trace_logger.log(e)
 
-    def process_mod_line_num(self, data, name, idx, num_type='hex'):
+    def process_mod_line_num(self, data, name, idx, num_type='hex', aux=None):
         """
         Processes particular number
         :param data:
         :param name:
         :param idx:
         :param num_type:
+        :param aux:
         :return:
         """
         try:
@@ -624,11 +721,12 @@ class IontFingerprinter(object):
                 js['type'] = 'mod-%s' % num_type
                 js['fname'] = name
                 js['idx'] = idx
+                js['aux'] = aux
                 js['mod'] = '%x' % num
                 print(json.dumps(js))
 
         except Exception as e:
-            logger.debug('Exception in testing modulus %s idx %s : %s' % (name, idx, e))
+            logger.debug('Exception in testing modulus %s idx %s : %s data: %s' % (name, idx, e, data[:30]))
             self.trace_logger.log(e)
 
     #
@@ -667,6 +765,7 @@ class IontFingerprinter(object):
         logger.info('.. PGP master keys: %s' % self.num_pgp_masters)
         logger.info('.. PGP total keys:  %s' % self.num_pgp_total)
         logger.info('.. SSH keys:  . . . %s' % self.num_ssh)
+        logger.info('.. JSON keys: . . . %s' % self.num_json)
         logger.info('.. Total RSA keys found: %s' % self.num_rsa)
 
     def main(self):
@@ -696,6 +795,9 @@ class IontFingerprinter(object):
 
         parser.add_argument('--file-mod', dest='file_mod', default=False, action='store_const', const=True,
                             help='One modulus per line')
+
+        parser.add_argument('--file-json', dest='file_json', default=False, action='store_const', const=True,
+                            help='JSON file')
 
         parser.add_argument('--key-fmt-base64', dest='key_fmt_base64', default=False, action='store_const', const=True,
                             help='Modulus per line, base64 encoded')
