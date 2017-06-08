@@ -226,14 +226,47 @@ class IontFingerprinter(object):
         :param name:
         :return:
         """
-        is_ssh_file = data.startswith('ssh-')
+        try:
+            self.process_file_autodetect(data, name)
+            return
+
+        except Exception as e:
+            logger.debug('Excetion processing file %s : %s' % (name, e))
+            self.trace_logger.log(e)
+
+        # autodetection fallback - all formats
+        logger.debug('processing %s as PEM' % name)
+        self.process_pem(data, name)
+
+        logger.debug('processing %s as DER' % name)
+        self.process_der(data, name)
+
+        logger.debug('processing %s as PGP' % name)
+        self.process_pgp(data, name)
+
+        logger.debug('processing %s as SSH' % name)
+        self.process_ssh(data, name)
+
+        logger.debug('processing %s as JSON' % name)
+        self.process_json(data, name)
+
+        logger.debug('processing %s as MOD' % name)
+        self.process_mod(data, name)
+
+    def process_file_autodetect(self, data, name):
+        """
+        Processes a single file - format autodetection
+        :param data:
+        :param name:
+        :return:
+        """
+        is_ssh_file = data.startswith('ssh-rsa') or 'ssh-rsa ' in data
         is_pgp_file = data.startswith('-----BEGIN PGP')
         is_pem_file = data.startswith('-----BEGIN') and not is_pgp_file
 
-        is_pgp = (self.file_matches_extensions(name, ['pgp', 'gpg', 'key', 'pub', 'asc'])
+        is_pgp = is_pgp_file or (self.file_matches_extensions(name, ['pgp', 'gpg', 'key', 'pub', 'asc'])
                   and not is_ssh_file
-                  and not is_pem_file) \
-                 or is_pgp_file
+                  and not is_pem_file)
         is_pgp |= self.args.file_pgp
 
         is_crt_ext = self.file_matches_extensions(name, ['der', 'crt', 'cer', 'cert', 'x509', 'key', 'pub', 'ca'])
@@ -289,23 +322,28 @@ class IontFingerprinter(object):
         :param name:
         :return:
         """
-        parts = re.split(r'-{5,}BEGIN', data)
-        if len(parts) == 0:
-            return
+        try:
+            parts = re.split(r'-{5,}BEGIN', data)
+            if len(parts) == 0:
+                return
 
-        if len(parts[0]) == 0:
-            parts.pop(0)
+            if len(parts[0]) == 0:
+                parts.pop(0)
 
-        crt_arr = ['-----BEGIN' + x for x in parts]
-        for idx, pem_rec in enumerate(crt_arr):
-            pem_rec = pem_rec.strip()
-            if len(pem_rec) == 0:
-                continue
+            crt_arr = ['-----BEGIN' + x for x in parts]
+            for idx, pem_rec in enumerate(crt_arr):
+                pem_rec = pem_rec.strip()
+                if len(pem_rec) == 0:
+                    continue
 
-            if pem_rec.startswith('-----BEGIN CERTIF'):
-                self.process_pem_cert(pem_rec, name, idx)
-            elif pem_rec.startswith('-----BEGIN '):  # fallback
-                self.process_pem_rsakey(pem_rec, name, idx)
+                if pem_rec.startswith('-----BEGIN CERTIF'):
+                    self.process_pem_cert(pem_rec, name, idx)
+                elif pem_rec.startswith('-----BEGIN '):  # fallback
+                    self.process_pem_rsakey(pem_rec, name, idx)
+
+        except Exception as e:
+            logger.debug('Exception processing PEM file %s : %s' % (name, e))
+            self.trace_logger.log(e)
 
     def process_pem_cert(self, data, name, idx):
         """
