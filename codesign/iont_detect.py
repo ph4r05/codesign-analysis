@@ -588,7 +588,7 @@ class IontFingerprinter(object):
             if self.args.key_fmt_base64 or re.match(r'^[a-zA-Z0-9+/=]+$', data):
                 self.process_mod_line_num(data, name, idx, 'base64')
 
-            if self.args.key_fmt_hex or re.match(r'^[a-fA-F0-9]+$', data):
+            if self.args.key_fmt_hex or re.match(r'^(0x)?[a-fA-F0-9]+$', data):
                 self.process_mod_line_num(data, name, idx, 'hex')
 
             if self.args.key_fmt_dec or re.match(r'^[0-9]+$', data):
@@ -612,7 +612,7 @@ class IontFingerprinter(object):
             if num_type == 'base64':
                 num = int(base64.b16encode(base64.b64decode(data)), 16)
             elif num_type == 'hex':
-                num = int(data, 16)
+                num = int(strip_hex_prefix(data), 16)
             elif num_type == 'dec':
                 num = int(data)
             else:
