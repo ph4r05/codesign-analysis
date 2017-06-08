@@ -538,8 +538,14 @@ class IontFingerprinter(object):
         :return:
         """
         data = data.strip()
-        if not data.startswith('ssh-rsa'):
+        if 'ssh-rsa' not in data:
             return
+
+        # strip ssh params / adjustments
+        try:
+            data = data[data.find('ssh-rsa'):]
+        except:
+            pass
 
         from cryptography.hazmat.primitives.serialization import load_ssh_public_key
         from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
@@ -550,9 +556,10 @@ class IontFingerprinter(object):
             if not isinstance(key_obj, RSAPublicKey):
                 return
 
+            self.num_rsa += 1
             numbers = key_obj.public_numbers()
+
             if self.has_fingerprint(numbers.n):
-                self.num_rsa += 1
                 logger.warning('Fingerprint found in the SSH key %s idx %s ' % (name, idx))
                 js = collections.OrderedDict()
                 js['type'] = 'ssh-rsa'
