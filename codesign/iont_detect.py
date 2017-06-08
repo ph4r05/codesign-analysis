@@ -3,6 +3,8 @@
 
 """
 Key IONT fingerprinting
+Installation:
+    pip install cryptography pgpdump coloredlogs future six pycrypto>=2.6
 """
 
 import json
