@@ -861,7 +861,9 @@ class IontFingerprinter(object):
         :return:
         """
         self.process_inputs()
-        logger.info('Records tested: %s, found: %s' % (self.tested, self.found))
+
+        logger.info('### SUMMARY ####################')
+        logger.info('Records tested: %s' % self.tested)
         logger.info('.. PEM certs: . . . %s' % self.num_pem_certs)
         logger.info('.. DER certs: . . . %s' % self.num_der_certs)
         logger.info('.. RSA key files: . %s' % self.num_rsa_keys)
@@ -870,7 +872,13 @@ class IontFingerprinter(object):
         logger.info('.. SSH keys:  . . . %s' % self.num_ssh)
         logger.info('.. APK keys:  . . . %s' % self.num_apk)
         logger.info('.. JSON keys: . . . %s' % self.num_json)
-        logger.info('.. Total RSA keys found: %s' % self.num_rsa)
+        logger.debug('. Total RSA keys . %s  (# of keys RSA extracted & analyzed)' % self.num_rsa)
+        if self.found > 0:
+            logger.info('Fingerprinted keys found: %s' % self.found)
+            logger.info('WARNING: Potential vulnerability')
+        else:
+            logger.info('No fingerprinted keys found (OK)')
+        logger.info('################################')
 
     def main(self):
         """
