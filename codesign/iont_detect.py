@@ -40,8 +40,13 @@ import binascii
 import collections
 import traceback
 
+
+#            '%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s'
+LOG_FORMAT = '%(asctime)s [%(process)d] %(levelname)s %(message)s'
+
+
 logger = logging.getLogger(__name__)
-coloredlogs.install(level=logging.INFO)
+coloredlogs.install(level=logging.INFO, fmt=LOG_FORMAT)
 
 
 #
@@ -926,7 +931,7 @@ class IontFingerprinter(object):
         self.args = parser.parse_args()
 
         if self.args.debug:
-            coloredlogs.install(level=logging.DEBUG)
+            coloredlogs.install(level=logging.DEBUG, fmt=LOG_FORMAT)
 
         self.work()
 
