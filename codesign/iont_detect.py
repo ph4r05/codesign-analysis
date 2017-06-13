@@ -11,6 +11,7 @@ The fingerprinter supports the following formats:
     - RSA PEM encoded private key, public key, more per file, *.pem (has to have correct header -----BEGIN RSA...)
     - SSH public key, *.pub, starting with "ssh-rsa", one per line
     - ASC encoded PGP key, *.pgp, *.asc. More per file, has to have correct header -----BEGIN PGP...
+    - APK android application, *.apk
     - one modulus per line text file *.txt, modulus can be
         a) base64 encoded number, b) hex coded number, c) decimal coded number
     - JSON file with moduli, one record per line, record with modulus has
@@ -154,6 +155,7 @@ class IontFingerprinter(object):
         self.num_pgp_total = 0
         self.num_ssh = 0
         self.num_json = 0
+        self.num_apk = 0
         self.found = 0
 
     def has_fingerprint_test(self, modulus):
@@ -268,6 +270,9 @@ class IontFingerprinter(object):
         logger.debug('processing %s as JSON' % name)
         self.process_json(data, name)
 
+        logger.debug('processing %s as APK' % name)
+        self.process_apk(data, name)
+
         logger.debug('processing %s as MOD' % name)
         self.process_mod(data, name)
 
@@ -298,14 +303,16 @@ class IontFingerprinter(object):
         is_ssh = self.file_matches_extensions(name, ['ssh', 'pub']) or is_ssh_file
         is_ssh |= self.args.file_ssh
 
+        is_apk = self.file_matches_extensions(name, 'apk')
+
         is_mod = self.file_matches_extensions(name, ['txt', 'mod', 'mods', 'moduli'])
-        is_mod |= not is_pem and not is_der and not is_pgp and not is_ssh_file
+        is_mod |= not is_pem and not is_der and not is_pgp and not is_ssh_file and not is_apk
         is_mod |= self.args.file_mod
 
         is_json = self.file_matches_extensions(name, ['json', 'js']) or data.startswith('{') or data.startswith('[')
         is_json |= self.args.file_json
 
-        det = is_pem or is_der or is_pgp or is_ssh or is_mod or is_json
+        det = is_pem or is_der or is_pgp or is_ssh or is_mod or is_json or is_apk
         if is_pem:
             logger.debug('processing %s as PEM' % name)
             self.process_pem(data, name)
@@ -325,6 +332,10 @@ class IontFingerprinter(object):
         if is_json:
             logger.debug('processing %s as JSON' % name)
             self.process_json(data, name)
+
+        if is_apk:
+            logger.debug('processing %s as APK' % name)
+            self.process_apk(data, name)
 
         if is_mod:
             logger.debug('processing %s as MOD' % name)
@@ -375,7 +386,7 @@ class IontFingerprinter(object):
         try:
             x509 = load_pem_x509_certificate(data, self.get_backend())
             self.num_pem_certs += 1
-            self.process_x509(x509, name=name, idx=idx, data=data, pem=True)
+            self.process_x509(x509, name=name, idx=idx, data=data, pem=True, source='pem-cert')
 
         except Exception as e:
             logger.debug('PEM processing failed: ' % e)
@@ -419,13 +430,13 @@ class IontFingerprinter(object):
         try:
             x509 = load_der_x509_certificate(data, self.get_backend())
             self.num_der_certs += 1
-            self.process_x509(x509, name=name, pem=False)
+            self.process_x509(x509, name=name, pem=False, source='der-cert')
 
         except Exception as e:
             logger.debug('DER processing failed: %s : %s' % (name, e))
             self.trace_logger.log(e)
 
-    def process_x509(self, x509, name, idx=None, data=None, pem=True):
+    def process_x509(self, x509, name, idx=None, data=None, pem=True, source='', aux=None):
         """
         Processing parsed X509 certificate
         :param x509:
@@ -433,6 +444,8 @@ class IontFingerprinter(object):
         :param idx:
         :param data:
         :param pem:
+        :param source:
+        :param aux:
         :return:
         """
         if x509 is None:
@@ -450,11 +463,12 @@ class IontFingerprinter(object):
         if self.has_fingerprint(pubnum.n):
             logger.warning('Fingerprint found in the Certificate %s idx %s ' % (name, idx))
             js = collections.OrderedDict()
-            js['type'] = 'pem-cert' if pem else 'der-cert'
+            js['type'] = source
             js['fname'] = name
             js['idx'] = idx
             js['fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))
-            js['pem'] = data if pem else base64.b64encode(pem)
+            js['pem'] = data if pem else None
+            js['aux'] = aux
             print(json.dumps(js))
 
     def process_pgp(self, data, name):
@@ -716,6 +730,32 @@ class IontFingerprinter(object):
 
         self.process_mod_line(data, name, idx, aux={'stype': 'json', 'sub_idx': sub_idx})
 
+    def process_apk(self, data, name):
+        """
+        Processes Android application
+        :param data:
+        :param name:
+        :return:
+        """
+        from cryptography.x509.base import load_pem_x509_certificate
+        from apk_parse.apk import APK
+        try:
+            apkf = APK(data, process_now=False, process_file_types=False, raw=True,
+                       temp_dir=self.args.tmp_dir)
+            apkf.process()
+            self.num_apk += 1
+
+            pem = apkf.cert_pem
+            aux = {'subtype': 'apk'}
+
+            x509 = load_pem_x509_certificate(pem, self.get_backend())
+
+            self.process_x509(x509, name=name, idx=0, data=data, pem=True, source='apk-pem-cert', aux=aux)
+
+        except Exception as e:
+            logger.debug('Exception in processing JSON %s : %s' % (name, e))
+            self.trace_logger.log(e)
+
     def process_mod(self, data, name):
         """
         Processing one modulus per line
@@ -828,6 +868,7 @@ class IontFingerprinter(object):
         logger.info('.. PGP master keys: %s' % self.num_pgp_masters)
         logger.info('.. PGP total keys:  %s' % self.num_pgp_total)
         logger.info('.. SSH keys:  . . . %s' % self.num_ssh)
+        logger.info('.. APK keys:  . . . %s' % self.num_apk)
         logger.info('.. JSON keys: . . . %s' % self.num_json)
         logger.info('.. Total RSA keys found: %s' % self.num_rsa)
 
@@ -838,8 +879,8 @@ class IontFingerprinter(object):
         """
         parser = argparse.ArgumentParser(description='Iont Fingerprinter')
 
-        parser.add_argument('--data', dest='data_dir', default='.',
-                            help='Data directory output')
+        parser.add_argument('--tmp', dest='tmp_dir', default='.',
+                            help='Temporary dir for subprocessing (e.g. APK parsing scratch)')
 
         parser.add_argument('--debug', dest='debug', default=False, action='store_const', const=True,
                             help='Debugging logging')
