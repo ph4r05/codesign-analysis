@@ -2,9 +2,27 @@
 # -*- coding: utf-8 -*-
 
 """
-Key IONT fingerprinting
-Installation:
-    pip install cryptography pgpdump coloredlogs future six pycrypto>=2.6
+Key fingerprinting
+
+The fingerprinter supports the following formats:
+
+    - X509 Certificate, DER encoded, one per file, *.der, *.crt
+    - X509 Certificate, PEM encoded, more per file, *.pem
+    - RSA PEM encoded private key, public key, more per file, *.pem (has to have correct header -----BEGIN RSA...)
+    - SSH public key, *.pub, starting with "ssh-rsa", one per line
+    - ASC encoded PGP key, *.pgp, *.asc. More per file, has to have correct header -----BEGIN PGP...
+    - one modulus per line text file *.txt, modulus can be
+        a) base64 encoded number, b) hex coded number, c) decimal coded number
+    - JSON file with moduli, one record per line, record with modulus has
+        key "mod" (int, base64, hex, dec encoding supported)
+
+Script requirements:
+
+    - Tested on Python 2.7.13
+    - pip install cryptography pgpdump coloredlogs future six pycrypto>=2.6
+    - some system packages are usually needed for pip to install dependencies (like gcc):
+        yum install gcc openssl-devel libffi-devel dialog
+
 """
 
 import json
