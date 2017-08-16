@@ -161,6 +161,7 @@ class IontFingerprinter(object):
         self.num_ssh = 0
         self.num_json = 0
         self.num_apk = 0
+        self.num_ldiff_cert = 0
         self.found = 0
 
     def has_fingerprint_test(self, modulus):
@@ -281,6 +282,9 @@ class IontFingerprinter(object):
         logger.debug('processing %s as MOD' % name)
         self.process_mod(data, name)
 
+        logger.debug('processing %s as LDIFF' % name)
+        self.process_ldiff(data, name)
+
     def process_file_autodetect(self, data, name):
         """
         Processes a single file - format autodetection
@@ -291,6 +295,7 @@ class IontFingerprinter(object):
         is_ssh_file = data.startswith('ssh-rsa') or 'ssh-rsa ' in data
         is_pgp_file = data.startswith('-----BEGIN PGP')
         is_pem_file = data.startswith('-----BEGIN') and not is_pgp_file
+        is_ldiff_file = 'binary::' in data
 
         is_pgp = is_pgp_file or (self.file_matches_extensions(name, ['pgp', 'gpg', 'key', 'pub', 'asc'])
                   and not is_ssh_file
@@ -316,6 +321,9 @@ class IontFingerprinter(object):
 
         is_json = self.file_matches_extensions(name, ['json', 'js']) or data.startswith('{') or data.startswith('[')
         is_json |= self.args.file_json
+
+        is_ldiff = self.file_matches_extensions(name, ['ldiff', 'ldap']) or is_ldiff_file
+        is_ldiff |= self.args.file_ldiff
 
         det = is_pem or is_der or is_pgp or is_ssh or is_mod or is_json or is_apk
         if is_pem:
@@ -345,6 +353,10 @@ class IontFingerprinter(object):
         if is_mod:
             logger.debug('processing %s as MOD' % name)
             self.process_mod(data, name)
+
+        if is_ldiff:
+            logger.debug('processing %s as LDIFF' % name)
+            self.process_ldiff(data, name)
 
         if not det:
             logger.debug('Undetected (skipped) file: %s' % name)
@@ -837,6 +849,33 @@ class IontFingerprinter(object):
             logger.debug('Exception in testing modulus %s idx %s : %s data: %s' % (name, idx, e, data[:30]))
             self.trace_logger.log(e)
 
+    def process_ldiff(self, data, name):
+        """
+        Processes LDAP output
+        field;binary::blob
+        :param data:
+        :param name:
+        :return:
+        """
+        from cryptography.x509.base import load_der_x509_certificate
+        reg = re.compile(r'binary::\s*([0-9a-zA-Z+/=\s\t\r\n]{20,})$', re.MULTILINE | re.DOTALL)
+        matches = re.findall(reg, data)
+
+        num_certs_found = 0
+        for idx, match in enumerate(matches):
+            match = re.sub('[\r\t\n\s]', '', match)
+            try:
+                bindata = base64.b64decode(match)
+                x509 = load_der_x509_certificate(bindata, self.get_backend())
+
+                self.num_ldiff_cert += 1
+                self.process_x509(x509, name=name, pem=False, source='ldiff-cert')
+
+            except Exception as e:
+                logger.debug('Error in line ldiff file processing %s, idx %s, matchlen %s : %s'
+                             % (name, idx, len(match), e))
+                self.trace_logger.log(e)
+
     #
     # Helpers & worker
     #
@@ -877,6 +916,7 @@ class IontFingerprinter(object):
         logger.info('.. SSH keys:  . . . %s' % self.num_ssh)
         logger.info('.. APK keys:  . . . %s' % self.num_apk)
         logger.info('.. JSON keys: . . . %s' % self.num_json)
+        logger.info('.. LDIFF certs: . . %s' % self.num_ldiff_cert)
         logger.debug('. Total RSA keys . %s  (# of keys RSA extracted & analyzed)' % self.num_rsa)
         if self.found > 0:
             logger.info('Fingerprinted keys found: %s' % self.found)
@@ -915,6 +955,9 @@ class IontFingerprinter(object):
 
         parser.add_argument('--file-json', dest='file_json', default=False, action='store_const', const=True,
                             help='JSON file')
+
+        parser.add_argument('--file-ldiff', dest='file_ldiff', default=False, action='store_const', const=True,
+                            help='LDIFF file')
 
         parser.add_argument('--key-fmt-base64', dest='key_fmt_base64', default=False, action='store_const', const=True,
                             help='Modulus per line, base64 encoded')
