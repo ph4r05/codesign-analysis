@@ -73,7 +73,7 @@ def random_isikukood():
 
     # year - century 0 -> live people.. start with 50
     #        century 1 -> adult people, none :P
-    year = random.randint(60, 99)
+    year = random.randint(50, 99)
 
     # generate random day & month in that year - ordinals
     minord = datetime.date(year=year, month=1, day=1).toordinal()
@@ -81,7 +81,9 @@ def random_isikukood():
     randord = random.randint(minord, maxord)
     rnddate = datetime.date.fromordinal(randord)
 
-    serial = random.randint(0, 999)
+    # serial = random.randint(0, 999)
+    serial = random.randint(1, 40)  # small serials
+
     code = '%d%02d%02d%02d%03d' % (d1, year, rnddate.month, rnddate.day, serial)
     return code + control_nr(code)
 
@@ -115,7 +117,7 @@ def main():
         try:
             logger.debug('A : %d, c: %s, t: %s, hits: %s' % (i, id, time.time(), hits))
 
-            res = get_pems_from_ldap(id, SIGN, DIGI)
+            res = get_pems_from_ldap(id, AUTH, IDCARD)
             logger.info('Success! Found: %s' % id)
 
             hits += 1
