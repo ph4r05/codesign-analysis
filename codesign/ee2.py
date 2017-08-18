@@ -28,16 +28,26 @@ class LdapError(Exception):
     pass
 
 
-def get_pems_from_ldap(idcode, cert_type, chip_type):
+def get_pems_from_ldap(idcode, cert_type=None, chip_type=None):
     """
     Fetches the certificate(s) of the idcode owner from SK LDAP.
     """
+    if isinstance(idcode, int):
+        idcode = str(idcode)
+
     assert idcode.isdigit() and len(idcode) == 11
 
+    query = []
+    if cert_type is not None:
+        query.append('ou=%s' % cert_type)
+    if chip_type is not None:
+        query.append('o=%s' % chip_type)
+    query.append('c=EE')
+
     server = ldap.initialize(LDAP_SERVER)
-    q = server.search('ou=%s,o=%s,c=EE' % (cert_type, chip_type), ldap.SCOPE_SUBTREE,
+    q = server.search(','.join(query), ldap.SCOPE_SUBTREE,
                       'serialNumber=%s' % idcode,
-                      ['userCertificate;binary'])
+                      [])  # ['userCertificate;binary'])
 
     result = server.result(q, timeout=10)
     if result[0] != ldap.RES_SEARCH_RESULT:
