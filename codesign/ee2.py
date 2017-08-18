@@ -170,7 +170,7 @@ def build_serial_pms():
 
     # significance groups
     add_score(pms, range(1, 40), 100)
-    add_score(pms, range(1, 99), 20)
+    add_score(pms, range(1, 99), 5)
 
     add_score(pms, range(200, 230), 6)
     add_score(pms, range(270, 280), 10)
@@ -251,11 +251,13 @@ def random_isikukood(serial_dist=None):
 def append_to_file(id):
     with open(DEF_ID_FILE, 'a+') as fh:
         fh.write('%s\n' % id)
+        fh.flush()
 
 
 def append_json_to_file(data):
     with open(DEF_JSON_FILE, 'a+') as fh:
         fh.write('%s\n' % data)
+        fh.flush()
 
 
 def load_idxs():
