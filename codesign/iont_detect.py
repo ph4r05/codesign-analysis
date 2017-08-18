@@ -16,6 +16,8 @@ The fingerprinter supports the following formats:
         a) base64 encoded number, b) hex coded number, c) decimal coded number
     - JSON file with moduli, one record per line, record with modulus has
         key "mod" (int, base64, hex, dec encoding supported)
+        certificate(s) with key "cert" / array of certificates with key "certs" are supported, base64 encoded DER.
+    - LDIFF file - LDAP database dump. Any field ending with ";binary::" is attempted to decode as X509 certificate
 
 Script requirements:
 
@@ -723,10 +725,14 @@ class IontFingerprinter(object):
                 self.process_js_mod(data['n'], name, idx, sub_idx)
             if 'mod' in data:
                 self.process_js_mod(data['mod'], name, idx, sub_idx)
+            if 'cert' in data:
+                self.process_js_certs([data['cert']], name, idx, sub_idx)
+            if 'certs' in data:
+                self.process_js_certs(data['certs'], name, idx, sub_idx)
 
     def process_js_mod(self, data, name, idx, sub_idx):
         """
-        Processes one moduli from JS
+        Processes one moduli from JSON
         :param data:
         :param name:
         :param idx:
@@ -746,6 +752,29 @@ class IontFingerprinter(object):
             return
 
         self.process_mod_line(data, name, idx, aux={'stype': 'json', 'sub_idx': sub_idx})
+
+    def process_js_certs(self, data, name, idx, sub_idx):
+        """
+        Process one certificate from JSON
+        :param data:
+        :param name:
+        :param idx:
+        :param sub_idx:
+        :return:
+        """
+        from cryptography.x509.base import load_der_x509_certificate
+        for crt_hex in data:
+            try:
+                bindata = base64.b64decode(crt_hex)
+                x509 = load_der_x509_certificate(bindata, self.get_backend())
+
+                self.num_ldiff_cert += 1
+                self.process_x509(x509, name=name, pem=False, source='ldiff-cert')
+
+            except Exception as e:
+                logger.debug('Error in line JSON cert file processing %s, idx %s, subidx %s : %s'
+                             % (name, idx, sub_idx, e))
+                self.trace_logger.log(e)
 
     def process_apk(self, data, name):
         """
