@@ -4,6 +4,9 @@
 import ldap, base64, textwrap, time, random, datetime
 import logging
 import coloredlogs
+import itertools
+from past.builtins import cmp
+
 
 LDAP_SERVER = "ldap://ldap.sk.ee"
 
@@ -16,8 +19,12 @@ RESIDENT_MID = "ESTEID (MOBIIL-ID E-RESIDENT)"
 AUTH = "Authentication"
 SIGN = "Digital Signature"
 
-SLEEP_OK = 5
+SLEEP_OK = 6
 SLEEP_ERR = 60*10
+
+# SERIALS = sorted([int(str(x)[7:10]) for x in ISIKUKOODS])
+SERIALS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 12, 12, 13, 14, 14, 15, 15, 15, 16, 17, 21, 21, 21, 21, 22, 22, 22, 23, 23, 23, 23, 24, 24, 24, 24, 25, 25, 25, 25, 25, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 28, 29, 29, 29, 29, 30, 31, 32, 32, 33, 33, 34, 34, 35, 36, 38, 38, 39, 90, 202, 222, 223, 225, 271, 271, 271, 272, 272, 272, 273, 273, 273, 273, 273, 274, 279, 371, 421, 421, 423, 423, 423, 423, 493, 521, 521, 521, 521, 521, 524, 571, 571, 572, 601, 601, 601, 601, 601, 602, 602, 602, 602, 602, 604, 651, 651, 651, 651, 652, 652, 654]
+
 
 _ = lambda x: x  # please copypaste from lib/libldap.py
 logger = logging.getLogger(__name__)
@@ -67,11 +74,78 @@ def _get_pem_from_der(der):
     Converts DER certificate to PEM.
     """
     return "\n".join(("-----BEGIN CERTIFICATE-----",
-        "\n".join(textwrap.wrap(base64.b64encode(der), 64)),
-        "-----END CERTIFICATE-----",))
+                      "\n".join(textwrap.wrap(base64.b64encode(der), 64)),
+                      "-----END CERTIFICATE-----",))
 
 
-def random_isikukood():
+def add_score(pms, range, score):
+    """
+    Adds score to the pms
+    :param pms:
+    :param range:
+    :param score:
+    :return:
+    """
+    for x in range:
+        pms[x] += score
+
+
+def normalize(pms):
+    """
+    Normalizes pms scores to 1
+    :param pms:
+    :return:
+    """
+    total = sum(pms)
+    fact = 1.0/total
+    for x in range(len(pms)):
+        pms[x] *= fact
+    return pms
+
+
+def build_serial_pms():
+    """
+    Probability mass function on serials from collected samples
+    :return:
+    """
+    hists = sorted(SERIALS)
+    pms = [0.005] * 1000  # serial pms, baseline score
+
+    # significance groups
+    add_score(pms, range(1, 99), 50)
+    add_score(pms, range(200, 300), 6)
+    add_score(pms, range(300, 400), 4)
+    add_score(pms, range(400, 500), 4)
+    add_score(pms, range(500, 600), 7)
+    add_score(pms, range(600, 700), 8)
+
+    # collected data - adding points
+    # give away another 100 points in total
+    total = len(hists)
+    one_pt = 100.0 / float(total)
+    for k, g in itertools.groupby(hists, lambda x: x):
+        pms[k] += one_pt * len(list(g))
+
+    # normalize for use as pms
+    pmsn = normalize(pms)
+    return pmsn
+
+
+def build_serial_dist(pms):
+    """
+    Builds discrete distribution with probability mass function
+    :param pms:
+    :return:
+    """
+    from scipy import stats
+    import numpy as np
+
+    xk = np.arange(1000)
+    custm = stats.rv_discrete(name='custm', values=(xk, pms))
+    return custm
+
+
+def random_isikukood(serial_dist):
     """
     Generates random personal code / isikukood
     :return:
