@@ -9,6 +9,7 @@ import json
 from json import JSONEncoder
 import decimal
 import os
+import sys
 import collections
 import argparse
 import socket
@@ -85,7 +86,12 @@ class EeFetch(object):
         """
         Fetches the certificate(s) of the idcode owner from SK LDAP.
         """
-        import ldap
+        try:
+            import ldap
+        except:
+            logger.error('Could not import ldap. Try: pip install python-ldap')
+            sys.exit(1)
+        
         if isinstance(idcode, int):
             idcode = str(idcode)
 
@@ -285,7 +291,7 @@ class EeFetch(object):
         if self.args.add_id:
             pid = os.getpid()
             self.id_file = '%s_%s_%s.txt' % (self.id_file, pid, self.hostname)
-            self.json_file = '%s_%s_%s.txt' % (self.json_file, pid, self.hostname)
+            self.json_file = '%s_%s_%s.json' % (self.json_file, pid, self.hostname)
         else:
             self.id_file += '.txt'
             self.json_file += '.json'
