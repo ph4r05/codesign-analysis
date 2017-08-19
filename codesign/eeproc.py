@@ -44,6 +44,8 @@ class Eeproc(object):
         self.big_nose = BigNose()
 
         self.totals = collections.defaultdict(lambda: [0, 0])
+        self.non_rsa_cats = collections.defaultdict(lambda: 0)
+        self.totals_key_types = collections.defaultdict(lambda: 0)
         self.db = []
 
         self.num_der_certs = 0
@@ -143,7 +145,7 @@ class Eeproc(object):
         else:
             raise Exception('Unrecognized O: %s' % dnl)
 
-    def process_der(self, data, js, serial, desc, idx):
+    def process_der(self, data, js, dn, serial, desc, idx):
         """
         DER processing
         :param data:
@@ -155,13 +157,13 @@ class Eeproc(object):
         try:
             x509 = load_der_x509_certificate(data, self.get_backend())
             self.num_der_certs += 1
-            return self.process_x509(x509, js=js, serial=serial, desc=desc, idx=idx)
+            return self.process_x509(x509, js=js, dn=dn, serial=serial, desc=desc, idx=idx)
 
         except Exception as e:
             logger.debug('DER processing failed: %s : %s' % (js['id'], e))
         return None
 
-    def process_x509(self, x509, js, serial, desc, idx):
+    def process_x509(self, x509, js, dn, serial, desc, idx):
         """
         Processing parsed X509 certificate
         :param x509:
@@ -175,7 +177,9 @@ class Eeproc(object):
         from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
         pub = x509.public_key()
+        self.totals_key_types[str(pub.__class__)] += 1
         if not isinstance(pub, RSAPublicKey):
+            self.non_rsa_cats[desc] += 1
             return None
 
         self.num_rsa += 1
@@ -221,7 +225,7 @@ class Eeproc(object):
                     totals_obj = self.totals[desc]
                     totals_obj[0] += 1
                     try:
-                        cert_pos = self.process_der(bindata, rec, id, desc, idx)
+                        cert_pos = self.process_der(bindata, rec, dn, id, desc, idx)
                         if cert_pos:
                             totals_obj[1] += 1
                             logger.warning('Nice DN: %s' % dn)
@@ -247,9 +251,16 @@ class Eeproc(object):
                     pad = ' ' + pad
                 print('%s %s %4d / %4d ~ %3.5f %%' % (pref, pad, cur[1], cur[0], cur[1]*100.0/cur[0] if cur[0] > 0 else -1))
 
-        # print(json.dumps(self.totals, indent=2))
+        print('\nTotals per user: ')
         print(json.dumps(people_counts, indent=2))
-        logger.info('DER certs: %s, rsa: %s, people: %s' % (self.num_der_certs, self.num_rsa, num_people))
+
+        print('\nTotal key types: ')
+        print(json.dumps(self.totals_key_types, indent=2))
+
+        print('\nNon-RSA key occurences: ')
+        print(json.dumps(self.non_rsa_cats, indent=2))
+
+        print('\nDER certs: %s, rsa: %s, people: %s' % (self.num_der_certs, self.num_rsa, num_people))
 
 
 def main():
