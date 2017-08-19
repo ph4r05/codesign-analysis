@@ -18,11 +18,12 @@ The fingerprinter supports the following formats:
         key "mod" (int, base64, hex, dec encoding supported)
         certificate(s) with key "cert" / array of certificates with key "certs" are supported, base64 encoded DER.
     - LDIFF file - LDAP database dump. Any field ending with ";binary::" is attempted to decode as X509 certificate
+    - Java Key Store file (JKS). Tries empty password & some common, specify more with --jks-pass-file
 
 Script requirements:
 
     - Tested on Python 2.7.13
-    - pip install cryptography pgpdump coloredlogs future six pycrypto>=2.6 python-dateutil pyx509_ph4 apk_parse_ph4
+    - pip install cryptography pgpdump coloredlogs future six pycrypto>=2.6 python-dateutil pyx509_ph4 apk_parse_ph4 pyjks
     - some system packages are usually needed for pip to install dependencies (like gcc):
         yum install gcc openssl-devel libffi-devel dialog
 
@@ -152,6 +153,9 @@ class IontFingerprinter(object):
     def __init__(self):
         self.args = None
         self.trace_logger = Tracelogger(logger)
+        self.jks_passwords = ['', 'changeit', 'chageit', 'root', 'server', 'test', 'alias', 'jks',
+                              'tomcat', 'www', 'web', 'https']
+        self.jks_file_passwords = None
 
         self.tested = 0
         self.num_rsa = 0
@@ -164,6 +168,7 @@ class IontFingerprinter(object):
         self.num_json = 0
         self.num_apk = 0
         self.num_ldiff_cert = 0
+        self.num_jks_cert = 0
         self.found = 0
 
     def has_fingerprint_test(self, modulus):
@@ -287,6 +292,9 @@ class IontFingerprinter(object):
         logger.debug('processing %s as LDIFF' % name)
         self.process_ldiff(data, name)
 
+        logger.debug('processing %s as JKS' % name)
+        self.process_jks(data, name)
+
     def process_file_autodetect(self, data, name):
         """
         Processes a single file - format autodetection
@@ -327,7 +335,9 @@ class IontFingerprinter(object):
         is_ldiff = self.file_matches_extensions(name, ['ldiff', 'ldap']) or is_ldiff_file
         is_ldiff |= self.args.file_ldiff
 
-        det = is_pem or is_der or is_pgp or is_ssh or is_mod or is_json or is_apk
+        is_jks = self.file_matches_extensions(name, ['jks', 'bks'])
+
+        det = is_pem or is_der or is_pgp or is_ssh or is_mod or is_json or is_apk or is_ldiff or is_jks
         if is_pem:
             logger.debug('processing %s as PEM' % name)
             self.process_pem(data, name)
@@ -359,6 +369,10 @@ class IontFingerprinter(object):
         if is_ldiff:
             logger.debug('processing %s as LDIFF' % name)
             self.process_ldiff(data, name)
+
+        if is_jks:
+            logger.debug('processing %s as JKS' % name)
+            self.process_jks(data, name)
 
         if not det:
             logger.debug('Undetected (skipped) file: %s' % name)
@@ -905,6 +919,74 @@ class IontFingerprinter(object):
                              % (name, idx, len(match), e))
                 self.trace_logger.log(e)
 
+    def process_jks(self, data, name):
+        """
+        Processes Java Key Store file
+        :param data:
+        :param name:
+        :return:
+        """
+        if self.jks_file_passwords is None and self.args.jks_pass_file is not None:
+            self.jks_file_passwords = []
+            if not os.path.exists(self.args.jks_pass_file):
+                logger.warning('JKS password file %s does not exist' % self.args.jks_pass_file)
+            with open(self.args.jks_pass_file) as fh:
+                self.jks_file_passwords = sorted(list(set([x.strip() for x in fh])))
+
+        ks = self.try_open_jks(data, name)
+        if ks is None:
+            logger.warning('Could not open JKS file: %s, password not valid, '
+                           'try specify passwords in --jks-pass-file' % name)
+            return
+
+        # certs
+        from cryptography.x509.base import load_der_x509_certificate
+        for alias, cert in ks.certs.items():
+            try:
+                x509 = load_der_x509_certificate(cert.cert, self.get_backend())
+
+                self.num_jks_cert += 1
+                self.process_x509(x509, name=name, pem=False, source='jks-cert', aux='cert-%s' % alias)
+
+            except Exception as e:
+                logger.debug('Error in JKS cert processing %s, alias %s : %s' % (name, alias, e))
+                self.trace_logger.log(e)
+
+        # priv key chains
+        for alias, pk in ks.private_keys.items():
+            for idx, cert in enumerate(pk.cert_chain):
+                try:
+                    x509 = load_der_x509_certificate(cert[1], self.get_backend())
+
+                    self.num_jks_cert += 1
+                    self.process_x509(x509, name=name, pem=False, source='jks-cert-chain',
+                                      aux='cert-chain-%s-%s' % (alias, idx))
+
+                except Exception as e:
+                    logger.debug('Error in JKS priv key cert-chain processing %s, alias %s %s : %s'
+                                 % (name, alias, idx, e))
+                    self.trace_logger.log(e)
+
+    def try_open_jks(self, data, name):
+        """
+        Tries to guess JKS password
+        :param data:
+        :return:
+        """
+        try:
+            import jks
+        except:
+            logger.error('Could not import jks, try running: pip install pyjks')
+            return None
+
+        pwdlist = sorted(list(set(self.jks_file_passwords + self.jks_passwords)))
+        for cur in pwdlist:
+            try:
+                return jks.KeyStore.loads(data, cur)
+            except Exception as e:
+                pass
+        return None
+
     #
     # Helpers & worker
     #
@@ -946,6 +1028,7 @@ class IontFingerprinter(object):
         logger.info('.. APK keys:  . . . %s' % self.num_apk)
         logger.info('.. JSON keys: . . . %s' % self.num_json)
         logger.info('.. LDIFF certs: . . %s' % self.num_ldiff_cert)
+        logger.info('.. JKS certs: . . . %s' % self.num_jks_cert)
         logger.debug('. Total RSA keys . %s  (# of keys RSA extracted & analyzed)' % self.num_rsa)
         if self.found > 0:
             logger.info('Fingerprinted keys found: %s' % self.found)
@@ -996,6 +1079,9 @@ class IontFingerprinter(object):
 
         parser.add_argument('--key-fmt-dec', dest='key_fmt_dec', default=False, action='store_const', const=True,
                             help='Modulus per line, dec encoded')
+
+        parser.add_argument('--jks-pass-file', dest='jks_pass_file', default=None,
+                            help='Password file for JKS, one per line')
 
         parser.add_argument('files', nargs=argparse.ZERO_OR_MORE, default=[],
                             help='files to process')
