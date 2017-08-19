@@ -31,8 +31,8 @@ SIGN = "Digital Signature"
 
 SLEEP_OK = 6
 SLEEP_ERR = 60*10
-DEF_ID_FILE = './eeids'
-DEF_JSON_FILE = './eeids'
+DEF_ID_FILE = 'eeids'
+DEF_JSON_FILE = 'eeids'
 
 # SERIALS = sorted([int(str(x)[7:10]) for x in ISIKUKOODS])
 SERIALS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 12, 12, 13, 14, 14, 15, 15, 15, 16, 17, 21, 21, 21, 21, 22, 22, 22, 23, 23, 23, 23, 24, 24, 24, 24, 25, 25, 25, 25, 25, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 28, 29, 29, 29, 29, 30, 31, 32, 32, 33, 33, 34, 34, 35, 36, 38, 38, 39, 90, 202, 222, 223, 225, 271, 271, 271, 272, 272, 272, 273, 273, 273, 273, 273, 274, 279, 371, 421, 421, 423, 423, 423, 423, 493, 521, 521, 521, 521, 521, 524, 571, 571, 572, 601, 601, 601, 601, 601, 602, 602, 602, 602, 602, 604, 651, 651, 651, 651, 652, 652, 654]
@@ -260,7 +260,7 @@ class EeFetch(object):
         :return:
         """
         # pick those likely alive and already having IDs
-        year = random.randint(1950, 2002)
+        year = random.randint(1950, 2003)
         century = (year - 1800) / 100
 
         sex = random.randint(1, 2)  # 1,2 for 18xx | 3,4 for 19xx | 5,6 for 20xx
@@ -287,14 +287,17 @@ class EeFetch(object):
         """
         self.id_file = os.path.join(self.args.outputdir, DEF_ID_FILE)
         self.json_file = os.path.join(self.args.outputdir, DEF_JSON_FILE)
+        pid = os.getpid()
 
         if self.args.add_id:
-            pid = os.getpid()
             self.id_file = '%s_%s_%s.txt' % (self.id_file, self.hostname, pid)
             self.json_file = '%s_%s_%s.json' % (self.json_file, self.hostname, pid)
         else:
             self.id_file += '.txt'
             self.json_file += '.json'
+
+        logger.info('ID file: %s @ %s.%s' % (self.id_file, self.hostname, pid))
+        logger.info('JS file: %s % %s.%s' % (self.json_file, self.hostname, pid))
 
     def append_to_file(self, id):
         with open(self.id_file, 'a+') as fh:
