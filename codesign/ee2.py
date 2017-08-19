@@ -260,7 +260,7 @@ class EeFetch(object):
         :return:
         """
         # pick those likely alive and already having IDs
-        year = random.randint(1950, 2003)
+        year = random.randint(1950, 2006)
         century = (year - 1800) / 100
 
         sex = random.randint(1, 2)  # 1,2 for 18xx | 3,4 for 19xx | 5,6 for 20xx
