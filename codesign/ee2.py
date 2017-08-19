@@ -91,7 +91,7 @@ class EeFetch(object):
         except:
             logger.error('Could not import ldap. Try: pip install python-ldap')
             sys.exit(1)
-        
+
         if isinstance(idcode, int):
             idcode = str(idcode)
 
@@ -290,8 +290,8 @@ class EeFetch(object):
 
         if self.args.add_id:
             pid = os.getpid()
-            self.id_file = '%s_%s_%s.txt' % (self.id_file, pid, self.hostname)
-            self.json_file = '%s_%s_%s.json' % (self.json_file, pid, self.hostname)
+            self.id_file = '%s_%s_%s.txt' % (self.id_file, self.hostname, pid)
+            self.json_file = '%s_%s_%s.json' % (self.json_file, self.hostname, pid)
         else:
             self.id_file += '.txt'
             self.json_file += '.json'
