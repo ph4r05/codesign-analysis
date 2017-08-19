@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import ldap, base64, textwrap, time, random, datetime
+import base64, textwrap, time, random, datetime
 import logging
 import coloredlogs
 import itertools
@@ -77,6 +77,7 @@ def get_pems_from_ldap(idcode, cert_type=None, chip_type=None):
     """
     Fetches the certificate(s) of the idcode owner from SK LDAP.
     """
+    import ldap
     if isinstance(idcode, int):
         idcode = str(idcode)
 
@@ -277,6 +278,23 @@ def load_processed():
     return ret
 
 
+def plot_pms(dist):
+    """
+    Plots PMF of the distribution
+    :param dist:
+    :return:
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    xk = np.arange(1000)
+    fig, ax = plt.subplots(1, 1)
+    ax.bar(xk, dist.pmf(xk))
+    # ax.plot(xk, dist.pmf(xk), 'ro', ms=12, mec='r')
+    # ax.vlines(xk, 0, dist.pmf(xk), colors='r', lw=4)
+    plt.show()
+
+
 def main():
     parser = argparse.ArgumentParser(description='EE loader')
 
@@ -285,6 +303,9 @@ def main():
 
     parser.add_argument('--pms', dest='pms', default=False, action='store_const', const=True,
                         help='Use observed PMS')
+
+    parser.add_argument('--pms-plot', dest='pms_plot', default=False, action='store_const', const=True,
+                        help='Plot PMS only and exit')
 
     args = parser.parse_args()
     slp = SLEEP_OK
@@ -297,9 +318,13 @@ def main():
 
     pms = build_serial_pms()
     cust_dist = build_serial_dist(pms)
-    dist = cust_dist if args.pms else None
+    dist = cust_dist if args.pms or args.pms_plot else None
     if dist is not None:
         logger.info('Using custom PMS')
+
+    if args.pms_plot:
+        plot_pms(dist)
+        return
 
     for i in range(50000):
         id = random_isikukood(dist)
