@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import ldap, base64, textwrap, time, random, datetime
+import base64, textwrap, time, random, datetime
 import logging
 import coloredlogs
 import itertools
@@ -105,7 +105,7 @@ class Eeproc(object):
 
     def smells_nice(self, mod):
         """
-        Fingerprint
+        Smelling detection
         :param mod:
         :return:
         """
@@ -144,6 +144,26 @@ class Eeproc(object):
             return RESIDENT_MID
         else:
             raise Exception('Unrecognized O: %s' % dnl)
+
+    def year_from_serial(self, s):
+        """
+        Returns year from the serial
+        :param s:
+        :return:
+        """
+        s = str(s)
+        lst = int(s[1:3])
+        d1 = (int(s[0])-1) / 2
+        return 1800 + d1 * 100 + lst
+
+    def serial_from_serial(self, s):
+        """
+        Serial number from the ID
+        :param s:
+        :return:
+        """
+        s = str(s)
+        return int(s[7:10])
 
     def process_der(self, data, js, dn, serial, desc, idx):
         """
@@ -185,12 +205,12 @@ class Eeproc(object):
         self.num_rsa += 1
         pubnum = x509.public_key().public_numbers()
         if self.smells_nice(pubnum.n):
-            logger.warning('Fingerprint found in the Certificate %s idx %s desc %s  ' % (serial, idx, desc))
+            # logger.warning('Good Certificate %s idx %s desc %s  ' % (serial, idx, desc))
             js = collections.OrderedDict()
             js['serial'] = serial
             js['desc'] = desc
             js['id'] = idx
-            js['fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))
+            js['fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))[:16]
             print(json.dumps(js))
             return True
         return False
@@ -204,10 +224,15 @@ class Eeproc(object):
         recs = self.load_processed(fnames)
 
         num_people = 0
+        nice_numbers = []
+        all_ids = []
         people_counts = collections.defaultdict(lambda: 0)
+        nice_years = collections.defaultdict(lambda: 0)
+        all_years = collections.defaultdict(lambda: 0)
 
         for rec in recs:
             id = int(rec['id'])
+            all_ids.append(id)
             num_people += 1
 
             for res in rec['res']:
@@ -228,10 +253,12 @@ class Eeproc(object):
                         cert_pos = self.process_der(bindata, rec, dn, id, desc, idx)
                         if cert_pos:
                             totals_obj[1] += 1
-                            logger.warning('Nice DN: %s' % dn)
+                            if cat_uo == AUTH and cat_o == IDCARD:
+                                nice_numbers.append(id)
                     except Exception as e:
                         logger.warning('Exception : %s' % e)
 
+        # Categories nice / all
         longest = 0
         for o in [IDCARD, DIGI, MID, RESIDENT_DIGI, RESIDENT_MID]:
             for uo in [AUTH, SIGN]:
@@ -261,6 +288,56 @@ class Eeproc(object):
         print(json.dumps(self.non_rsa_cats, indent=2))
 
         print('\nDER certs: %s, rsa: %s, people: %s' % (self.num_der_certs, self.num_rsa, num_people))
+
+        # y-analysis
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        nice_numbers = sorted(list(set(nice_numbers)))
+        all_ids = sorted(list(set(all_ids)))
+        for cur in nice_numbers:
+            nice_years[self.year_from_serial(cur)] += 1
+        for cur in all_ids:
+            all_years[self.year_from_serial(cur)] += 1
+
+        xaxis = np.arange(1950, 2003)
+        width = 0.35
+
+        all_y = [all_years[i] for i in xaxis]
+        nice_y = [nice_years[i] for i in xaxis]
+        fact = float(sum(all_y)) / sum(nice_y)
+        nice_y = [x * fact for x in nice_y]
+
+        fig, ax = plt.subplots()
+        rects1 = ax.bar(xaxis, nice_y, width, color='b')
+        rects2 = ax.bar(xaxis + width, all_y, width, color='y')
+        ax.legend((rects1[0], rects2[0]), ('Nice', 'All'))
+        ax.set_ylabel('Count')
+        ax.set_title('Year vs. count')
+        plt.show()
+
+        # serial analysis
+        all_serials = collections.defaultdict(lambda: 0)
+        nice_serials = collections.defaultdict(lambda: 0)
+        for cur in [self.serial_from_serial(x) for x in all_ids]:
+            all_serials[cur] += 1
+        for cur in [self.serial_from_serial(x) for x in nice_numbers]:
+            nice_serials[cur] += 1
+
+        fig, ax = plt.subplots()
+        xaxis = np.arange(0, 1000)
+
+        all_y = [all_serials[i] for i in xaxis]
+        nice_y = [nice_serials[i] for i in xaxis]
+        fact = float(sum(all_y)) / sum(nice_y)
+        nice_y = [x * fact for x in nice_y]
+
+        rects1 = ax.bar(xaxis, nice_y, width, color='b')
+        rects2 = ax.bar(xaxis + width, all_y, width, color='y')
+        ax.legend((rects1[0], rects2[0]), ('Nice', 'All'))
+        ax.set_ylabel('Count')
+        ax.set_title('Serials vs. count')
+        plt.show()
 
 
 def main():
