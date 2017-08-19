@@ -173,11 +173,11 @@ def build_serial_pms():
     add_score(pms, range(1, 99), 5)
 
     add_score(pms, range(200, 230), 6)
-    add_score(pms, range(270, 280), 10)
+    add_score(pms, range(270, 280), 15)
     add_score(pms, range(420, 430), 5)
-    add_score(pms, range(520, 530), 5)
-    add_score(pms, range(600, 610), 10)
-    add_score(pms, range(650, 660), 8)
+    add_score(pms, range(520, 530), 8)
+    add_score(pms, range(600, 610), 15)
+    add_score(pms, range(650, 660), 11)
 
     # collected data - adding points
     # give away another 100 points in total
@@ -234,8 +234,8 @@ def random_isikukood(serial_dist=None):
     year = random.randint(50, 99)
 
     # generate random day & month in that year - ordinals
-    minord = datetime.date(year=year, month=1, day=1).toordinal()
-    maxord = datetime.date(year=year, month=12, day=31).toordinal()
+    minord = datetime.date(year=1900+year, month=1, day=1).toordinal()
+    maxord = datetime.date(year=1900+year, month=12, day=31).toordinal()
     randord = random.randint(minord, maxord)
     rnddate = datetime.date.fromordinal(randord)
 
