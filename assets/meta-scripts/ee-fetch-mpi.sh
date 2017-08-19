@@ -20,7 +20,7 @@ sleep 3
 
 echo "`hostname` starting..."
 
-exec mpirun -machinefile $PBS_NODEFILE \
+mpirun -machinefile $PBS_NODEFILE \
 /bin/bash /storage/praha1/home/ph4r05/cas/assets/meta-scripts/ee-fetch-submpi.sh "${SCRATCH}"
 
 echo "Finished, fetching"
@@ -28,4 +28,5 @@ for srv in `cat $PBS_NODEFILE`; do
     echo "Fetching $srv"
     scp $srv:"${SCRATCH}/*" /storage/brno3-cerit/home/ph4r05/eeids-mpis
 done
+
 
