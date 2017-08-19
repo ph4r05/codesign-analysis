@@ -18,9 +18,10 @@ sleep 3
 pyenv local 2.7.13
 sleep 3
 
-echo "`hostname` starting..."
+SUBSCRATCH=${1:-$SCRATCH}
+echo "`hostname` starting... $SUBSCRATCH"
 
 exec stdbuf -eL python /storage/praha1/home/ph4r05/cas/codesign/ee2.py \
-    --output-dir /storage/brno3-cerit/home/ph4r05/eeids \
-    --pms --add-id --one-bulk
+    --output-dir "${SUBSCRATCH}" \
+    --pms --add-id
 
