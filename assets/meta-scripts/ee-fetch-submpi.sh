@@ -1,6 +1,10 @@
 #!/bin/bash
 
-HOMEDIR="/storage/praha1/home/${LOGNAME}"
+# MPI has sometimes access issues to different localities so all required libs
+# have to be available in the current locality.
+# HOMEDIR="/storage/praha1/home/${LOGNAME}"
+
+HOMEDIR=~
 cd $HOMEDIR
 
 export MPICH_NEMESIS_NETMOD=tcp
@@ -21,7 +25,7 @@ sleep 3
 SUBSCRATCH=${1:-$SCRATCH}
 echo "`hostname` starting... $SUBSCRATCH"
 
-exec stdbuf -eL python /storage/praha1/home/ph4r05/cas/codesign/ee2.py \
+exec stdbuf -eL python ~/cas/codesign/ee2.py \
     --output-dir "${SUBSCRATCH}" \
     --pms --add-id
 
