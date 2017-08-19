@@ -214,11 +214,13 @@ pip install SQLAlchemy
 Ubuntu:
 ```
 sudo apt-get install python-pip python-dev libmysqlclient-dev
+sudo apt-get install libsasl2-dev python-dev libldap2-dev libssl-dev
 ```
 
 CentOS:
 ```
 sudo yum install python python-devel mysql-devel redhat-rpm-config gcc
+sudo yum install python-devel openldap-devel
 ```
 
 ## Scipy installation with pip

@@ -2,9 +2,10 @@
 
 # MPI has sometimes access issues to different localities so all required libs
 # have to be available in the current locality.
-# HOMEDIR="/storage/praha1/home/${LOGNAME}"
 
-HOMEDIR=~
+# HOMEDIR="/storage/praha1/home/${LOGNAME}"
+# HOMEDIR=~
+HOMEDIR=.
 cd $HOMEDIR
 
 export MPICH_NEMESIS_NETMOD=tcp
