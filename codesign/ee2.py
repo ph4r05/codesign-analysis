@@ -297,7 +297,7 @@ class EeFetch(object):
             self.json_file += '.json'
 
         logger.info('ID file: %s @ %s.%s' % (self.id_file, self.hostname, pid))
-        logger.info('JS file: %s % %s.%s' % (self.json_file, self.hostname, pid))
+        logger.info('JS file: %s @ %s.%s' % (self.json_file, self.hostname, pid))
 
     def append_to_file(self, id):
         with open(self.id_file, 'a+') as fh:
