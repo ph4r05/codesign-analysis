@@ -357,6 +357,8 @@ class EeFetch(object):
         found = []
 
         self.init_file_names()
+        if self.args.add_id:
+            time.sleep(random.uniform(0, slp))
 
         loaded = set(self.load_processed())
         do_first = sorted(list(set([x for x in self.load_idxs() if x not in loaded])))
@@ -394,7 +396,7 @@ class EeFetch(object):
 
             except Exception as e:
                 if 'desc' in e.message and 'LDAP server' in e.message['desc']:
-                    logger.warning('LDAP server blocked')
+                    logger.warning('LDAP server blocked @ %s' % self.hostname)
                     if self.args.one_bulk:
                         logger.info('One bulk, terminating')
                         return
