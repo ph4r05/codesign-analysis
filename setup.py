@@ -33,7 +33,8 @@ install_requires = [
     'dpkt',
     'py-lz4framed_ph4',
     'python-dateutil',
-    'mpi4py'
+    'pyjks',
+    # 'mpi4py'
 ]
 
 dev_extras = [
