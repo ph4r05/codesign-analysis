@@ -178,24 +178,31 @@ class EeFetch(object):
         return pms
 
     @staticmethod
-    def build_serial_pms():
+    def build_serial_pms(ex):
         """
         Probability mass function on serials from collected samples
         :return:
         """
         hists = sorted(SERIALS)
-        pms = [0.005] * 1000  # serial pms, baseline score
+        pms = [0.005 if not ex else 1] * 1000  # serial pms, baseline score
 
         # significance groups
-        EeFetch.add_score(pms, range(1, 40), 100)
-        EeFetch.add_score(pms, range(1, 99), 5)
+        EeFetch.add_score(pms, range(1, 40), 100 if not ex else 50)
+        EeFetch.add_score(pms, range(1, 99), 5 if not ex else 25)
 
-        EeFetch.add_score(pms, range(200, 230), 6)
-        EeFetch.add_score(pms, range(270, 280), 15)
-        EeFetch.add_score(pms, range(420, 430), 5)
-        EeFetch.add_score(pms, range(520, 530), 8)
-        EeFetch.add_score(pms, range(600, 610), 15)
-        EeFetch.add_score(pms, range(650, 660), 11)
+        if ex:
+            EeFetch.add_score(pms, range(200, 300), 25)
+            EeFetch.add_score(pms, range(400, 500), 25)
+            EeFetch.add_score(pms, range(500, 600), 25)
+            EeFetch.add_score(pms, range(600, 700), 25)
+
+        else:
+            EeFetch.add_score(pms, range(200, 230), 6)
+            EeFetch.add_score(pms, range(270, 280), 15)
+            EeFetch.add_score(pms, range(420, 430), 5)
+            EeFetch.add_score(pms, range(520, 530), 8)
+            EeFetch.add_score(pms, range(600, 610), 15)
+            EeFetch.add_score(pms, range(650, 660), 11)
 
         # collected data - adding points
         # give away another 100 points in total
@@ -272,8 +279,8 @@ class EeFetch(object):
         randord = random.randint(minord, maxord)
         rnddate = datetime.date.fromordinal(randord)
 
-        # serial = random.randint(0, 999)
-        serial = random.randint(1, 40)  # small serials
+        # serial = random.randint(0, 999)  # general serial space, not very effective though
+        serial = random.randint(1, 40)  # small serials, gives 1:3 success rate
         if serial_dist is not None:
             serial = serial_dist.rvs()
 
@@ -339,6 +346,9 @@ class EeFetch(object):
         parser.add_argument('--pms', dest='pms', default=False, action='store_const', const=True,
                             help='Use observed PMS')
 
+        parser.add_argument('--pms-ex', dest='pms_ex', default=False, action='store_const', const=True,
+                            help='Use observed PMS - extended')
+
         parser.add_argument('--output-dir', dest='outputdir', default='.',
                             help='Dir with output data')
 
@@ -364,11 +374,14 @@ class EeFetch(object):
         do_first = sorted(list(set([x for x in self.load_idxs() if x not in loaded])))
         logger.info('Non-processed: %s' % len(do_first))
 
-        pms = EeFetch.build_serial_pms()
+        pms = EeFetch.build_serial_pms(self.args.pms_ex)
         cust_dist = EeFetch.build_serial_dist(pms)
-        dist = cust_dist if self.args.pms or self.args.pms_plot else None
+
+        dist = cust_dist if self.args.pms or self.args.pms_ex or self.args.pms_plot else None
         if dist is not None:
             logger.info('Using custom PMS')
+        if self.args.pms_ex:
+            logger.info('Using extended PMS')
 
         if self.args.pms_plot:
             EeFetch.plot_pms(dist)

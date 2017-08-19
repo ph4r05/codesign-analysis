@@ -28,5 +28,5 @@ echo "`hostname` starting... $SUBSCRATCH"
 
 exec stdbuf -eL python ~/cas/codesign/ee2.py \
     --output-dir "${SUBSCRATCH}" \
-    --pms --add-id
+    --pms-ex --add-id
 
