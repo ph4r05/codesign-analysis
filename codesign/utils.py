@@ -1145,3 +1145,47 @@ def nint(x):
         return 0
     return int(x)
 
+
+def is_string(x):
+    """
+    Py23 string type detection
+    :param x:
+    :return:
+    """
+    return isinstance(x, basestring)
+
+
+def is_number(x):
+    """
+    Py23 number detect
+    :param x:
+    :return:
+    """
+    return isinstance(x, (int, long, float))
+
+
+def try_parse_datetime_string(x):
+    """
+    Tries to parse try_parse_datetime_string
+    :param str:
+    :return:
+    """
+    try:
+        return dateutil.parser.parse(x)
+    except:
+        pass
+    return None
+
+
+def try_get_datetime_from_timestamp(x):
+    """
+    Converts number of seconds to datetime
+    :param x:
+    :return:
+    """
+    try:
+        return datetime.datetime.fromtimestamp(x)
+    except:
+        pass
+    return None
+
