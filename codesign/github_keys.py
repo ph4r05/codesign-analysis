@@ -740,8 +740,10 @@ class GitHubLoader(Cmd):
         :param raw_response:
         :return:
         """
+        js_empty = js is None or len(js) == 0
+
         # Expect failures, commit everything before
-        if self.merge:
+        if self.merge and not js_empty:
             try:
                 s = self.session()
                 s.commit()
