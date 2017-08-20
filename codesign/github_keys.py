@@ -724,6 +724,7 @@ class GitHubLoader(Cmd):
 
         # Store each key.
         for key in js:
+            s = None
             self.new_keys_events.insert()
 
             try:
