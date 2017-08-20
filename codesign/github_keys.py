@@ -42,6 +42,7 @@ import Queue
 from blessed import Terminal
 from cmd2 import Cmd
 from evt_dequeue import EvtDequeue
+import dbutil
 
 from github_base import AccessResource, RateLimitHit
 from database import GitHubKey, GitHubUser as GitHubUserDb
@@ -175,6 +176,8 @@ class GitHubLoader(Cmd):
         self.users_only = users_only
         self.users_per_page = 30
         self.users_bulk_load_pages = 500
+        self.user_load_bulk = 5000
+        self.user_refill_lock = Lock()
         self.state = state
         self.state_file_path = state_file
         self.rate_limit_reset = None
@@ -234,6 +237,10 @@ class GitHubLoader(Cmd):
         self.trigger_stop()
         utils.try_touch('.github-quit')
 
+    #
+    # CMD handlers
+    #
+
     def do_quit(self, arg):
         self.trigger_quit()
         logger.info('Waiting for thread termination')
@@ -281,6 +288,10 @@ class GitHubLoader(Cmd):
     def do_deq_disable(self, line):
         self.new_keys_events.disabled = True
         self.new_users_events.disabled = True
+
+    #
+    # Init
+    #
 
     def init_config(self):
         """
@@ -355,6 +366,10 @@ class GitHubLoader(Cmd):
         self.cmdloop()
         logger.info('Terminating CLI thread')
 
+    #
+    # Operation
+    #
+
     def work(self):
         """
         Main thread work method
@@ -375,9 +390,7 @@ class GitHubLoader(Cmd):
 
         # If there is no link to process - create from since.
         if self.link_queue.qsize() == 0:
-            job = DownloadJob(url=self.USERS_URL % self.since_id, jtype=DownloadJob.TYPE_USERS)
-            self.link_queue.put(job)
-            logger.info('Kickoff link added: %s' % job.url)
+            self.kickoff_links()
 
         # Worker threads
         self.init_workers()
@@ -393,6 +406,19 @@ class GitHubLoader(Cmd):
         self.after_loop()
         logger.info('Terminating main thread')
         return None
+
+    def kickoff_links(self):
+        """
+        Kick off the scrapping by adding initial links to the queue
+        :return:
+        """
+        if self.update_keys:
+            self.fill_user_key_links()
+
+        else:
+            job = DownloadJob(url=self.USERS_URL % self.since_id, jtype=DownloadJob.TYPE_USERS)
+            self.link_queue.put(job)
+            logger.info('Kickoff link added: %s' % job.url)
 
     def after_loop(self, wait_for_state=True):
         """
@@ -739,6 +765,22 @@ class GitHubLoader(Cmd):
                 utils.silent_close(s)
                 s = None
 
+        self.on_keys_processed()
+
+    def on_keys_processed(self):
+        """
+        Event called on keys have been processed.
+        Currently used to re-fill the link queue in the update key scenario.
+        :return:
+        """
+        if not self.update_keys:
+            return
+
+        with self.user_refill_lock:
+            qsize = self.link_queue.qsize()
+            if qsize < 30:
+                self.fill_user_key_links()
+
     def resource_allocate(self, blocking=True, timeout=1.0):
         """
         Takes resource from the pool.
@@ -921,6 +963,40 @@ class GitHubLoader(Cmd):
         self.state['rate_limit_remaining'] = self.rate_limit_remaining
         self.state['rate_limit_reset'] = self.rate_limit_reset
         utils.flush_json(self.state, self.state_file_path)
+
+    #
+    # DB
+    #
+
+    def fill_user_key_links(self):
+        """
+        Loads next X users from the database, advances since_id
+        :return:
+        """
+        # self.since_id
+        s = self.session()
+        try:
+            db_users = s.query(GitHubUserDb)\
+                .filter(GitHubUserDb.id > self.since_id)\
+                .order_by(GitHubUserDb.id)\
+                .limit(self.user_load_bulk)\
+                .all()
+
+            for user in db_users:
+                key_url = self.KEYS_URL % user.username
+                new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=user,
+                                      priority=random.randint(0, 1000), time_added=time.time())
+                self.link_queue.put(new_job)
+
+                if user.id > self.since_id:
+                    self.since_id = user.id
+
+        except Exception as e:
+            logger.warning('Exception in loading users: %s' % e)
+            utils.silent_rollback(s)
+
+        finally:
+            utils.silent_close(s)
 
     #
     # Auditing - errors, problems for further analysis
