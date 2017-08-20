@@ -846,6 +846,16 @@ class GitHubLoader(Cmd):
                 raise
             return 1
 
+    def load_existing_key(self, key, s):
+        """
+        Loads existing key if exists
+        :param key:
+        :param s:
+        :return:
+        """
+        key_id = int(key['id'])
+        return s.query(GitHubKey).filter(GitHubKey.id == key_id).one_or_none()
+
     def store_key(self, user, key, s):
         """
         Stores user key to the database.
@@ -854,7 +864,23 @@ class GitHubLoader(Cmd):
         :param s: current DB session
         :return:
         """
+
+        # Loading phase
+        existing_key = None
         try:
+            if self.merge or self.update_keys:
+                existing_key = self.load_existing_key(key, s)
+
+        except Exception as e:
+            logger.warning('Exception: %s' % e)
+
+        # Storing phase
+        try:
+            if existing_key is not None:
+                existing_key.date_last_check = salch.func.now()
+                s.merge(existing_key)
+                return 0
+
             key_id = int(key['id'])
             key_raw = key['key']
 
