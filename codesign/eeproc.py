@@ -211,7 +211,7 @@ class Eeproc(object):
             js['desc'] = desc
             js['id'] = idx
             js['fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))[:16]
-            print(json.dumps(js))
+            # print(json.dumps(js))
             return True
         return False
 
@@ -235,6 +235,9 @@ class Eeproc(object):
             all_ids.append(id)
             num_people += 1
 
+            has_auth = False
+            has_sign = False
+
             for res in rec['res']:
                 dn = res['dn']
                 certs = res['certs']
@@ -243,6 +246,12 @@ class Eeproc(object):
                 cat_uo = self.match_ou(dn)
                 if cat_uo == AUTH:
                     people_counts[cat_o] += 1
+
+                if cat_o == IDCARD:
+                    if cat_uo == AUTH:
+                        has_auth = True
+                    if cat_uo == SIGN:
+                        has_sign = True
 
                 desc = '%s_%s' % (cat_o, cat_uo)
                 for idx, crt_hex in enumerate(certs):
@@ -257,6 +266,9 @@ class Eeproc(object):
                                 nice_numbers.append(id)
                     except Exception as e:
                         logger.warning('Exception : %s' % e)
+
+            if has_auth != has_sign:
+                logger.warning('Not matching auth/sign: %s, %s' % (id, dn))
 
         # Categories nice / all
         longest = 0
