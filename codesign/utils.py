@@ -653,6 +653,14 @@ def silent_close(c):
         pass
 
 
+def silent_rollback(c):
+    try:
+        if c is not None:
+            c.rollback()
+    except:
+        pass
+
+
 def strip(x):
     """
     Strips string x (if non empty) or each string in x if it is a list
