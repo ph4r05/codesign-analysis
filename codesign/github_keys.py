@@ -155,7 +155,7 @@ class GitHubLoader(Cmd):
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
-                 max_mem=None, users_only=False, *args, **kwargs):
+                 max_mem=None, users_only=False, merge=False, update_keys=False, *args, **kwargs):
 
         Cmd.__init__(self, *args, **kwargs)
         self.t = Terminal()
@@ -170,6 +170,8 @@ class GitHubLoader(Cmd):
         self.processed_user_set_lock = Lock()
 
         self.max_mem = max_mem
+        self.merge = merge
+        self.update_keys = update_keys
         self.users_only = users_only
         self.users_per_page = 30
         self.users_bulk_load_pages = 500
@@ -575,7 +577,8 @@ class GitHubLoader(Cmd):
                 logger.error('Field ID not found in user')
                 continue
 
-            github_user = GitHubUser(user_id=long(user['id']), user_name=user['login'], user_type=user['type'], user_url=user['url'])
+            github_user = GitHubUser(user_id=int(user['id']), user_name=user['login'],
+                                     user_type=user['type'], user_url=user['url'])
             github_users.append(github_user)
 
             if github_user.user_id > max_id:
@@ -711,6 +714,14 @@ class GitHubLoader(Cmd):
         :param raw_response:
         :return:
         """
+        # Expect failures, commit everything before
+        if self.merge:
+            try:
+                s = self.session()
+                s.commit()
+            except Exception as e:
+                logger.warning('Could not pre-commit: %s' % e)
+
         # Store each key.
         for key in js:
             self.new_keys_events.insert()
@@ -843,7 +854,7 @@ class GitHubLoader(Cmd):
         :return:
         """
         try:
-            key_id = long(key['id'])
+            key_id = int(key['id'])
             key_raw = key['key']
 
             key_type, key_val = [utils.strip(x) for x in key_raw.split(' ', 1)]
@@ -1068,6 +1079,8 @@ def main():
                         help='Load only users list')
     parser.add_argument('--merge', dest='merge', default=False, action='store_const', const=True,
                         help='Merge DB operation - merge instead of add. slower, updates if exists')
+    parser.add_argument('--update-keys', dest='update_keys', default=False, action='store_const', const=True,
+                        help='Update keys for existing users')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
@@ -1083,7 +1096,7 @@ def main():
     sys.argv = [args_src[0]]
     logger.info('GitHub loader started, args: %s' % args)
     l = GitHubLoader(state_file=state_file, config_file=config_file, audit_file=audit_file, threads=args.threads,
-                     max_mem=args.max_mem, users_only=args.users_only)
+                     max_mem=args.max_mem, users_only=args.users_only, merge=args.merge, update_keys=args.update_keys)
     l.work()
     sys.argv = args_src
 
