@@ -267,7 +267,7 @@ class EeFetch(object):
         :return:
         """
         # pick those likely alive and already having IDs
-        year = random.randint(1950, 2008)
+        year = random.randint(1950, 2020)
         century = (year - 1800) / 100
 
         sex = random.randint(1, 2)  # 1,2 for 18xx | 3,4 for 19xx | 5,6 for 20xx
@@ -361,8 +361,11 @@ class EeFetch(object):
         parser.add_argument('--pms-plot', dest='pms_plot', default=False, action='store_const', const=True,
                             help='Plot PMS only and exit')
 
+        parser.add_argument('--pause', dest='pause', default=SLEEP_OK,
+                            help='Sleep after success query')
+
         self.args = parser.parse_args()
-        slp = SLEEP_OK
+        slp = self.args.pause
         hits = 0
         found = []
 
