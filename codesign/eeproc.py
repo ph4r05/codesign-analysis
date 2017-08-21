@@ -312,7 +312,7 @@ class Eeproc(object):
         for cur in all_ids:
             all_years[self.year_from_serial(cur)] += 1
 
-        xaxis = np.arange(1950, 2017)
+        xaxis = np.arange(1950, 2020)
         width = 0.35
 
         all_y = [all_years[i] for i in xaxis]
