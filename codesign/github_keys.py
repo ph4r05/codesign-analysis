@@ -152,6 +152,7 @@ class GitHubLoader(Cmd):
     prompt = '$> '
 
     LINK_FACTOR = 70
+    USER_URL = 'https://api.github.com/users/%s'
     USERS_URL = 'https://api.github.com/users?since=%s'
     KEYS_URL = 'https://api.github.com/users/%s/keys'
 
@@ -986,7 +987,9 @@ class GitHubLoader(Cmd):
 
             for user in db_users:
                 key_url = self.KEYS_URL % user.username
-                new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=user,
+                github_user = GitHubUser(user_id=user.id, user_name=user.username,
+                                         user_type=user.usr_type, user_url=self.USER_URL % user.username)
+                new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,
                                       priority=random.randint(0, 1000), time_added=time.time())
                 self.link_queue.put(new_job)
 
