@@ -45,10 +45,11 @@ from evt_dequeue import EvtDequeue
 import dbutil
 
 from github_base import AccessResource, RateLimitHit
-from database import GitHubKey, GitHubUser as GitHubUserDb
+from database import GitHubKey, GitHubUser as GitHubUserDb, GitHubUserKeys
 from database import Base as DB_Base
 from sqlalchemy.orm import scoped_session
 import sqlalchemy as salch
+from trace_logger import Tracelogger
 
 import gc
 import mem_top
@@ -161,6 +162,7 @@ class GitHubLoader(Cmd):
 
         Cmd.__init__(self, *args, **kwargs)
         self.t = Terminal()
+        self.trace_logger = Tracelogger(logger=logger)
 
         self.attempts = int(attempts)
         self.total = None
@@ -760,10 +762,17 @@ class GitHubLoader(Cmd):
                 s = self.session()
                 self.store_key(job.user, key, s)
                 s.commit()
+
+                self.assoc_key(job.user.user_id, key['id'], s)
+                s.commit()
+
                 s.flush()        # writes changes to DB
                 s.expunge_all()  # removes objects from session
+
             except Exception as e:
                 logger.warning('Exception in storing key %s' % e)
+                self.trace_logger.log(e)
+
             finally:
                 utils.silent_close(s)
                 s = None
@@ -954,7 +963,30 @@ class GitHubLoader(Cmd):
             return 0
 
         except Exception as e:
+            utils.silent_rollback(s)
             logger.warning('Exception during key store: %s' % e)
+            return 1
+
+    def assoc_key(self, user_id, key_id, s):
+        """
+        Association user <-> key
+        :param user_id:
+        :param key_id:
+        :param s:
+        :return:
+        """
+        try:
+            uassoc = GitHubUserKeys()
+            uassoc.user_id = user_id
+            uassoc.key_id = key_id
+            uassoc.fount_at = salch.func.now()
+            uassoc.lost_at = None
+            s.add(uassoc)
+            return 0
+
+        except Exception as e:
+            utils.silent_rollback(s)
+            logger.warning('Exception during key assoc: %s' % e)
             return 1
 
     def flush_state(self):

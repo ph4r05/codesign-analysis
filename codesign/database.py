@@ -147,6 +147,20 @@ class GitHubUser(Base):
     usr_type = Column(Integer, nullable=True)
 
 
+class GitHubUserKeys(Base):
+    """
+    GitHub SSH auth keys - user association
+    """
+    __tablename__ = 'github_user_key'
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(ForeignKey('github_user.id', name='fk_github_user_key_github_user_id', ondelete='CASCADE'),
+                     nullable=False, index=True)
+    key_id = Column(ForeignKey('github_key.id', name='fk_github_user_key_github_key_id', ondelete='CASCADE'),
+                    nullable=False, index=True)
+    fount_at = Column(DateTime, default=func.now(), nullable=True)
+    lost_at = Column(DateTime, default=None, nullable=True)
+
+
 class GitHubUserDetails(Base):
     """
     GitHub users
@@ -248,4 +262,14 @@ class GitHubRepoAssignee(Base):
     user_name = Column(String(255), nullable=False)
 
 
-
+# class AndroidApp(Base):
+#     """
+#     Androd application base
+#     """
+#     __tablename__ = 'android_app'
+#     id = Column(BigInteger, primary_key=True)
+#
+#     package_name = Column(String(255), nullable=False)
+#     app_name = Column(String(255), nullable=False)
+#     latest_version = Column(String(255), nullable=True)
+#
