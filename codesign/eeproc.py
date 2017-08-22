@@ -45,6 +45,17 @@ except:
     PLOT_OK = False
 
 
+class ClassifRes(object):
+    """
+    X509 result
+    """
+    def __init__(self):
+        self.marked = False
+        self.n = None
+        self.e = None
+        self.not_before = None
+
+
 class Eeproc(object):
     """
     EE processing
@@ -199,6 +210,7 @@ class Eeproc(object):
         :param x509:
         :param js:
         :return:
+        :rtype: ClassifRes
         """
         if x509 is None:
             return None
@@ -214,16 +226,34 @@ class Eeproc(object):
 
         self.num_rsa += 1
         pubnum = x509.public_key().public_numbers()
+
+        ret = ClassifRes()
+        ret.n = pubnum.n
+        ret.e = pubnum.e
+        ret.not_before = x509.not_valid_before
+
         if self.smells_nice(pubnum.n):
             # logger.warning('Good Certificate %s idx %s desc %s  ' % (serial, idx, desc))
+            ret.marked = True
             js = collections.OrderedDict()
             js['serial'] = serial
             js['desc'] = desc
             js['id'] = idx
+            js['e'] = hex(ret.e)
             js['fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))[:16]
-            # print(json.dumps(js))
-            return True
-        return False
+            print(json.dumps(js))
+
+        return ret
+
+    def strtime(self, x):
+        """
+        Simple time format
+        :param x:
+        :return:
+        """
+        if x is None:
+            return x
+        return x.strftime('%Y-%m-%d')
 
     def process(self, args):
         """
@@ -240,6 +270,7 @@ class Eeproc(object):
         nice_numbers = []
         all_ids = []
         people_counts = collections.defaultdict(lambda: 0)
+        classif_fh = open('classif-negative.json', 'w+') if args.classif_negative else None
 
         for rec in recs:
             id = int(rec['id'])
@@ -249,7 +280,7 @@ class Eeproc(object):
             has_auth = False
             has_sign = False
             dn = None
-            for res in rec['res']:
+            for res_idx, res in enumerate(rec['res']):
                 dn = res['dn']
                 certs = res['certs']
 
@@ -271,15 +302,29 @@ class Eeproc(object):
                     totals_obj[0] += 1
                     try:
                         cert_pos = self.process_der(bindata, rec, dn, id, desc, idx)
-                        if cert_pos:
+                        if cert_pos is None:  # not X509 or RSA
+                            continue
+
+                        if cert_pos.marked:
                             totals_obj[1] += 1
                             if cat_uo == AUTH and cat_o == IDCARD:
                                 nice_numbers.append(id)
+                        elif args.classif_negative:
+                            classif_rec = collections.OrderedDict()
+                            classif_rec['id'] = '%s%02d%02d' % (id, res_idx, idx)
+                            classif_rec['eid'] = id
+                            classif_rec['source'] = [dn, self.strtime(cert_pos.not_before)]
+                            classif_rec['n'] = hex(cert_pos.n)
+                            classif_rec['e'] = hex(cert_pos.e)
+                            classif_fh.write(json.dumps(classif_rec) + '\n')
                     except Exception as e:
                         logger.warning('Exception : %s' % e)
 
             if has_auth != has_sign:
                 logger.warning('Not matching auth/sign: %s, %s' % (id, dn))
+
+        if args.classif_negative:
+            classif_fh.close()
 
         # Categories nice / all
         longest = 0
@@ -394,6 +439,9 @@ def main():
 
     parser.add_argument('--plot-serial', dest='plot_serial', default=False, action='store_const', const=True,
                         help='Plot serial vs count')
+
+    parser.add_argument('--classif-negative', dest='classif_negative', default=False, action='store_const', const=True,
+                        help='Generate classification JSON from negative occurences')
 
     args = parser.parse_args()
 
