@@ -156,6 +156,7 @@ class GitHubLoader(Cmd):
     USER_URL = 'https://api.github.com/users/%s'
     USERS_URL = 'https://api.github.com/users?since=%s'
     KEYS_URL = 'https://api.github.com/users/%s/keys'
+    KEYS_ID_URL = 'https://api.github.com/user/%s/keys'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
                  max_mem=None, users_only=False, merge=False, update_keys=False, *args, **kwargs):
@@ -1018,7 +1019,7 @@ class GitHubLoader(Cmd):
                 .all()
 
             for user in db_users:
-                key_url = self.KEYS_URL % user.username
+                key_url = self.KEYS_ID_URL % user.id
                 github_user = GitHubUser(user_id=user.id, user_name=user.username,
                                          user_type=user.usr_type, user_url=self.USER_URL % user.username)
                 new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,

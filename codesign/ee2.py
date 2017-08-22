@@ -361,7 +361,7 @@ class EeFetch(object):
         parser.add_argument('--pms-plot', dest='pms_plot', default=False, action='store_const', const=True,
                             help='Plot PMS only and exit')
 
-        parser.add_argument('--pause', dest='pause', default=SLEEP_OK,
+        parser.add_argument('--pause', dest='pause', default=SLEEP_OK, type=int,
                             help='Sleep after success query')
 
         self.args = parser.parse_args()
