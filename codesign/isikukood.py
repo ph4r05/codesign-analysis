@@ -10,15 +10,12 @@ def random_isikukood():
     Generates random valid Estonian Personal Identification Number
     :return:
     """
+    # pick those likely alive and already having IDs
+    year = random.randint(1950, 2020)
+    century = (year - 1800) / 100
 
-    century = random.randint(0, 1)
-    sex = random.randint(3, 4)
-
-    d1 = sex + century
-
-    # year - century 0 -> live people.. start with 40
-    #        century 1 -> adult people, none :P
-    year = random.randint(50, 99)
+    sex = random.randint(1, 2)  # 1,2 for 18xx | 3,4 for 19xx | 5,6 for 20xx
+    d1 = sex + 2 * century
 
     # generate random day & month in that year - ordinals
     minord = datetime.date(year=year, month=1, day=1).toordinal()
@@ -26,8 +23,8 @@ def random_isikukood():
     randord = random.randint(minord, maxord)
     rnddate = datetime.date.fromordinal(randord)
 
-    serial = random.randint(0, 999)
-    code = '%d%02d%02d%02d%03d' % (d1, year, rnddate.month, rnddate.day, serial)
+    serial = random.randint(0, 999)  # general serial space, not very effective though
+    code = '%d%02d%02d%02d%03d' % (d1, year % 100, rnddate.month, rnddate.day, serial)
     return code + control_nr(code)
 
 
