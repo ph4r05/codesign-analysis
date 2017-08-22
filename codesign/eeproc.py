@@ -106,6 +106,10 @@ class Eeproc(object):
                         continue
                     idset.add(id)
                     ret.append(js)
+
+                    # if len(ret) > 1000:
+                    #     return ret
+                    
                 except Exception as e:
                     serial = line[8:19]
                     invser.append(serial)
@@ -241,7 +245,7 @@ class Eeproc(object):
             js['id'] = idx
             js['e'] = hex(ret.e)
             js['fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))[:16]
-            print(json.dumps(js))
+            # print(json.dumps(js))
 
         return ret
 
@@ -254,6 +258,15 @@ class Eeproc(object):
         if x is None:
             return x
         return x.strftime('%Y-%m-%d')
+
+    @staticmethod
+    def date_key(dt):
+        """
+        Date -> y-m
+        :param dt:
+        :return:
+        """
+        return '%4d-%02d' % (dt.year, dt.month)
 
     def process(self, args):
         """
@@ -272,9 +285,11 @@ class Eeproc(object):
         people_counts = collections.defaultdict(lambda: 0)
         classif_fh = open('classif-negative.json', 'w+') if args.classif_negative else None
 
+        all_years = collections.defaultdict(lambda: 0)
+        nice_years = collections.defaultdict(lambda: 0)
+
         for rec in recs:
             id = int(rec['id'])
-            all_ids.append(id)
             num_people += 1
 
             has_auth = False
@@ -290,6 +305,7 @@ class Eeproc(object):
                     people_counts[cat_o] += 1
 
                 if cat_o == IDCARD:
+                    all_ids.append(id)
                     if cat_uo == AUTH:
                         has_auth = True
                     if cat_uo == SIGN:
@@ -305,10 +321,15 @@ class Eeproc(object):
                         if cert_pos is None:  # not X509 or RSA
                             continue
 
+                        if cat_uo == AUTH and cat_o == IDCARD:
+                            all_years[Eeproc.date_key(cert_pos.not_before)] += 1
+
                         if cert_pos.marked:
                             totals_obj[1] += 1
                             if cat_uo == AUTH and cat_o == IDCARD:
                                 nice_numbers.append(id)
+                                nice_years[Eeproc.date_key(cert_pos.not_before)] += 1
+
                         elif args.classif_negative:
                             classif_rec = collections.OrderedDict()
                             classif_rec['id'] = '%s%02d%02d' % (id, res_idx, idx)
@@ -317,6 +338,7 @@ class Eeproc(object):
                             classif_rec['n'] = hex(cert_pos.n)
                             classif_rec['e'] = hex(cert_pos.e)
                             classif_fh.write(json.dumps(classif_rec) + '\n')
+
                     except Exception as e:
                         logger.warning('Exception : %s' % e)
 
@@ -361,10 +383,41 @@ class Eeproc(object):
         nice_numbers = sorted(list(set(nice_numbers)))
         all_ids = sorted(list(set(all_ids)))
         self.plot_age(all_ids, nice_numbers)
+        self.plot_not_before(all_years, nice_years)
 
         # serial analysis
         if PLOT_OK and args.plot_serial:
             self.plot_serial(all_ids, nice_numbers)
+
+    def plot_not_before(self, all_years, nice_years, width=0.35):
+        """
+        Plot not before
+        :param all_years:
+        :param nice_years:
+        :param width:
+        :return:
+        """
+        xaxis_ticks = []
+        idx = 0
+        for y in range(2012, 2017):
+            for m in range(1, 13):
+                xaxis_ticks.append('%4d-%02d' % (y, m))
+                idx += 1
+
+        xaxis = np.arange(len(xaxis_ticks))
+        all_y = [all_years[i] for i in xaxis_ticks]
+        nice_y = [nice_years[i] for i in xaxis_ticks]
+        nice_y = [x * fact for x in nice_y]
+
+        fig, ax = plt.subplots()
+        rects1 = ax.bar(xaxis, nice_y, width, color='b')
+        rects2 = ax.bar(xaxis + width, all_y, width, color='y')
+        plt.xticks(xaxis, xaxis_ticks, rotation='vertical')
+        ax.legend((rects1[0], rects2[0]), ('Nice', 'All'))
+        ax.set_ylabel('Count')
+        ax.set_title('Not before vs. count')
+        plt.show()
+
 
     def plot_age(self, all_ids, nice_numbers, width=0.35):
         """
