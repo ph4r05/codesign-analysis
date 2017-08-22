@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#
+# http://sangaline.com/post/advanced-web-scraping-tutorial/
+#
 
 import scrapy
 import re
@@ -28,6 +31,10 @@ from scrapy import signals
 from scrapy.http import Request
 from scrapy.utils.httpobj import urlparse_cached
 from scrapper_base import LinkSpider, DuplicatesPipeline, KeywordMiddleware, LinkItem
+
+from lxml import html
+from collections import OrderedDict
+from apk_parse.apk import APK
 
 from pgpdump.data import AsciiData
 from pgpdump.packet import SignaturePacket, PublicKeyPacket, PublicSubkeyPacket, UserIDPacket
@@ -144,82 +151,6 @@ class DbPipeline(object):
             s = None
         return item
 
-    # def store_pom(self, item, s):
-    #     """
-    #     Store POM file
-    #     :param item:
-    #     :param s:
-    #     :return:
-    #     """
-    #     if self.pom_exists(item, s):
-    #         logger.debug('POM Already exists %s' % strkey(item))
-    #         return
-    #
-    #     logger.info('Storing pom: %s' % strkey(item))
-    #
-    #     rec = MavenArtifact()
-    #     rec.artifact_id = item['artifact_id']
-    #     rec.group_id = item['group_id']
-    #     rec.artifact_id = item['artifact_id']
-    #     rec.version_id = item['version']
-    #     rec.pom_file = item['body']
-    #     s.add(rec)
-    #
-    # def store_asc(self, item, s):
-    #     """
-    #     Stores ASC file
-    #     :param item:
-    #     :param s:
-    #     :return:
-    #     """
-    #     if self.asc_exists(item, s):
-    #         logger.debug('ASC Already exists %s' % strkey(item))
-    #         return
-    #
-    #     rec = MavenSignature()
-    #     rec.artifact_id = item['artifact_id']
-    #     rec.group_id = item['group_id']
-    #     rec.artifact_id = item['artifact_id']
-    #     rec.version_id = item['version']
-    #     rec.sig_file = item['body']
-    #
-    #     rec.sig_hash = item['sig_hash']
-    #     rec.sig_key_id = item['sig_key_id']
-    #     rec.sig_version = item['sig_version']
-    #     rec.sig_pub_alg = item['sig_pub_alg']
-    #     rec.sig_created = item['sig_created']
-    #     rec.sig_expires = item['sig_expires']
-    #
-    #     s.add(rec)
-    #     logger.info('Storing asc: %s' % strkey(item))
-    #
-    # def store_index(self, item, s):
-    #     """
-    #     Stores ASC file
-    #     :param item:
-    #     :param s:
-    #     :return:
-    #     """
-    #     burl = utils.strip_leading_slash(item['url'])
-    #     grp_id, art_id = get_maven_id_from_url(burl)
-    #
-    #     is_new = False
-    #     rec = self.index_load(grp_id, art_id, s)
-    #
-    #     if rec is None:
-    #         rec = MavenArtifactIndex()
-    #         rec.group_id = grp_id
-    #         rec.artifact_id = art_id
-    #         is_new = True
-    #
-    #     rec.date_last_check = sqlalchemy.func.now()
-    #     rec.versions = json.dumps(item['versions'], cls=utils.AutoJSONEncoder)
-    #
-    #     if is_new:
-    #         s.add(rec)
-    #     else:
-    #         s.merge(rec)
-
 
 class AndroidDataSpider(LinkSpider):
     """
@@ -305,22 +236,6 @@ class AndroidDataSpider(LinkSpider):
         for req in self.app.start_requests():
             yield req
 
-    def pom_exists(self, group_id, artifact_id, version_id, s):
-        """
-        Returns True if POM already exists
-        :param group_id: 
-        :param artifact_id: 
-        :param version_id: 
-        :param s: 
-        :return: 
-        """
-        res = s.query(MavenArtifact)\
-            .filter(MavenArtifact.group_id == group_id)\
-            .filter(MavenArtifact.artifact_id == artifact_id)\
-            .filter(MavenArtifact.version_id == version_id)\
-            .one_or_none()
-        return res is not None
-
     def parse_page(self, response):
         """
         General page parser
@@ -331,16 +246,28 @@ class AndroidDataSpider(LinkSpider):
         links = set()
         for link in LxmlLinkExtractor(allow=(), deny=()).extract_links(response):
             links.add(link.url)
+
         logger.info('Current url: %s' % response.url)
         logger.info('Current resp: %s' % response)
-        # item = ArtifactItem()
-        # item['url'] = response.url
-        # item['versions'] = versions
-        # item['misc_files'] = misc_files
-        # item['artifact_detected'] = is_artifact
-        # item['confidence'] = art_conf
-        # yield item
-        # yield Request(pom_link, callback=self.parse_pom, meta=dict(meta))
+
+        # Search result - container element
+        lists = response.xpath('//div[@id="primary"]//div[@class="listWidget"]')
+        for list_widget in lists:
+            logger.debug('List widget: %s' % list_widget)
+            eapp = list_widget.xpath('div[@class="appRow"]')
+            einfo = list_widget.xpath('div[@class="infoSlide"]')
+
+            if len(eapp) == 0:
+                logger.warning('No results')
+                return
+
+            for eapp1 in eapp:
+                logger.debug(eapp1)
+
+                #ahref = eapp1.xpath('div/div/div/h5/a')[0]
+                #link = ahref.attrib['href']
+                #title = ahref.xpath('text()')
+                #logger.debug('Title / link %s %s ' % (title, link))
 
         logger.debug('Extracted %s links from %s' % (len(links_visit), response.url))
         for link in list(links_visit):
