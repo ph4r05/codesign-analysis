@@ -40,7 +40,9 @@ SERIALS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 
 
 _ = lambda x: x  # please copypaste from lib/libldap.py
 logger = logging.getLogger(__name__)
-coloredlogs.install(level=logging.DEBUG)
+
+coloredlogs.CHROOT_FILES = []
+coloredlogs.install(level=logging.DEBUG, use_chroot=False)
 
 
 class LdapError(Exception):
@@ -297,8 +299,9 @@ class EeFetch(object):
         pid = os.getpid()
 
         if self.args.add_id:
-            self.id_file = '%s_%s_%s.txt' % (self.id_file, self.hostname, pid)
-            self.json_file = '%s_%s_%s.json' % (self.json_file, self.hostname, pid)
+            timerand = int(time.time()*1000) % 1000
+            self.id_file = '%s_%s_%05d_%03d.txt' % (self.id_file, self.hostname, pid, timerand)
+            self.json_file = '%s_%s_%05d_%03d.json' % (self.json_file, self.hostname, pid, timerand)
         else:
             self.id_file += '.txt'
             self.json_file += '.json'

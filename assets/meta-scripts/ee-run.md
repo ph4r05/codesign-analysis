@@ -15,7 +15,10 @@ qsub -l select=32:ncpus=1:mem=200mb:scratch_local=200mb:cl_luna=False -l walltim
 ```
 rsync -av ../codesign-analysis/ tarkil:~/cas/ && \
 rsync -av ../codesign-analysis/ tarkil:/storage/plzen1/home/ph4r05/cas/ && \
-rsync -av ../codesign-analysis/ tarkil:/storage/brno2/home/ph4r05/cas/
+rsync -av ../codesign-analysis/ tarkil:/storage/brno2/home/ph4r05/cas/ && \
+rsync -av ../codesign-analysis/ skirit:/storage/brno6/home/ph4r05/cas/ && \
+rsync -av ../codesign-analysis/ skirit:/storage/budejovice1/home/ph4r05/cas/ && \
+rsync -av ../codesign-analysis/ skirit:/storage/ostrava1/home/ph4r05/cas/
 ```
 
 ## Collect results to one file
@@ -37,6 +40,9 @@ One simple way to achieve that is to have one primary and then sync to others.
 
 ```
 rsync -av /storage/praha1/home/ph4r05/.pyenv /storage/praha1/home/ph4r05/libs /storage/brno2/home/ph4r05/
+rsync -av /storage/praha1/home/ph4r05/.pyenv /storage/praha1/home/ph4r05/libs /storage/brno6/home/ph4r05/
 rsync -av /storage/praha1/home/ph4r05/.pyenv /storage/praha1/home/ph4r05/libs /storage/plzen1/home/ph4r05/
+rsync -av /storage/praha1/home/ph4r05/.pyenv /storage/praha1/home/ph4r05/libs /storage/budejovice1/home/ph4r05/
+rsync -av /storage/praha1/home/ph4r05/.pyenv /storage/praha1/home/ph4r05/libs /storage/ostrava1/home/ph4r05/
 ```
 
