@@ -408,7 +408,7 @@ class Eeproc(object):
         """
         xaxis_ticks = []
         idx = 0
-        for y in range(2012, 2017):
+        for y in range(2012, 2018):
             for m in range(1, 13):
                 xaxis_ticks.append('%4d-%02d' % (y, m))
                 idx += 1
