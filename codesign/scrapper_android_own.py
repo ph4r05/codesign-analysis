@@ -49,6 +49,10 @@ from sqlalchemy.orm import scoped_session
 import sqlalchemy as salch
 from trace_logger import Tracelogger
 
+from lxml import html
+from collections import OrderedDict
+from apk_parse.apk import APK
+
 import gc
 import mem_top
 from pympler.tracker import SummaryTracker
@@ -56,7 +60,7 @@ from collections import OrderedDict, namedtuple
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 logger = logging.getLogger(__name__)
-coloredlogs.install(level=logging.INFO)
+coloredlogs.install(level=logging.DEBUG)
 
 
 class DownloadJob(object):
@@ -106,7 +110,7 @@ class DownloadJob(object):
         tj.time_added = utils.defvalkey(js, 'time_added', 0)
         if 'user_id' in js:
             user_url = js['user_url'] if 'user_url' in js else None
-            tj.user = GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
+            tj.user = None #GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
         return tj
 
     @staticmethod
@@ -149,7 +153,7 @@ class AndroidApkLoader(Cmd):
     prompt = '$> '
 
     LINK_FACTOR = 70
-    PAGE_URL = 'https://www.apkmirror.com/page/1/'
+    PAGE_URL = 'https://www.apkmirror.com/page/%s/'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
                  max_mem=None, merge=False, num_res=1, *args, **kwargs):
@@ -446,11 +450,11 @@ class AndroidApkLoader(Cmd):
                 continue
 
             # Job processing starts here - fetch data page with the resource.
-            js_data = None
+            ret_data = None
             try:
                 self.local_data.job = job
                 self.local_data.resource = resource
-                js_data, headers, raw_response = self.load_page_local()
+                ret_data, headers, raw_response = self.load_page_local()
 
             except RateLimitHit as e:
                 logger.error('[%d] Rate limit hit: %s, failcnt: %d, res: %s, exception: %s'
@@ -472,19 +476,19 @@ class AndroidApkLoader(Cmd):
 
             # Process downloaded data here.
             try:
-                if js_data is None:
+                if ret_data is None:
                     self.audit_log('404', job.url, jtype=job.type, job=job)
                     self.flush_audit()
                     continue
 
                 if job.type == DownloadJob.TYPE_PAGE:
-                    self.process_page_data(job, js_data, headers, raw_response)
+                    self.process_page_data(job, ret_data, headers, raw_response)
                 elif job.type == DownloadJob.TYPE_DETAIL:
-                    self.process_detail_data(job, js_data, headers, raw_response)
+                    self.process_detail_data(job, ret_data, headers, raw_response)
                 elif job.type == DownloadJob.TYPE_DOWNLOAD:
-                    self.process_download_data(job, js_data, headers, raw_response)
+                    self.process_download_data(job, ret_data, headers, raw_response)
                 elif job.type == DownloadJob.TYPE_APK:
-                    self.process_apk_data(job, js_data, headers, raw_response)
+                    self.process_apk_data(job, ret_data, headers, raw_response)
                 else:
                     raise Exception('Unknown job type: ' + job.type)
 
@@ -537,6 +541,7 @@ class AndroidApkLoader(Cmd):
 
         job = self.local_data.job
 
+        # TODO: stream downloading of the APK to the file
         res = requests.get(job.url, timeout=10, auth=auth)
         headers = res.headers
 
@@ -563,8 +568,7 @@ class AndroidApkLoader(Cmd):
             resource.fail_cnt += 1
             raise Exception('Empty response')
 
-        js = json.loads(data, object_pairs_hook=OrderedDict)
-        return js, headers, res
+        return data, headers, res
 
     def resource_allocate(self, blocking=True, timeout=1.0):
         """
@@ -645,77 +649,191 @@ class AndroidApkLoader(Cmd):
         self.link_queue.put(job)
         logger.info('Kickoff link added: %s' % job.url)
 
-    def process_page_data(self, job, js, headers, raw_response):
+    # def old_process(self, job, js, headers, raw_response):
+    #     max_id = 0
+    #     github_users = []
+    #     cur_time = int(time.time())
+    #     for user in js:
+    #         if 'id' not in user:
+    #             logger.error('Field ID not found in user')
+    #             continue
+    #
+    #         github_user = GitHubUser(user_id=int(user['id']), user_name=user['login'],
+    #                                  user_type=user['type'], user_url=user['url'])
+    #         github_users.append(github_user)
+    #
+    #         if github_user.user_id > max_id:
+    #             max_id = github_user.user_id
+    #
+    #         if self.users_only:
+    #             continue
+    #
+    #         key_url = '%s/keys' % github_user.user_url
+    #         new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,
+    #                               priority=random.randint(0, 1000), time_added=cur_time)
+    #         self.link_queue.put(new_job)
+    #
+    #     # Link with the maximal user id
+    #     users_url = self.USERS_URL % max_id
+    #     new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS, time_added=cur_time)
+    #
+    #     # Optimizing the position of this link in the link queue
+    #     queue_size = self.link_queue.qsize()
+    #     queue_size_max = self.LINK_FACTOR * self.threads
+    #     fill_up_ratio = queue_size / float(queue_size_max)
+    #
+    #     # Key jobs are uniformly distributed on priorities 0...1000.
+    #     # To increase queue size pick priority closer to 1000, do decrease, closer to 0
+    #     priority = random.randint(0, 500)
+    #     if queue_size < queue_size_max:
+    #         priority = int((1 - fill_up_ratio) * 5000) + 500
+    #     if queue_size > 3*queue_size_max:
+    #         priority = 0
+    #
+    #     new_job.priority = priority
+    #     lucky_one = False
+    #     with self.user_lock:
+    #         if self.since_id < max_id:
+    #             self.since_id = max_id
+    #             self.link_queue.put(new_job)
+    #             lucky_one = True
+    #
+    #     logger.info('[%02d, usr=%20s, remaining=%5s] Processed users link %s, Next since: %3s. ResQSize: %4d, '
+    #                 'LQSize: %4d, fill-up: %0.4f, priority: %4s, ram: %s kB, new=%s, New users: [%s]'
+    #                 % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
+    #                    len(github_users)+1, max_id, self.resources_queue.qsize(),
+    #                    queue_size, fill_up_ratio, priority,
+    #                    resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, lucky_one,
+    #                    ', '.join([str(x.user_name) for x in github_users])))
+    #
+    #     # Store all users.
+    #     self.store_users_list(github_users)
+
+    def process_page_data(self, job, data, headers, raw_response):
         """
         Process user data - produce keys links + next user link
         :param job:
-        :param js:
+        :param data:
         :param headers:
         :param raw_response:
         :return:
         """
-        max_id = 0
-        github_users = []
-        cur_time = int(time.time())
-        for user in js:
-            if 'id' not in user:
-                logger.error('Field ID not found in user')
-                continue
+        tree = html.fromstring(data)
+        logger.info('Page downloaded ')
 
-            github_user = GitHubUser(user_id=int(user['id']), user_name=user['login'],
-                                     user_type=user['type'], user_url=user['url'])
-            github_users.append(github_user)
+        lists = tree.xpath('//div[@id="primary"]//div[@class="listWidget"]')
+        for list_widget in lists:
+            logger.debug('List widget: %s' % list_widget)
+            eapp = list_widget.xpath('div[@class="appRow"]')
+            einfo = list_widget.xpath('div[@class="infoSlide"]')
 
-            if github_user.user_id > max_id:
-                max_id = github_user.user_id
+            if len(eapp) == 0:
+                logger.warning('No results')
+                return
 
-            if self.users_only:
-                continue
+            for eapp1 in eapp:
+                try:
+                    tbl_cel = eapp1[0][1][0]
+                    ahref = tbl_cel[0][0]
 
-            key_url = '%s/keys' % github_user.user_url
-            new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,
-                                  priority=random.randint(0, 1000), time_added=cur_time)
-            self.link_queue.put(new_job)
+                    link = ahref.attrib['href']
+                    title = utils.first(ahref.xpath('text()'))
 
-        # Link with the maximal user id
-        users_url = self.USERS_URL % max_id
-        new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS, time_added=cur_time)
+                    info_slide = eapp1.getnext()
+                    version, uploaded, size, downloads = self.get_info_details(info_slide)
+                    app_name = self.get_app_name(title, version)
+                    app_ver_type = self.get_app_version_type(title, version)
 
-        # Optimizing the position of this link in the link queue
-        queue_size = self.link_queue.qsize()
-        queue_size_max = self.LINK_FACTOR * self.threads
-        fill_up_ratio = queue_size / float(queue_size_max)
+                    logger.debug('Title / link [%s] [%s] ' % (title, link))
+                    logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s'
+                                 % (version, uploaded, size, downloads, app_name, app_ver_type))
 
-        # Key jobs are uniformly distributed on priorities 0...1000.
-        # To increase queue size pick priority closer to 1000, do decrease, closer to 0
-        priority = random.randint(0, 500)
-        if queue_size < queue_size_max:
-            priority = int((1 - fill_up_ratio) * 5000) + 500
-        if queue_size > 3*queue_size_max:
-            priority = 0
+                except Exception as e:
+                    self.trace_logger.log(e)
 
-        new_job.priority = priority
-        lucky_one = False
-        with self.user_lock:
-            if self.since_id < max_id:
-                self.since_id = max_id
-                self.link_queue.put(new_job)
-                lucky_one = True
+    def get_info_details(self, info_slide):
+        """
+        version, uploaded, size, downloads
+        :param info_slide:
+        :return:
+        """
+        version, uploaded, size, downloads = None, None, None, None
 
-                # Bulk user optimisation - add more users at once, multithreading
-                if self.users_only:
-                    self.bulk_user_only_load(max_id=max_id, cur_time=cur_time, priority=priority)
+        try:
+            version = utils.first(info_slide[0][1].xpath('text()'))
+        except Exception as e:
+            self.trace_logger.log(e)
 
-        logger.info('[%02d, usr=%20s, remaining=%5s] Processed users link %s, Next since: %3s. ResQSize: %4d, '
-                    'LQSize: %4d, fill-up: %0.4f, priority: %4s, ram: %s kB, new=%s, New users: [%s]'
-                    % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
-                       len(github_users)+1, max_id, self.resources_queue.qsize(),
-                       queue_size, fill_up_ratio, priority,
-                       resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, lucky_one,
-                       ', '.join([str(x.user_name) for x in github_users])))
+        try:
+            uploaded = utils.try_parse_timestamp(info_slide[1][1][0].attrib['data-utcdate'])
+        except Exception as e:
+            self.trace_logger.log(e)
 
-        # Store all users.
-        self.store_users_list(github_users)
+        try:
+            size = utils.first(info_slide[2][1].xpath('text()'))
+            a, b = [x.strip() for x in re.sub(r'\s+', ' ', size).split(' ')]
+            if b.lower() == 'mb':
+                size = float(a) * 1024 * 1024
+            elif b.lower() == 'kb':
+                size = float(a) * 1024
+            elif b.lower() == 'gb':
+                size = float(a) * 1024 * 1024 * 1024
+            else:
+                size = None
+        except Exception as e:
+            self.trace_logger.log(e)
+
+        try:
+            downloads = int(utils.first(info_slide[3][1].xpath('text()')))
+        except Exception as e:
+            self.trace_logger.log(e)
+
+        return version, uploaded, size, downloads
+
+    def get_app_name(self, title, version):
+        """
+        Pure app name
+        :param title:
+        :param version:
+        :return:
+        """
+        idx = title.find(version)
+        if idx > 0:
+            return utils.strip(title[0:idx])
+
+        # fallback solution
+        match = re.search(r'[0-9]+\b', title)
+        if not match:
+            return title
+        start = match.start(0)
+        if not start or start < 0:
+            return title
+
+        return utils.strip(title[0:start])
+
+    def get_app_version_type(self, title, version):
+        """
+        Beta / alpha / test
+        :param title:
+        :param version:
+        :return:
+        """
+        title = utils.lower(title)
+        if re.search(r'\bbeta\b.*$', title):
+            return 'beta'
+        if re.search(r'\balpha\b.*$', title):
+            return 'alpha'
+        if re.search(r'\balfa\b.*$', title):
+            return 'alpha'
+        if re.search(r'\btest\b.*$', title):
+            return 'alpha'
+        if re.search(r'\brc\b.*$', title):
+            return 'rc'
+        if re.search(r'\bfree\b.*$', title):
+            return 'free'
+        if re.search(r'\bpro\b.*$', title):
+            return 'pro'
+        return None
 
     def store_users_list(self, users):
         """
@@ -895,7 +1013,7 @@ class AndroidApkLoader(Cmd):
         # Loading phase
         existing_key = None
         try:
-            if self.merge or self.update_keys:
+            if self.merge:
                 existing_key = self.load_existing_key(key, s)
 
         except Exception as e:
@@ -1147,18 +1265,18 @@ class AndroidApkLoader(Cmd):
 def main():
     args_src = sys.argv
     parser = argparse.ArgumentParser(description='Downloads APKs')
-    parser.add_argument('-c', dest='config', default=None, help='JSON config file')
-    parser.add_argument('-s', dest='status', default=None, help='JSON status file')
-    parser.add_argument('-t', dest='threads', default=1, help='Number of download threads to use')
-    parser.add_argument('--res', dest='resnum', default=1, help='Number of active slots')
+    parser.add_argument('-c', dest='config', default=None,
+                        help='JSON config file')
+    parser.add_argument('-s', dest='status', default=None,
+                        help='JSON status file')
+    parser.add_argument('-t', dest='threads', default=1, type=int,
+                        help='Number of download threads to use')
+    parser.add_argument('--res', dest='resnum', default=1, type=int,
+                        help='Number of active slots')
     parser.add_argument('--max-mem', dest='max_mem', default=None, type=int,
                         help='Maximal memory threshold in kB when program terminates itself')
-    parser.add_argument('--users-only', dest='users_only', default=False, action='store_const', const=True,
-                        help='Load only users list')
     parser.add_argument('--merge', dest='merge', default=False, action='store_const', const=True,
                         help='Merge DB operation - merge instead of add. slower, updates if exists')
-    parser.add_argument('--update-keys', dest='update_keys', default=False, action='store_const', const=True,
-                        help='Update keys for existing users')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
