@@ -719,13 +719,10 @@ class AndroidApkLoader(Cmd):
         :return:
         """
         tree = html.fromstring(data)
-        logger.info('Page downloaded ')
-
         lists = tree.xpath('//div[@id="primary"]//div[@class="listWidget"]')
         for list_widget in lists:
             logger.debug('List widget: %s' % list_widget)
             eapp = list_widget.xpath('div[@class="appRow"]')
-            einfo = list_widget.xpath('div[@class="infoSlide"]')
 
             if len(eapp) == 0:
                 logger.warning('No results')
@@ -747,6 +744,8 @@ class AndroidApkLoader(Cmd):
                     logger.debug('Title / link [%s] [%s] ' % (title, link))
                     logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s'
                                  % (version, uploaded, size, downloads, app_name, app_ver_type))
+
+                    # TODO: download this app? already downloaded?
 
                 except Exception as e:
                     self.trace_logger.log(e)
@@ -896,6 +895,7 @@ class AndroidApkLoader(Cmd):
         :param raw_response:
         :return:
         """
+        # if variant page, pick one variant and download, if not, go to process_download_data
 
     def process_download_data(self, job, js, headers, raw_response):
         """
@@ -906,8 +906,22 @@ class AndroidApkLoader(Cmd):
         :param raw_response:
         :return:
         """
+        # update with package name
+        # update with version_number - 6.31.0 (631043)
+        # generate directly download link: a, id=pbDropdown, data-postid contains ID
 
     def process_apk_data(self, job, js, headers, raw_response):
+        """
+        Processing key loaded data
+        :param job:
+        :param js:
+        :param headers:
+        :param raw_response:
+        :return:
+        """
+        # process download APK file, open APK, read cert, fprint, store all thos info to DB
+
+    def process_old_keys(self, job, js, headers, raw_response):
         """
         Processing key loaded data
         :param job:
