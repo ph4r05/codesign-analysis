@@ -411,19 +411,6 @@ class GitHubLoader(Cmd):
         logger.info('Terminating main thread')
         return None
 
-    def kickoff_links(self):
-        """
-        Kick off the scrapping by adding initial links to the queue
-        :return:
-        """
-        if self.update_keys:
-            self.fill_user_key_links()
-
-        else:
-            job = DownloadJob(url=self.USERS_URL % self.since_id, jtype=DownloadJob.TYPE_USERS)
-            self.link_queue.put(job)
-            logger.info('Kickoff link added: %s' % job.url)
-
     def after_loop(self, wait_for_state=True):
         """
         After work loop finishes
@@ -589,6 +576,89 @@ class GitHubLoader(Cmd):
 
         js = json.loads(data, object_pairs_hook=OrderedDict)
         return js, headers, res
+
+    def resource_allocate(self, blocking=True, timeout=1.0):
+        """
+        Takes resource from the pool.
+        If the resource has low remaining credit, thread is suspended to re-charge.
+        :return: resource or None if not available in the time
+        """
+        try:
+            resource = self.resources_queue.get(True, timeout=1.0)
+            if resource.remaining is not None and resource.remaining <= self.threads + 2:
+                sleep_sec = resource.reset_time - time.time()
+                sleep_sec += 120  # extra 2 minutes to avoid problems with resources
+
+                logger.info('Rate limit exceeded on resource %s, remaining: %d, sleeping till: %d, it is %d seconds, '
+                            '%d minutes'
+                            % (resource.usr, resource.remaining, resource.reset_time, sleep_sec, sleep_sec / 60.0))
+                self.sleep_interruptible(time.time() + sleep_sec)
+                logger.info('Resource sleep finished %s' % resource.usr)
+
+                # Reset estimations, needs to be refreshed
+                resource.remaining = None
+                resource.reset_time = None
+
+            return resource
+
+        except Queue.Empty:
+            return None
+
+    def resource_return(self, res):
+        """
+        Returns resource to the pool
+        :param res:
+        :return:
+        """
+        self.resources_queue.put(res)
+
+    def sleep_interruptible(self, until_time):
+        """
+        Interruptible sleep - sleep until given time.
+        :param until_time:
+        :return:
+        """
+        while time.time() <= until_time:
+            time.sleep(1.0)
+            if self.terminate or self.stop_event.is_set():
+                return
+
+    def interruptible_sleep_delta(self, sleep_time):
+        """
+        Sleeps the current thread for given amount of seconds, stop event terminates the sleep - to exit the thread.
+        :param sleep_time:
+        :return:
+        """
+        if sleep_time is None:
+            return
+
+        sleep_time = float(sleep_time)
+
+        if sleep_time == 0:
+            return
+
+        sleep_start = time.time()
+        while not self.stop_event.is_set() and not self.terminate:
+            time.sleep(0.1)
+            if time.time() - sleep_start >= sleep_time:
+                return
+
+    #
+    # Parser and processing logic
+    #
+
+    def kickoff_links(self):
+        """
+        Kick off the scrapping by adding initial links to the queue
+        :return:
+        """
+        if self.update_keys:
+            self.fill_user_key_links()
+
+        else:
+            job = DownloadJob(url=self.USERS_URL % self.since_id, jtype=DownloadJob.TYPE_USERS)
+            self.link_queue.put(job)
+            logger.info('Kickoff link added: %s' % job.url)
 
     def process_users_data(self, job, js, headers, raw_response):
         """
@@ -793,72 +863,6 @@ class GitHubLoader(Cmd):
             qsize = self.link_queue.qsize()
             if qsize < 30:
                 self.fill_user_key_links()
-
-    def resource_allocate(self, blocking=True, timeout=1.0):
-        """
-        Takes resource from the pool.
-        If the resource has low remaining credit, thread is suspended to re-charge.
-        :return: resource or None if not available in the time
-        """
-        try:
-            resource = self.resources_queue.get(True, timeout=1.0)
-            if resource.remaining is not None and resource.remaining <= self.threads + 2:
-                sleep_sec = resource.reset_time - time.time()
-                sleep_sec += 120  # extra 2 minutes to avoid problems with resources
-
-                logger.info('Rate limit exceeded on resource %s, remaining: %d, sleeping till: %d, it is %d seconds, '
-                            '%d minutes'
-                            % (resource.usr, resource.remaining, resource.reset_time, sleep_sec, sleep_sec / 60.0))
-                self.sleep_interruptible(time.time() + sleep_sec)
-                logger.info('Resource sleep finished %s' % resource.usr)
-
-                # Reset estimations, needs to be refreshed
-                resource.remaining = None
-                resource.reset_time = None
-
-            return resource
-
-        except Queue.Empty:
-            return None
-
-    def resource_return(self, res):
-        """
-        Returns resource to the pool
-        :param res:
-        :return:
-        """
-        self.resources_queue.put(res)
-
-    def sleep_interruptible(self, until_time):
-        """
-        Interruptible sleep - sleep until given time.
-        :param until_time:
-        :return:
-        """
-        while time.time() <= until_time:
-            time.sleep(1.0)
-            if self.terminate or self.stop_event.is_set():
-                return
-
-    def interruptible_sleep_delta(self, sleep_time):
-        """
-        Sleeps the current thread for given amount of seconds, stop event terminates the sleep - to exit the thread.
-        :param sleep_time:
-        :return:
-        """
-        if sleep_time is None:
-            return
-
-        sleep_time = float(sleep_time)
-
-        if sleep_time == 0:
-            return
-
-        sleep_start = time.time()
-        while not self.stop_event.is_set() and not self.terminate:
-            time.sleep(0.1)
-            if time.time() - sleep_start >= sleep_time:
-                return
 
     def store_user(self, user, s, db_user=None, db_user_loaded=False):
         """
