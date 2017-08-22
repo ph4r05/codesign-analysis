@@ -5,7 +5,7 @@
 Basic database methods / models for the project.
 """
 
-from sqlalchemy import Column, DateTime, String, Integer, ForeignKey, func, BLOB, Text, BigInteger
+from sqlalchemy import Column, DateTime, String, SmallInteger, Integer, ForeignKey, func, BLOB, Text, BigInteger
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -121,7 +121,7 @@ class GitHubKey(Base):
 
     date_discovered = Column(DateTime, default=func.now())
     date_last_check = Column(DateTime, default=func.now())
-    date_lost = Column(DateTime, default=func.now())
+    date_lost = Column(DateTime, default=None)
 
     key_id = Column(BigInteger, nullable=True)
     key_type = Column(String(32), nullable=True)
@@ -262,14 +262,82 @@ class GitHubRepoAssignee(Base):
     user_name = Column(String(255), nullable=False)
 
 
-# class AndroidApp(Base):
-#     """
-#     Androd application base
-#     """
-#     __tablename__ = 'android_app'
-#     id = Column(BigInteger, primary_key=True)
-#
-#     package_name = Column(String(255), nullable=False)
-#     app_name = Column(String(255), nullable=False)
-#     latest_version = Column(String(255), nullable=True)
-#
+class AndroidApkMirrorApp(Base):
+    """
+    Androd application base
+    """
+    __tablename__ = 'android_apk_mirror_app'
+    id = Column(BigInteger, primary_key=True)
+
+    app_name = Column(String(255), nullable=True)
+    package_name = Column(String(255), nullable=True)
+    version_code = Column(String(255), nullable=True)
+    version_number = Column(BigInteger, nullable=True)
+    version_type = Column(String(255), nullable=True)
+    version_variant = Column(BigInteger, nullable=True)
+
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+
+    company = Column(String(255), nullable=True)
+    file_size = Column(BigInteger, nullable=True)
+    downloads = Column(BigInteger, nullable=True)
+    is_processed = Column(SmallInteger, nullable=True)
+    is_downloaded = Column(SmallInteger, nullable=True)
+
+    url_detail = Column(Text, nullable=True)
+    aux_json = Column(Text, nullable=True)
+
+
+class AndroidApkMirrorApk(Base):
+    """
+    GitHub SSH auth keys
+    """
+    __tablename__ = 'android_apk_mirror_apk'
+    id = Column(BigInteger, primary_key=True)
+    app_id = Column(ForeignKey('android_apk_mirror_app.id', name='fk_android_apk_mirror_apk_android_apk_mirror_app_id',
+                               ondelete='CASCADE'), nullable=False, index=True)
+
+    url_download = Column(Text, nullable=True)
+    post_id = Column(BigInteger, nullable=True)
+
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+    date_lost = Column(DateTime, default=None)
+
+    file_size = Column(BigInteger, nullable=True)
+    md5 = Column(String(128), nullable=True)
+    sha1 = Column(String(128), nullable=True)
+    sha256 = Column(String(128), nullable=True)
+
+    is_xapk = Column(SmallInteger, nullable=True)
+    sub_apk_size = Column(BigInteger, nullable=True)
+
+    apk_package = Column(String(255), nullable=True)
+    apk_version_code = Column(String(255), nullable=True)
+    apk_version_name = Column(String(255), nullable=True)
+    apk_min_sdk = Column(String(128), nullable=True)
+    apk_tgt_sdk = Column(String(128), nullable=True)
+    apk_max_sdk = Column(String(128), nullable=True)
+
+    sign_date = Column(DateTime, default=None)
+    sign_info_cnt = Column(Integer, nullable=True)
+    sign_serial = Column(String(255), nullable=True)
+    sign_issuer = Column(String(255), nullable=True)
+    sign_alg = Column(String(64), nullable=True)
+
+    cert_alg = Column(String(64), nullable=True)
+    cert_print = Column(String(255), nullable=True)
+    cert_not_before = Column(DateTime, default=None)
+    cert_not_after = Column(DateTime, default=None)
+    cert_dn = Column(String(255), nullable=True)
+    cert_issuer_dn = Column(String(255), nullable=True)
+    cert_raw = Column(Text, nullable=True)
+
+    pub_type = Column(String(32), nullable=True)
+    pub_modulus = Column(Text, nullable=True)
+    pub_exponent = Column(Text, nullable=True)
+    pub_modulus_size = Column(Integer, nullable=True)
+    pub_interesting = Column(Integer, nullable=False, default=0)
+
+    aux_json = Column(Text, nullable=True)
