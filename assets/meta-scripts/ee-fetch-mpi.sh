@@ -31,5 +31,6 @@ for srv in `cat $PBS_NODEFILE`; do
     echo "Fetching $srv"
     scp $srv:"${SCRATCH}/*" /storage/brno3-cerit/home/ph4r05/eeids-mpis
 done
+echo "Finished"
 
 

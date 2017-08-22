@@ -269,7 +269,7 @@ class EeFetch(object):
         :return:
         """
         # pick those likely alive and already having IDs
-        year = random.randint(1950, 2020)
+        year = random.randint(1910, 2017)
         century = (year - 1800) / 100
 
         sex = random.randint(1, 2)  # 1,2 for 18xx | 3,4 for 19xx | 5,6 for 20xx
@@ -367,9 +367,17 @@ class EeFetch(object):
         parser.add_argument('--pause', dest='pause', default=SLEEP_OK, type=int,
                             help='Sleep after success query')
 
+        parser.add_argument('--pause-ex', dest='pause_ex', default=SLEEP_ERR, type=int,
+                            help='Sleep after error query')
+
+        parser.add_argument('--max-walltime', dest='max_walltime', default=None, type=int,
+                            help='Maximum walltime')
+
         self.args = parser.parse_args()
         slp = self.args.pause
+        slp_err = self.args.pause_ex
         hits = 0
+        time_start = time.time()
         found = []
 
         self.init_file_names()
@@ -399,6 +407,10 @@ class EeFetch(object):
                 id = do_first[0]
 
             try:
+                if self.args.max_walltime and (time.time() - time_start) > self.args.max_walltime:
+                    logger.info('Terminating, max wall time reached')
+                    return
+
                 logger.debug('A : %d, c: %s, t: %s, hits: %s, rem: %s' % (i, id, time.time(), hits, len(do_first)))
 
                 res = self.get_pems_from_ldap(id)
@@ -420,7 +432,11 @@ class EeFetch(object):
                         logger.info('One bulk, terminating')
                         return
 
-                    time.sleep(SLEEP_ERR)
+                    if self.args.max_walltime and ((time.time() - time_start) + slp_err) > self.args.max_walltime:
+                        logger.info('Terminating, waiting would exceed walltime')
+                        return
+
+                    time.sleep(slp_err)
                     continue
 
                 logger.debug('Exception: %s' % e)
