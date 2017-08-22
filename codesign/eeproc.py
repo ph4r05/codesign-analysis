@@ -294,6 +294,9 @@ class Eeproc(object):
 
             has_auth = False
             has_sign = False
+            has_pos_auth = False
+            has_pos_sign = False
+
             dn = None
             for res_idx, res in enumerate(rec['res']):
                 dn = res['dn']
@@ -327,8 +330,12 @@ class Eeproc(object):
                         if cert_pos.marked:
                             totals_obj[1] += 1
                             if cat_uo == AUTH and cat_o == IDCARD:
+                                has_pos_auth = True
                                 nice_numbers.append(id)
                                 nice_years[Eeproc.date_key(cert_pos.not_before)] += 1
+
+                            elif cat_uo == SIGN and cat_o == IDCARD:
+                                has_pos_sign = True
 
                         elif args.classif_negative:
                             classif_rec = collections.OrderedDict()
@@ -344,6 +351,8 @@ class Eeproc(object):
 
             if has_auth != has_sign:
                 logger.warning('Not matching auth/sign: %s, %s' % (id, dn))
+            if has_pos_auth != has_pos_sign:
+                logger.warning('Not matching pos auth/sign: %s, %s' % (id, dn))
 
         if args.classif_negative:
             classif_fh.close()
@@ -407,7 +416,7 @@ class Eeproc(object):
         xaxis = np.arange(len(xaxis_ticks))
         all_y = [all_years[i] for i in xaxis_ticks]
         nice_y = [nice_years[i] for i in xaxis_ticks]
-        nice_y = [x * fact for x in nice_y]
+        nice_y = [x for x in nice_y]
 
         fig, ax = plt.subplots()
         rects1 = ax.bar(xaxis, nice_y, width, color='b')
