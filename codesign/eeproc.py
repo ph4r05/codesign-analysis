@@ -36,12 +36,22 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.DEBUG)
 
 
+try:
+    import numpy as np
+    import matplotlib.pyplot as plt
+    PLOT_OK = True
+except:
+    logger.error('Could not import numpy / matplotlib. Plotting disabled')
+    PLOT_OK = False
+
+
 class Eeproc(object):
     """
     EE processing
     """
     def __init__(self):
         self.big_nose = BigNose()
+        self.args = None
 
         self.totals = collections.defaultdict(lambda: [0, 0])
         self.non_rsa_cats = collections.defaultdict(lambda: 0)
@@ -215,20 +225,21 @@ class Eeproc(object):
             return True
         return False
 
-    def process(self, fnames):
+    def process(self, args):
         """
         Processing
-        :param fnames:
+        :param args:
         :return:
         """
+        self.args = args
+
+        fnames = args.fname
         recs = self.load_processed(fnames)
 
         num_people = 0
         nice_numbers = []
         all_ids = []
         people_counts = collections.defaultdict(lambda: 0)
-        nice_years = collections.defaultdict(lambda: 0)
-        all_years = collections.defaultdict(lambda: 0)
 
         for rec in recs:
             id = int(rec['id'])
@@ -237,7 +248,7 @@ class Eeproc(object):
 
             has_auth = False
             has_sign = False
-
+            dn = None
             for res in rec['res']:
                 dn = res['dn']
                 certs = res['certs']
@@ -302,22 +313,35 @@ class Eeproc(object):
         print('\nDER certs: %s, rsa: %s, people: %s' % (self.num_der_certs, self.num_rsa, num_people))
 
         # y-analysis
-        import numpy as np
-        import matplotlib.pyplot as plt
-
         nice_numbers = sorted(list(set(nice_numbers)))
         all_ids = sorted(list(set(all_ids)))
+        self.plot_age(all_ids, nice_numbers)
+
+        # serial analysis
+        if PLOT_OK and args.plot_serial:
+            self.plot_serial(all_ids, nice_numbers)
+
+    def plot_age(self, all_ids, nice_numbers, width=0.35):
+        """
+        Plot age vs. count
+        :param all_years:
+        :param nice_years:
+        :param width:
+        :return:
+        """
+        nice_years = collections.defaultdict(lambda: 0)
+        all_years = collections.defaultdict(lambda: 0)
+
         for cur in nice_numbers:
             nice_years[self.year_from_serial(cur)] += 1
         for cur in all_ids:
             all_years[self.year_from_serial(cur)] += 1
 
-        xaxis = np.arange(1950, 2020)
-        width = 0.35
+        xaxis = np.arange(1910, 2020)
 
         all_y = [all_years[i] for i in xaxis]
         nice_y = [nice_years[i] for i in xaxis]
-        fact = float(sum(all_y)) / sum(nice_y)
+        fact = 1  # float(sum(all_y)) / sum(nice_y)
         nice_y = [x * fact for x in nice_y]
 
         fig, ax = plt.subplots()
@@ -328,7 +352,14 @@ class Eeproc(object):
         ax.set_title('Year vs. count')
         plt.show()
 
-        # serial analysis
+    def plot_serial(self, all_ids, nice_numbers, width=0.35):
+        """
+        Plot serial vs. count
+        :param all_ids:
+        :param nice_numbers:
+        :param width:
+        :return:
+        """
         all_serials = collections.defaultdict(lambda: 0)
         nice_serials = collections.defaultdict(lambda: 0)
         for cur in [self.serial_from_serial(x) for x in all_ids]:
@@ -361,12 +392,16 @@ def main():
     parser.add_argument('--fname', dest='fname', default=DEF_JSON_FILE,
                         help='Fname')
 
+    parser.add_argument('--plot-serial', dest='plot_serial', default=False, action='store_const', const=True,
+                        help='Plot serial vs count')
+
     args = parser.parse_args()
 
     ee = Eeproc()
-    ee.process(args.fname)
+    ee.process(args)
 
 
 if __name__ == '__main__':
-    print(main())
+    main()
+
 
