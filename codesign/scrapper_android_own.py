@@ -43,7 +43,7 @@ from evt_dequeue import EvtDequeue
 import dbutil
 
 from github_base import AccessResource, RateLimitHit
-from database import GitHubKey, GitHubUser as GitHubUserDb, GitHubUserKeys
+from database import GitHubKey, GitHubUser as GitHubUserDb, GitHubUserKeys, AndroidApkMirrorApp, AndroidApkMirrorApk
 from database import Base as DB_Base
 from sqlalchemy.orm import scoped_session
 import sqlalchemy as salch
@@ -63,6 +63,23 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.DEBUG)
 
 
+class SkipException(Exception):
+    def __init__(self, *args):
+        super(SkipException, self).__init__(*args)
+
+
+class AndroidApp(object):
+    """
+    Android App model
+    """
+    def __init__(self, id=None, model=None, title=None, version=None, has_variants=False):
+        self.id = id
+        self.model = model
+        self.title = title
+        self.version = version
+        self.has_variants = has_variants
+
+
 class DownloadJob(object):
     """
     Represents link to download
@@ -73,12 +90,12 @@ class DownloadJob(object):
     TYPE_DOWNLOAD = 3
     TYPE_APK = 4
 
-    __slots__ = ['url', 'type', 'user', 'fail_cnt', 'last_fail', 'priority', 'time_added']
+    __slots__ = ['url', 'type', 'app', 'fail_cnt', 'last_fail', 'priority', 'time_added']
 
-    def __init__(self, url=None, jtype=TYPE_PAGE, user=None, priority=0, time_added=None, *args, **kwargs):
+    def __init__(self, url=None, jtype=TYPE_PAGE, app=None, priority=0, time_added=None, *args, **kwargs):
         self.url = url
         self.type = jtype
-        self.user = user
+        self.app = app
         self.fail_cnt = 0
         self.last_fail = 0
         self.priority = priority
@@ -92,11 +109,11 @@ class DownloadJob(object):
         js['last_fail'] = self.last_fail
         js['priority'] = self.priority
         js['time_added'] = self.time_added
-        if self.user is not None:
-            js['user_id'] = self.user.user_id
-            js['user_name'] = self.user.user_name
-            js['user_type'] = self.user.user_type
-            js['user_url'] = self.user.user_url
+        # if self.app is not None:
+        #     js['user_id'] = self.app.user_id
+        #     js['user_name'] = self.app.user_name
+        #     js['user_type'] = self.app.user_type
+        #     js['user_url'] = self.app.user_url
         return js
 
     @classmethod
@@ -110,7 +127,7 @@ class DownloadJob(object):
         tj.time_added = utils.defvalkey(js, 'time_added', 0)
         if 'user_id' in js:
             user_url = js['user_url'] if 'user_url' in js else None
-            tj.user = None #GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
+            # tj.user = None  # GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
         return tj
 
     @staticmethod
@@ -481,6 +498,8 @@ class AndroidApkLoader(Cmd):
                     self.flush_audit()
                     continue
 
+                self.local_data.s = self.session()
+
                 if job.type == DownloadJob.TYPE_PAGE:
                     self.process_page_data(job, ret_data, headers, raw_response)
                 elif job.type == DownloadJob.TYPE_DETAIL:
@@ -492,13 +511,19 @@ class AndroidApkLoader(Cmd):
                 else:
                     raise Exception('Unknown job type: ' + job.type)
 
+            except SkipException as ae:
+                pass
+
             except Exception as e:
                 logger.error('[%d] Unexpected exception, processing type %s, link %s: cnt: %d, res: %s, %s'
                              % (idx, job.type, job.url, job.fail_cnt, resource.usr, e))
 
-                traceback.print_exc()
+                self.trace_logger.log(e)
                 self.on_job_failed(job)
+
             finally:
+                utils.silent_close(self.local_data.s)
+                self.local_data.s = None
                 self.local_data.resource = None
                 self.local_data.job = None
                 self.local_data.last_usr = None
@@ -718,6 +743,7 @@ class AndroidApkLoader(Cmd):
         :param raw_response:
         :return:
         """
+        cur_time = time.time()
         tree = html.fromstring(data)
         lists = tree.xpath('//div[@id="primary"]//div[@class="listWidget"]')
         for list_widget in lists:
@@ -728,27 +754,62 @@ class AndroidApkLoader(Cmd):
                 logger.warning('No results')
                 return
 
-            for eapp1 in eapp:
+            for app_idx, eapp1 in enumerate(eapp):
                 try:
                     tbl_cel = eapp1[0][1][0]
                     ahref = tbl_cel[0][0]
 
                     link = ahref.attrib['href']
-                    title = utils.first(ahref.xpath('text()'))
+                    title = utils.utf8ize(utils.first(ahref.xpath('text()')))
 
                     info_slide = eapp1.getnext()
                     version, uploaded, size, downloads = self.get_info_details(info_slide)
                     app_name = self.get_app_name(title, version)
                     app_ver_type = self.get_app_version_type(title, version)
+                    has_variants = len(tbl_cel.xpath('div[@class="appRowVariantTag"]')) > 0
 
                     logger.debug('Title / link [%s] [%s] ' % (title, link))
-                    logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s'
-                                 % (version, uploaded, size, downloads, app_name, app_ver_type))
+                    logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s, variants: %s'
+                                 % (version, uploaded, size, downloads, app_name, app_ver_type, has_variants))
 
-                    # TODO: download this app? already downloaded?
+                    app = self.load_app(title=app_name)
+                    if app is not None:
+                        continue
+                    if app_idx > 1: # and 'firefox' not in app_name.lower():
+                        continue
+
+                    new_link = self.link(link)
+
+                    app = AndroidApp(title=app_name, version=version, has_variants=has_variants)
+
+                    new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DETAIL, app=app,
+                                          priority=random.randint(0, 1000), time_added=cur_time)
+
+                    self.link_queue.put(new_job)
 
                 except Exception as e:
                     self.trace_logger.log(e)
+
+    def link(self, x):
+        """
+        Creates an absolute link
+        :param x:
+        :return:
+        """
+        x = str(x)
+        if x.startswith('http'):
+            return x
+        if not x.startswith('/'):
+            x = '/%s' %x
+        return 'https://www.apkmirror.com%s' % x
+
+    def download_link(self, x):
+        """
+        Generates download link
+        :param x:
+        :return:
+        """
+        return 'https://www.apkmirror.com/wp-content/themes/APKMirror/download.php?id=%d' % x
 
     def get_info_details(self, info_slide):
         """
@@ -834,6 +895,24 @@ class AndroidApkLoader(Cmd):
             return 'pro'
         return None
 
+    def load_app(self, title=None, package=None, s=None):
+        """
+        Loads app by name
+        :param title:
+        :param package:
+        :param s:
+        :return:
+        """
+        if s is None:
+            s = self.local_data.s
+
+        q = s.query(AndroidApkMirrorApp)
+        if title is not None:
+            q = q.filter(AndroidApkMirrorApp.app_name == title)
+        if package is not None:
+            q = q.filter(AndroidApkMirrorApp.package_name == package)
+        return q.first()
+
     def store_users_list(self, users):
         """
         Stores all user in the list
@@ -886,22 +965,70 @@ class AndroidApkLoader(Cmd):
         finally:
             utils.silent_close(s)
 
-    def process_detail_data(self, job, js, headers, raw_response):
+    def process_detail_data(self, job, data, headers, raw_response):
         """
         Process user data - produce keys links + next user link
         :param job:
-        :param js:
+        :param data:
         :param headers:
         :param raw_response:
         :return:
         """
         # if variant page, pick one variant and download, if not, go to process_download_data
+        cur_time = time.time()
 
-    def process_download_data(self, job, js, headers, raw_response):
+        logger.debug('Detail page downloaded')
+        tree = html.fromstring(data)
+
+        variants_btn = len(tree.xpath('//a[contains(@class, "variantsButton")]')) > 0
+        logger.info('variants page: %s' % variants_btn)
+
+        if not variants_btn:
+            return self.process_download_data(job, data, headers, raw_response)
+
+        # variants:
+        vtable = utils.first(tree.xpath('//div[contains(@class, "variants-table")]'))
+        if vtable is None:
+            logger.debug('Variant parse error')
+            raise SkipException('Variant parse error')
+
+        chosen_variant = None
+        for idx, row in enumerate(vtable):
+            if idx == 0:
+                continue
+            try:
+                is_new = len(row.xpath('.//svg[contains(@class, "icon-new")]')) > 0
+                ahref = row[0][0]
+
+                link = ahref.attrib['href']
+                title = utils.utf8ize(utils.first_non_empty([str(x).strip() for x in ahref.xpath('text()')]))
+                chosen_variant = link, title
+
+                logger.info('.. variant %s (%s) : %s' % (title, is_new, link))
+                if is_new:
+                    break
+
+            except Exception as e:
+                self.trace_logger.log(e)
+
+        if chosen_variant is None:
+            logger.debug('No variant to pick')
+            return
+
+        new_link = self.link(chosen_variant[0])
+
+        app = AndroidApp(has_variants=True)
+
+        new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DOWNLOAD, app=app,
+                              priority=random.randint(0, 1000), time_added=cur_time)
+
+        self.link_queue.put(new_job)
+
+    def process_download_data(self, job, data, headers, raw_response):
         """
         Process user data - produce keys links + next user link
         :param job:
-        :param js:
+        :param data:
         :param headers:
         :param raw_response:
         :return:
@@ -909,17 +1036,43 @@ class AndroidApkLoader(Cmd):
         # update with package name
         # update with version_number - 6.31.0 (631043)
         # generate directly download link: a, id=pbDropdown, data-postid contains ID
+        cur_time = time.time()
 
-    def process_apk_data(self, job, js, headers, raw_response):
+        try:
+            logger.debug('Download page downloaded')
+            tree = html.fromstring(data)
+
+            ahref_playstore = utils.first_non_empty(tree.xpath('//div[@class="tab-buttons"]//a[contains(@title, "Play Store")]'))
+            playstore_link = ahref_playstore.attrib['href']
+            package_name = playstore_link[playstore_link.find('?id=')+4:]
+
+            ahref_push = utils.first_non_empty(tree.xpath('//div[@class="tab-buttons"]//a[@id="pbDropdown"]'))
+            item_id = int(ahref_push.attrib['data-postid'])
+
+            new_link = self.download_link(item_id)
+
+            app = AndroidApp(has_variants=True)
+
+            new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_APK, app=app,
+                                  priority=random.randint(0, 1000), time_added=cur_time)
+
+            self.link_queue.put(new_job)
+
+        except Exception as e:
+            self.trace_logger.log(e)
+            raise SkipException('Download parse error')
+
+    def process_apk_data(self, job, data, headers, raw_response):
         """
         Processing key loaded data
         :param job:
-        :param js:
+        :param data:
         :param headers:
         :param raw_response:
         :return:
         """
         # process download APK file, open APK, read cert, fprint, store all thos info to DB
+        logger.info('APK downloaded, len: %s' % len(data))
 
     def process_old_keys(self, job, js, headers, raw_response):
         """
