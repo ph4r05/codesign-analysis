@@ -283,7 +283,8 @@ class Eeproc(object):
         nice_numbers = []
         all_ids = []
         people_counts = collections.defaultdict(lambda: 0)
-        classif_fh = open('classif-negative.json', 'w+') if args.classif_negative else None
+        classif_neg_fh = open('classif-negative.json', 'w+') if args.classif else None
+        classif_pos_fh = open('classif-positive.json', 'w+') if args.classif else None
 
         all_years = collections.defaultdict(lambda: 0)
         nice_years = collections.defaultdict(lambda: 0)
@@ -337,25 +338,31 @@ class Eeproc(object):
                             elif cat_uo == SIGN and cat_o == IDCARD:
                                 has_pos_sign = True
 
-                        elif args.classif_negative:
+                        if args.classif and (cat_o == IDCARD):  # or cat_o == DIGI or cat_o == RESIDENT_DIGI):
                             classif_rec = collections.OrderedDict()
                             classif_rec['id'] = '%s%02d%02d' % (id, res_idx, idx)
                             classif_rec['eid'] = id
                             classif_rec['source'] = [dn, self.strtime(cert_pos.not_before)]
                             classif_rec['n'] = hex(cert_pos.n)
                             classif_rec['e'] = hex(cert_pos.e)
-                            classif_fh.write(json.dumps(classif_rec) + '\n')
+                            classif_rec['uo'] = cat_uo
+                            classif_rec['o'] = cat_o
+                            if cert_pos.marked:
+                                classif_pos_fh.write(json.dumps(classif_rec) + '\n')
+                            else:
+                                classif_neg_fh.write(json.dumps(classif_rec) + '\n')
 
                     except Exception as e:
                         logger.warning('Exception : %s' % e)
 
             if has_auth != has_sign:
                 logger.warning('Not matching auth/sign: %s, %s' % (id, dn))
-            if has_pos_auth != has_pos_sign:
+            if has_auth == has_sign and has_pos_auth != has_pos_sign:
                 logger.warning('Not matching pos auth/sign: %s, %s' % (id, dn))
 
-        if args.classif_negative:
-            classif_fh.close()
+        if args.classif:
+            classif_pos_fh.close()
+            classif_neg_fh.close()
 
         # Categories nice / all
         longest = 0
@@ -391,8 +398,10 @@ class Eeproc(object):
         # y-analysis
         nice_numbers = sorted(list(set(nice_numbers)))
         all_ids = sorted(list(set(all_ids)))
-        self.plot_age(all_ids, nice_numbers)
-        self.plot_not_before(all_years, nice_years)
+
+        if PLOT_OK:
+            self.plot_age(all_ids, nice_numbers)
+            self.plot_not_before(all_years, nice_years)
 
         # serial analysis
         if PLOT_OK and args.plot_serial:
@@ -426,7 +435,6 @@ class Eeproc(object):
         ax.set_ylabel('Count')
         ax.set_title('Not before vs. count')
         plt.show()
-
 
     def plot_age(self, all_ids, nice_numbers, width=0.35):
         """
@@ -502,8 +510,8 @@ def main():
     parser.add_argument('--plot-serial', dest='plot_serial', default=False, action='store_const', const=True,
                         help='Plot serial vs count')
 
-    parser.add_argument('--classif-negative', dest='classif_negative', default=False, action='store_const', const=True,
-                        help='Generate classification JSON from negative occurences')
+    parser.add_argument('--classif', dest='classif', default=False, action='store_const', const=True,
+                        help='Generate classification JSON from the occurrences')
 
     args = parser.parse_args()
 
