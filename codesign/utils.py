@@ -759,6 +759,21 @@ def first(arr):
     return arr[0]
 
 
+def first_non_empty(arr):
+    """
+        First elem if possible
+        :param arr:
+        :return:
+        """
+    if arr is None or len(arr) == 0:
+        return None
+    for x in arr:
+        if x is None or len(x) == 0:
+            continue
+        return x
+    return None
+
+
 def last(arr):
     """
     Last elem if possible
