@@ -2,23 +2,29 @@
 
 ```
 qsub -l select=32:ncpus=1:mem=200mb:scratch_local=200mb -l walltime=00:59:00 -l place=scatter -I
+tput bel
+tput bel
+tput bel
 ```
 
 To exclude previously used cluster (and now depleted):
 
 ```
 qsub -l select=32:ncpus=1:mem=200mb:scratch_local=200mb:cl_luna=False -l walltime=00:59:00 -l place=scatter -I
+tput bel
+tput bel
+tput bel
 ```
 
 ## Locality sync
 
 ```
-rsync -av ../codesign-analysis/ tarkil:~/cas/ && \
-rsync -av ../codesign-analysis/ tarkil:/storage/plzen1/home/ph4r05/cas/ && \
-rsync -av ../codesign-analysis/ tarkil:/storage/brno2/home/ph4r05/cas/ && \
-rsync -av ../codesign-analysis/ skirit:/storage/brno6/home/ph4r05/cas/ && \
-rsync -av ../codesign-analysis/ skirit:/storage/budejovice1/home/ph4r05/cas/ && \
-rsync -av ../codesign-analysis/ skirit:/storage/ostrava1/home/ph4r05/cas/
+rsync -av --exclude 'eeids*' ../codesign-analysis/ tarkil:~/cas/ && \
+rsync -av --exclude 'eeids*' ../codesign-analysis/ tarkil:/storage/plzen1/home/ph4r05/cas/ && \
+rsync -av --exclude 'eeids*' ../codesign-analysis/ tarkil:/storage/brno2/home/ph4r05/cas/ && \
+rsync -av --exclude 'eeids*' ../codesign-analysis/ skirit:/storage/brno6/home/ph4r05/cas/ && \
+rsync -av --exclude 'eeids*' ../codesign-analysis/ skirit:/storage/budejovice1/home/ph4r05/cas/ && \
+rsync -av --exclude 'eeids*' ../codesign-analysis/ skirit:/storage/ostrava1/home/ph4r05/cas/
 ```
 
 ## Collect results to one file

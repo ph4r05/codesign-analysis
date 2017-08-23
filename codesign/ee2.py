@@ -155,6 +155,22 @@ class EeFetch(object):
                           "-----END CERTIFICATE-----",))
 
     @staticmethod
+    def lower_strip(x):
+        """
+        Lower & strip
+        :param x:
+        :return:
+        """
+        if x is None:
+            return x
+
+        x = str(x)
+        try:
+            return x.strip().lower()
+        except:
+            return x
+
+    @staticmethod
     def add_score(pms, range, score):
         """
         Adds score to the pms
@@ -426,8 +442,15 @@ class EeFetch(object):
                 time.sleep(slp)
 
             except Exception as e:
-                if 'desc' in e.message and 'LDAP server' in e.message['desc']:
-                    logger.warning('LDAP server blocked @ %s' % self.hostname)
+                blocked = 'desc' in e.message and 'LDAP server' in e.message['desc']
+                unknown = 'no results' not in EeFetch.lower_strip(e.message)
+
+                if blocked or unknown:
+                    if blocked:
+                        logger.warning('LDAP server blocked @ %s' % self.hostname)
+                    else:
+                        logger.warning('Exception: %s [%s]' % (e, e.message))
+
                     if self.args.one_bulk:
                         logger.info('One bulk, terminating')
                         return
@@ -439,7 +462,6 @@ class EeFetch(object):
                     time.sleep(slp_err)
                     continue
 
-                logger.debug('Exception: %s' % e)
                 if self.args.add_id:
                     time.sleep(random.uniform(slp*0.95, slp*1.05))
                 else:
