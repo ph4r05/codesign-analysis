@@ -440,7 +440,10 @@ class EeFetch(object):
                     continue
 
                 logger.debug('Exception: %s' % e)
-                time.sleep(slp)
+                if self.args.add_id:
+                    time.sleep(random.uniform(slp*0.95, slp*1.05))
+                else:
+                    time.sleep(slp)
 
 
 if __name__ == '__main__':
