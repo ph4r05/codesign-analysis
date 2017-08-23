@@ -72,12 +72,10 @@ class AndroidApp(object):
     """
     Android App model
     """
-    def __init__(self, id=None, model=None, title=None, version=None, has_variants=False):
+    def __init__(self, id=None, model=None, data=None):
         self.id = id
         self.model = model
-        self.title = title
-        self.version = version
-        self.has_variants = has_variants
+        self.data = data if data is not None else collections.OrderedDict()
 
 
 class DownloadJob(object):
@@ -738,6 +736,7 @@ class AndroidApkLoader(Cmd):
         """
         Process user data - produce keys links + next user link
         :param job:
+        :type job: DownloadJob
         :param data:
         :param headers:
         :param raw_response:
@@ -773,14 +772,23 @@ class AndroidApkLoader(Cmd):
                                  % (version, uploaded, size, downloads, app_name, app_ver_type, has_variants))
 
                     app = self.load_app(title=app_name)
-                    if app is not None:
+                    if app is not None and app.is_downloaded:
                         continue
-                    if app_idx > 1: # and 'firefox' not in app_name.lower():
+
+                    if app_idx > 1:  # and 'firefox' not in app_name.lower():
                         continue
 
                     new_link = self.link(link)
 
-                    app = AndroidApp(title=app_name, version=version, has_variants=has_variants)
+                    app_data = collections.OrderedDict()
+                    app_data['title'] = app_name
+                    app_data['version'] = version
+                    app_data['uploaded'] = utils.unix_time(uploaded)
+                    app_data['size'] = size
+                    app_data['downloads'] = downloads
+                    app_data['has_variants'] = has_variants
+                    app_data['app_ver_type'] = app_ver_type
+                    app = AndroidApp(data=app_data)
 
                     new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DETAIL, app=app,
                                           priority=random.randint(0, 1000), time_added=cur_time)
@@ -969,6 +977,7 @@ class AndroidApkLoader(Cmd):
         """
         Process user data - produce keys links + next user link
         :param job:
+        :type job: DownloadJob
         :param data:
         :param headers:
         :param raw_response:
@@ -1017,7 +1026,9 @@ class AndroidApkLoader(Cmd):
 
         new_link = self.link(chosen_variant[0])
 
-        app = AndroidApp(has_variants=True)
+        app = job.app
+        app.data['variant_link'] = new_link
+        app.data['variant_title'] = chosen_variant[1]
 
         new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DOWNLOAD, app=app,
                               priority=random.randint(0, 1000), time_added=cur_time)
@@ -1028,6 +1039,7 @@ class AndroidApkLoader(Cmd):
         """
         Process user data - produce keys links + next user link
         :param job:
+        :type job: DownloadJob
         :param data:
         :param headers:
         :param raw_response:
@@ -1051,7 +1063,9 @@ class AndroidApkLoader(Cmd):
 
             new_link = self.download_link(item_id)
 
-            app = AndroidApp(has_variants=True)
+            app = job.app
+            app.data['pacakge_name'] = package_name
+            app.data['item_id'] = item_id
 
             new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_APK, app=app,
                                   priority=random.randint(0, 1000), time_added=cur_time)
@@ -1066,6 +1080,7 @@ class AndroidApkLoader(Cmd):
         """
         Processing key loaded data
         :param job:
+        :type job: DownloadJob
         :param data:
         :param headers:
         :param raw_response:
@@ -1073,6 +1088,8 @@ class AndroidApkLoader(Cmd):
         """
         # process download APK file, open APK, read cert, fprint, store all thos info to DB
         logger.info('APK downloaded, len: %s' % len(data))
+        app = job.app
+        logger.info(json.dumps(app.data, indent=2))
 
     def process_old_keys(self, job, js, headers, raw_response):
         """
