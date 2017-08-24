@@ -592,7 +592,7 @@ class AndroidApkLoader(Cmd):
             res = requests.get(job.url, stream=True, timeout=15)
             nurl = res.url
 
-            fname = utils.slugify(nurl[ nurl.rfind('/') : ])
+            fname = utils.slugify(nurl[ nurl.rfind('/') : ], repl=True)
             # fname = utils.safe_filename(re.findall("filename=(.+)", res.headers['content-disposition']))
 
             if fname is None or len(fname) == 0:
@@ -601,12 +601,14 @@ class AndroidApkLoader(Cmd):
                 fname = os.path.join(self.apk_dir, fname)
 
             sha1 = hashlib.sha1()
+            sha256 = hashlib.sha256()
             md5 = hashlib.md5()
             with open(fname, 'wb') as f:
                 for chunk in res.iter_content(chunk_size=4096):
                     if chunk:
                         f.write(chunk)
                         sha1.update(chunk)
+                        sha256.update(chunk)
                         md5.update(chunk)
                 f.flush()
 
@@ -614,9 +616,11 @@ class AndroidApkLoader(Cmd):
             if size < 500:
                 raise SkipException('File size too small: %s' % size)
 
+            data['download_url'] = job.url
             data['fname'] = fname
             data['size'] = size
             data['sha1'] = sha1.hexdigest()
+            data['sha256'] = sha256.hexdigest()
             data['md5'] = md5.hexdigest()
 
         else:
