@@ -76,14 +76,14 @@ class AutoJSONEncoder(JSONEncoder):
             return super(AutoJSONEncoder, self).default(o)
         
 
-def slugify(value):
+def slugify(value, repl=False):
     """
     Normalizes string, converts to lowercase, removes non-alpha characters,
     and converts spaces to hyphens.
     """
     import unicodedata
     value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore')
-    value = unicode(re.sub('[^\w\s\-.]', '', value).strip())
+    value = unicode(re.sub('[^\w\s\-.]', '' if not repl else '_', value).strip())
     value = unicode(re.sub('[-\s]+', '-', value))
     return value
 
