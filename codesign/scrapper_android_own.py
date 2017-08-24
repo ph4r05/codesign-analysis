@@ -15,7 +15,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
-
+import hashlib
 import requests
 import logging
 import coloredlogs
@@ -52,12 +52,15 @@ from trace_logger import Tracelogger
 from lxml import html
 from collections import OrderedDict
 from apk_parse.apk import APK
+from sec_light import BigNose
 
 import gc
 import mem_top
 from pympler.tracker import SummaryTracker
 from collections import OrderedDict, namedtuple
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
+from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.DEBUG)
@@ -171,11 +174,15 @@ class AndroidApkLoader(Cmd):
     PAGE_URL = 'https://www.apkmirror.com/page/%s/'
 
     def __init__(self, attempts=5, threads=1, state=None, state_file=None, config_file=None, audit_file=None,
-                 max_mem=None, merge=False, num_res=1, *args, **kwargs):
+                 max_mem=None, merge=False, num_res=1, cmd_args=None, *args, **kwargs):
 
         Cmd.__init__(self, *args, **kwargs)
         self.t = Terminal()
         self.trace_logger = Tracelogger(logger=logger)
+        self.big_nose = BigNose()
+
+        self.args = cmd_args
+        self.apk_dir = self.args.apk_dir
 
         self.attempts = int(attempts)
         self.total = None
@@ -563,11 +570,47 @@ class AndroidApkLoader(Cmd):
             auth = HTTPBasicAuth(resource.usr, resource.token)
 
         job = self.local_data.job
+        data = None
 
-        # TODO: stream downloading of the APK to the file
-        res = requests.get(job.url, timeout=10, auth=auth)
+        # Streamed downloading of the APK to the file
+        res = None
+        if job.type == DownloadJob.TYPE_APK:
+            data = collections.OrderedDict()
+
+            res = requests.get(job.url, stream=True, timeout=15)
+            nurl = res.url
+
+            fname = utils.slugify(nurl[ nurl.rfind('/') : ])
+            # fname = utils.safe_filename(re.findall("filename=(.+)", res.headers['content-disposition']))
+
+            if fname is None or len(fname) == 0:
+                fname = os.tempnam(self.apk_dir, 'apktmp')
+            else:
+                fname = os.path.join(self.apk_dir, fname)
+
+            sha1 = hashlib.sha1()
+            md5 = hashlib.md5()
+            with open(fname, 'wb') as f:
+                for chunk in res.iter_content(chunk_size=4096):
+                    if chunk:
+                        f.write(chunk)
+                        sha1.update(chunk)
+                        md5.update(chunk)
+                f.flush()
+
+            size = os.path.getsize(fname)
+            if size < 500:
+                raise SkipException('File size too small: %s' % size)
+
+            data['fname'] = fname
+            data['size'] = size
+            data['sha1'] = sha1.hexdigest()
+            data['md5'] = md5.hexdigest()
+
+        else:
+            res = requests.get(job.url, timeout=10, auth=auth)
+
         headers = res.headers
-
         resource.reset_time = float(headers.get('X-RateLimit-Reset', 0))
         resource.remaining = int(headers.get('X-RateLimit-Remaining', 1000))
         resource.last_used = time.time()
@@ -586,10 +629,11 @@ class AndroidApkLoader(Cmd):
             resource.fail_cnt += 1
             res.raise_for_status()
 
-        data = res.content
-        if data is None:
-            resource.fail_cnt += 1
-            raise Exception('Empty response')
+        if job.type != DownloadJob.TYPE_APK:
+            data = res.content
+            if data is None:
+                resource.fail_cnt += 1
+                raise Exception('Empty response')
 
         return data, headers, res
 
@@ -672,66 +716,6 @@ class AndroidApkLoader(Cmd):
         self.link_queue.put(job)
         logger.info('Kickoff link added: %s' % job.url)
 
-    # def old_process(self, job, js, headers, raw_response):
-    #     max_id = 0
-    #     github_users = []
-    #     cur_time = int(time.time())
-    #     for user in js:
-    #         if 'id' not in user:
-    #             logger.error('Field ID not found in user')
-    #             continue
-    #
-    #         github_user = GitHubUser(user_id=int(user['id']), user_name=user['login'],
-    #                                  user_type=user['type'], user_url=user['url'])
-    #         github_users.append(github_user)
-    #
-    #         if github_user.user_id > max_id:
-    #             max_id = github_user.user_id
-    #
-    #         if self.users_only:
-    #             continue
-    #
-    #         key_url = '%s/keys' % github_user.user_url
-    #         new_job = DownloadJob(url=key_url, jtype=DownloadJob.TYPE_KEYS, user=github_user,
-    #                               priority=random.randint(0, 1000), time_added=cur_time)
-    #         self.link_queue.put(new_job)
-    #
-    #     # Link with the maximal user id
-    #     users_url = self.USERS_URL % max_id
-    #     new_job = DownloadJob(url=users_url, jtype=DownloadJob.TYPE_USERS, time_added=cur_time)
-    #
-    #     # Optimizing the position of this link in the link queue
-    #     queue_size = self.link_queue.qsize()
-    #     queue_size_max = self.LINK_FACTOR * self.threads
-    #     fill_up_ratio = queue_size / float(queue_size_max)
-    #
-    #     # Key jobs are uniformly distributed on priorities 0...1000.
-    #     # To increase queue size pick priority closer to 1000, do decrease, closer to 0
-    #     priority = random.randint(0, 500)
-    #     if queue_size < queue_size_max:
-    #         priority = int((1 - fill_up_ratio) * 5000) + 500
-    #     if queue_size > 3*queue_size_max:
-    #         priority = 0
-    #
-    #     new_job.priority = priority
-    #     lucky_one = False
-    #     with self.user_lock:
-    #         if self.since_id < max_id:
-    #             self.since_id = max_id
-    #             self.link_queue.put(new_job)
-    #             lucky_one = True
-    #
-    #     logger.info('[%02d, usr=%20s, remaining=%5s] Processed users link %s, Next since: %3s. ResQSize: %4d, '
-    #                 'LQSize: %4d, fill-up: %0.4f, priority: %4s, ram: %s kB, new=%s, New users: [%s]'
-    #                 % (self.local_data.idx, self.local_data.last_usr, self.local_data.last_remaining,
-    #                    len(github_users)+1, max_id, self.resources_queue.qsize(),
-    #                    queue_size, fill_up_ratio, priority,
-    #                    resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, lucky_one,
-    #                    ', '.join([str(x.user_name) for x in github_users])))
-    #
-    #     # Store all users.
-    #     self.store_users_list(github_users)
-
     def process_page_data(self, job, data, headers, raw_response):
         """
         Process user data - produce keys links + next user link
@@ -765,7 +749,7 @@ class AndroidApkLoader(Cmd):
                     version, uploaded, size, downloads = self.get_info_details(info_slide)
                     app_name = self.get_app_name(title, version)
                     app_ver_type = self.get_app_version_type(title, version)
-                    has_variants = len(tbl_cel.xpath('div[@class="appRowVariantTag"]')) > 0
+                    has_variants = len(tbl_cel.xpath('.//div[@class="appRowVariantTag"]')) > 0
 
                     logger.debug('Title / link [%s] [%s] ' % (title, link))
                     logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s, variants: %s'
@@ -1087,9 +1071,92 @@ class AndroidApkLoader(Cmd):
         :return:
         """
         # process download APK file, open APK, read cert, fprint, store all thos info to DB
-        logger.info('APK downloaded, len: %s' % len(data))
+        logger.info('APK downloaded, len: %s' % data)
+
         app = job.app
+        app_data = app.data
+        app_data['apk'] = data
+
         logger.info(json.dumps(app.data, indent=2))
+
+        self.process_apk(data['fname'], data)
+        logger.info(json.dumps(app.data, indent=2))
+
+    def process_apk(self, file_path, apk_rec):
+        """
+        Processing APK - extracting useful information, certificate.
+        :param file_path:
+        :param apk_rec:
+        :return:
+        """
+        # parse_again = False
+        # if 'pubkey_type' not in apk_rec:
+        #     logger.info('Parse again - key type not found')
+        #     parse_again = True
+        #
+        # elif not self.rescan and 'apk_version_code' in apk_rec and apk_rec['pubkey_type'] != 'RSA':
+        #     logger.info('Skipping re-parsing of non-RSA certificates: %s' % apk_rec['pubkey_type'])
+        #     return
+        #
+        # if not self.is_apk_processed(apk_rec):
+        #     parse_again = True
+        #
+        # if not parse_again:
+        #     print(apk_rec['modulus_hex'])
+        #     return
+
+        # Downloaded - now parse
+        try:
+            logger.info('Parsing APK')
+
+            # Optimized parsing - parse only manifest and certificate, no file type inference.
+            # In case of xapks (nested apks), use temp dir to extract it.
+            apkf = APK(file_path, process_now=False, process_file_types=False, as_file_name=True, temp_dir=self.apk_dir)
+
+            # Save some time - do not re-compute MD5 inside apk parsing lib
+            if 'md5' in apk_rec:
+                apkf.file_md5 = apk_rec['md5']
+
+            apkf.process()
+            apk_rec['is_xapk'] = apkf.is_xapk
+            apk_rec['sub_apk_size'] = apkf.sub_apk_size
+
+            # Android related info (versions, SDKs)
+            utils.extend_with_android_data(apk_rec, apkf, logger)
+            pem = apkf.cert_pem
+
+            x509 = utils.load_x509(pem)
+            apk_rec['cert_alg'] = x509.signature_hash_algorithm.name
+
+            pub = x509.public_key()
+            if isinstance(pub, RSAPublicKey):
+                apk_rec['pubkey_type'] = 'RSA'
+                mod = pub.public_numbers().n
+
+                apk_rec['modulus'] = mod
+                apk_rec['modulus_hex'] = '%x' % mod
+                apk_rec['modulus_size'] = len(bin(mod)) - 2
+                apk_rec['cert_e'] = x509.public_key().public_numbers().e
+                apk_rec['cert_e_hex'] = '%x' % apk_rec['cert_e']
+                apk_rec['smells_nice'] = self.big_nose.smells_good(mod)
+                print('%x' % mod)
+
+            elif isinstance(pub, DSAPublicKey):
+                apk_rec['pubkey_type'] = 'DSA'
+
+            elif isinstance(pub, EllipticCurvePublicKey):
+                apk_rec['pubkey_type'] = 'ECC'
+
+            else:
+                apk_rec['pubkey_type'] = ''
+
+            utils.extend_with_cert_data(apk_rec, x509, logger)
+            utils.extend_with_pkcs7_data(apk_rec, apkf.pkcs7_der, logger)
+            apk_rec['pem'] = pem
+
+        except Exception as e:
+            self.trace_logger.log(e)
+            logger.error('APK parsing failed: %s' % e)
 
     def process_old_keys(self, job, js, headers, raw_response):
         """
@@ -1461,6 +1528,8 @@ def main():
                         help='Maximal memory threshold in kB when program terminates itself')
     parser.add_argument('--merge', dest='merge', default=False, action='store_const', const=True,
                         help='Merge DB operation - merge instead of add. slower, updates if exists')
+    parser.add_argument('--apk-dir', dest='apk_dir', default='.',
+                        help='Dir to cache APKs')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
@@ -1476,7 +1545,7 @@ def main():
     sys.argv = [args_src[0]]
     logger.info('Android loader started, args: %s' % args)
     l = AndroidApkLoader(state_file=state_file, config_file=config_file, audit_file=audit_file, threads=args.threads,
-                         max_mem=args.max_mem, merge=args.merge, num_res=args.resnum)
+                         max_mem=args.max_mem, merge=args.merge, num_res=args.resnum, cmd_args=args)
     l.work()
     sys.argv = args_src
 
