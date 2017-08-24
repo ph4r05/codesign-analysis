@@ -8,6 +8,7 @@ import os
 import sys
 import inspect
 import resource
+import base64
 
 from requests.auth import HTTPBasicAuth
 
@@ -80,6 +81,21 @@ class AndroidApp(object):
         self.model = model
         self.data = data if data is not None else collections.OrderedDict()
 
+    def to_json(self):
+        js = collections.OrderedDict()
+        js['id'] = self.id
+        js['model'] = self.model
+        js['data'] = self.data
+        return js
+
+    @classmethod
+    def from_json(cls, js):
+        tj = cls()
+        tj.id = js['id']
+        tj.model = js['model']
+        tj.data = js['data']
+        return tj
+
 
 class DownloadJob(object):
     """
@@ -110,11 +126,8 @@ class DownloadJob(object):
         js['last_fail'] = self.last_fail
         js['priority'] = self.priority
         js['time_added'] = self.time_added
-        # if self.app is not None:
-        #     js['user_id'] = self.app.user_id
-        #     js['user_name'] = self.app.user_name
-        #     js['user_type'] = self.app.user_type
-        #     js['user_url'] = self.app.user_url
+        if self.app is not None:
+            js['app'] = self.app.to_json()
         return js
 
     @classmethod
@@ -126,9 +139,8 @@ class DownloadJob(object):
         tj.last_fail = js['last_fail']
         tj.priority = utils.defvalkey(js, 'priority', 0)
         tj.time_added = utils.defvalkey(js, 'time_added', 0)
-        if 'user_id' in js:
-            user_url = js['user_url'] if 'user_url' in js else None
-            # tj.user = None  # GitHubUser(user_id=js['user_id'], user_name=js['user_name'], user_type=js['user_type'], user_url=user_url)
+        if 'app' in js:
+            tj.app = AndroidApp.from_json(js['app'])
         return tj
 
     @staticmethod
