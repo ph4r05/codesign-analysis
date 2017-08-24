@@ -734,7 +734,7 @@ class AndroidApkLoader(Cmd):
 
     def process_page_data(self, job, data, headers, raw_response):
         """
-        Process user data - produce keys links + next user link
+        Process app page listing
         :param job:
         :type job: DownloadJob
         :param data:
@@ -852,7 +852,7 @@ class AndroidApkLoader(Cmd):
             self.trace_logger.log(e)
 
         try:
-            downloads = int(utils.first(info_slide[3][1].xpath('text()')))
+            downloads = int(re.sub(r'[^\d]', '', utils.first(info_slide[3][1].xpath('text()'))))
         except Exception as e:
             self.trace_logger.log(e)
 
@@ -921,61 +921,9 @@ class AndroidApkLoader(Cmd):
             q = q.filter(AndroidApkMirrorApp.package_name == package)
         return q.first()
 
-    def store_users_list(self, users):
-        """
-        Stores all user in the list
-        :param users
-        :return:
-        """
-        # Handling gaps in the user space ID. With user-only optimization it causes
-        # overlaps.
-        reduced_by = 0
-        with self.processed_user_set_lock:
-            ids = [user.user_id for user in users]
-            ids_ok = []
-            for id in ids:
-                if id in self.processed_user_set:
-                    reduced_by += 1
-                    continue
-                self.processed_user_set.add(id)
-                ids_ok.append(id)
-            users = [user for user in users if user.user_id in ids_ok]
-
-        # Bulk user load
-        s = self.session()
-        id_list = sorted([user.user_id for user in users])
-        db_users = s.query(GitHubUserDb).filter(GitHubUserDb.id.in_(id_list)).all()
-        db_user_map = {user.id: user for user in db_users}
-
-        for user in users:
-            self.new_users_events.insert()
-
-            # Store user to the DB
-            try:
-                db_user = utils.defvalkey(db_user_map, key=user.user_id)
-                self.store_user(user, s, db_user=db_user, db_user_loaded=True)
-
-            except Exception as e:
-                logger.warning('[%02d] Exception in storing user %s' % (self.local_data.idx, e))
-                logger.warning(traceback.format_exc())
-                logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
-                self.trigger_quit()
-                break
-
-        try:
-            s.commit()
-            # logger.info('[%02d] Commited, reduced by: %s' % (self.local_data.idx, reduced_by))
-        except Exception as e:
-            logger.warning('[%02d] Exception in storing bulk users' % self.local_data.idx)
-            logger.warning(traceback.format_exc())
-            logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
-            self.trigger_quit()
-        finally:
-            utils.silent_close(s)
-
     def process_detail_data(self, job, data, headers, raw_response):
         """
-        Process user data - produce keys links + next user link
+        Process App detail page - if variant page, extract new variant link, otherwise proceed to download page
         :param job:
         :type job: DownloadJob
         :param data:
@@ -1037,7 +985,7 @@ class AndroidApkLoader(Cmd):
 
     def process_download_data(self, job, data, headers, raw_response):
         """
-        Process user data - produce keys links + next user link
+        Process App download page - extract package name, app infos, download link
         :param job:
         :type job: DownloadJob
         :param data:
@@ -1078,7 +1026,7 @@ class AndroidApkLoader(Cmd):
 
     def process_apk_data(self, job, data, headers, raw_response):
         """
-        Processing key loaded data
+        Process downloaded APK file
         :param job:
         :type job: DownloadJob
         :param data:
@@ -1166,13 +1114,72 @@ class AndroidApkLoader(Cmd):
             else:
                 apk_rec['pubkey_type'] = ''
 
+            apk_rec['sign_raw'] = base64.b64encode(apkf.pkcs7_der)
+
             utils.extend_with_cert_data(apk_rec, x509, logger)
             utils.extend_with_pkcs7_data(apk_rec, apkf.pkcs7_der, logger)
             apk_rec['pem'] = pem
+            apk_rec['der'] = base64.b64encode(apkf.cert_der)
 
         except Exception as e:
             self.trace_logger.log(e)
             logger.error('APK parsing failed: %s' % e)
+
+    #
+    # OLD
+    #
+
+    def store_users_list(self, users):
+        """
+        Stores all user in the list
+        :param users
+        :return:
+        """
+        # Handling gaps in the user space ID. With user-only optimization it causes
+        # overlaps.
+        reduced_by = 0
+        with self.processed_user_set_lock:
+            ids = [user.user_id for user in users]
+            ids_ok = []
+            for id in ids:
+                if id in self.processed_user_set:
+                    reduced_by += 1
+                    continue
+                self.processed_user_set.add(id)
+                ids_ok.append(id)
+            users = [user for user in users if user.user_id in ids_ok]
+
+        # Bulk user load
+        s = self.session()
+        id_list = sorted([user.user_id for user in users])
+        db_users = s.query(GitHubUserDb).filter(GitHubUserDb.id.in_(id_list)).all()
+        db_user_map = {user.id: user for user in db_users}
+
+        for user in users:
+            self.new_users_events.insert()
+
+            # Store user to the DB
+            try:
+                db_user = utils.defvalkey(db_user_map, key=user.user_id)
+                self.store_user(user, s, db_user=db_user, db_user_loaded=True)
+
+            except Exception as e:
+                logger.warning('[%02d] Exception in storing user %s' % (self.local_data.idx, e))
+                logger.warning(traceback.format_exc())
+                logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
+                self.trigger_quit()
+                break
+
+        try:
+            s.commit()
+            # logger.info('[%02d] Commited, reduced by: %s' % (self.local_data.idx, reduced_by))
+        except Exception as e:
+            logger.warning('[%02d] Exception in storing bulk users' % self.local_data.idx)
+            logger.warning(traceback.format_exc())
+            logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
+            self.trigger_quit()
+        finally:
+            utils.silent_close(s)
 
     def process_old_keys(self, job, js, headers, raw_response):
         """
@@ -1346,6 +1353,10 @@ class AndroidApkLoader(Cmd):
             utils.silent_rollback(s)
             logger.warning('Exception during key assoc: %s' % e)
             return 1
+
+    #
+    # /OLD
+    #
 
     def flush_state(self):
         """
