@@ -282,6 +282,9 @@ class AndroidApkMirrorApp(Base):
     company = Column(String(255), nullable=True)
     file_size = Column(BigInteger, nullable=True)
     downloads = Column(BigInteger, nullable=True)
+
+    processing_started_at = Column(DateTime, default=None, nullable=True)  # reservation
+    download_started_at = Column(DateTime, default=None, nullable=True)  # reservation
     is_processed = Column(SmallInteger, nullable=True)
     is_downloaded = Column(SmallInteger, nullable=True)
 
@@ -325,9 +328,10 @@ class AndroidApkMirrorApk(Base):
     sign_serial = Column(String(255), nullable=True)
     sign_issuer = Column(String(255), nullable=True)
     sign_alg = Column(String(64), nullable=True)
+    sign_raw = Column(Text, nullable=True)
 
     cert_alg = Column(String(64), nullable=True)
-    cert_print = Column(String(255), nullable=True)
+    cert_fprint = Column(String(255), nullable=True)
     cert_not_before = Column(DateTime, default=None)
     cert_not_after = Column(DateTime, default=None)
     cert_dn = Column(String(255), nullable=True)
