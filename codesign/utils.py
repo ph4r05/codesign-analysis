@@ -255,6 +255,20 @@ def extend_with_cert_data(rec, x509, logger=None):
         if logger is not None:
             logger.error('Cert parsing exception %s' % e2)
 
+    # Subject DN
+    try:
+        rec['cert_dn'] = get_dn_string(x509.subject)
+    except Exception as e2:
+        if logger is not None:
+            logger.error('Cert parsing exception %s' % e2)
+
+    # Issuer DN
+    try:
+        rec['cert_issuer_dn'] = get_dn_string(x509.issuer)
+    except Exception as e2:
+        if logger is not None:
+            logger.error('Cert parsing exception %s' % e2)
+
     # Subject
     try:
         rec['cert_cn'] = get_dn_part(x509.subject, NameOID.COMMON_NAME)
@@ -1211,4 +1225,13 @@ def try_get_datetime_from_timestamp(x):
     except:
         pass
     return None
+
+
+def safe_filename(x):
+    """
+    Safe file name
+    :param x:
+    :return:
+    """
+    return re.sub('[^\w_.)( -]', '', x)
 
