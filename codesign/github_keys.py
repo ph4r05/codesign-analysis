@@ -503,7 +503,7 @@ class GitHubLoader(Cmd):
                 logger.error('[%d] Unexpected exception, processing type %s, link %s: cnt: %d, res: %s, %s'
                              % (idx, job.type, job.url, job.fail_cnt, resource.usr, e))
 
-                traceback.print_exc()
+                self.trace_logger.log(e)
                 self.on_job_failed(job)
             finally:
                 self.local_data.resource = None
@@ -789,7 +789,7 @@ class GitHubLoader(Cmd):
 
             except Exception as e:
                 logger.warning('[%02d] Exception in storing user %s' % (self.local_data.idx, e))
-                logger.warning(traceback.format_exc())
+                self.trace_logger.log(e)
                 logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
                 self.trigger_quit()
                 break
@@ -886,7 +886,7 @@ class GitHubLoader(Cmd):
                 return 0
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.warning('User query problem: %s' % e)
 
         # Store a new user here
@@ -899,7 +899,7 @@ class GitHubLoader(Cmd):
             return 0
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.warning('[%02d] Exception during user store: %s' % (self.local_data.idx, e))
             if db_user_loaded:
                 raise
@@ -1107,7 +1107,7 @@ class GitHubLoader(Cmd):
                 self.state_ram_check()
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.error('Exception in state: %s' % e)
 
         finally:
@@ -1171,7 +1171,7 @@ class GitHubLoader(Cmd):
             return js_q
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.error('Exception in state: %s', e)
 
     def state_save(self):
@@ -1184,7 +1184,7 @@ class GitHubLoader(Cmd):
             utils.flush_json(js_q, self.state_file_path)
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.error('Exception in state: %s', e)
 
     def state_resume(self):
@@ -1206,7 +1206,7 @@ class GitHubLoader(Cmd):
                 logger.info('Link queue resumed, entries: %d' % len(self.state['link_queue']))
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.warning('Exception in resuming the state %s' % e)
             logger.error('State resume failed, exiting')
             sys.exit(1)
