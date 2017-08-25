@@ -987,6 +987,11 @@ class AndroidApkLoader(Cmd):
                 except Exception as e:
                     self.trace_logger.log(e)
 
+        if self.since_id < 900:
+            self.since_id += 1
+            job = DownloadJob(url=self.PAGE_URL % self.since_id, jtype=DownloadJob.TYPE_PAGE)
+            self.link_queue.put(job)
+
     def process_detail_data(self, job, data, headers, raw_response):
         """
         Process App detail page - if variant page, extract new variant link, otherwise proceed to download page
