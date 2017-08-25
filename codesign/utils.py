@@ -218,8 +218,13 @@ def extend_with_pkcs7_data(rec, p7der, logger=None):
 
         try:
             signed_date, valid_from, valid_to, signer = p7.get_timestamp_info()
+            rec['sign_date_dt'] = signed_date
+            rec['sign_valid_from'] = valid_from
+            rec['sign_valid_to'] = valid_to
+
             rec['sign_date'] = unix_time_millis(signed_date)
             rec['sign_date_fmt'] = fmt_time(signed_date)
+
         except Exception as e:
             logger.error('Exception in parsing PKCS7 signer: %s' % e)
 
@@ -248,6 +253,9 @@ def extend_with_cert_data(rec, x509, logger=None):
     try:
         rec['cert_fprint'] = binascii.hexlify(x509.fingerprint(hashes.SHA256()))
         rec['cert_not_before'] = unix_time_millis(x509.not_valid_before)
+        rec['cert_not_before_dt'] = x509.not_valid_before
+        rec['cert_not_after_dt'] = x509.not_valid_after
+
         rec['cert_not_before_fmt'] = fmt_time(x509.not_valid_before)
         rec['cert_not_after'] = unix_time_millis(x509.not_valid_after)
         rec['cert_not_after_fmt'] = fmt_time(x509.not_valid_after)
@@ -332,7 +340,7 @@ def flush_json(js, filepath):
     abs_filepath = os.path.abspath(filepath)
     tmp_filepath = abs_filepath + '.tmpfile'
     with open(tmp_filepath, 'w') as fw:
-        json.dump(js, fp=fw, indent=2)
+        json.dump(js, fp=fw, indent=2, cls=AutoJSONEncoder)
         fw.flush()
 
     shutil.move(tmp_filepath, abs_filepath)
