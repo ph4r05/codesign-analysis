@@ -282,8 +282,9 @@ class AndroidApkMirrorApp(Base):
     company = Column(String(255), nullable=True)
     file_size = Column(BigInteger, nullable=True)
     downloads = Column(BigInteger, nullable=True)
-
     uploaded_at = Column(DateTime, default=None, nullable=True)
+
+    processing_pid = Column(Integer, nullable=True)
     processing_started_at = Column(DateTime, default=None, nullable=True)  # reservation
     download_started_at = Column(DateTime, default=None, nullable=True)  # reservation
     processed_at = Column(DateTime, default=None, nullable=True)  # reservation
