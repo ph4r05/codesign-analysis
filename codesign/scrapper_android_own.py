@@ -551,6 +551,8 @@ class AndroidApkLoader(Cmd):
                 headers = None
                 raw_response = None
 
+            self.interruptible_sleep_delta(2)
+
         pass
         logger.info('Terminating worker thread %d' % idx)
 
@@ -980,7 +982,7 @@ class AndroidApkLoader(Cmd):
                     app = AndroidApp(data=app_data)
 
                     new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DETAIL, app=app,
-                                          priority=random.randint(0, 1000), time_added=cur_time)
+                                          priority=1000, time_added=cur_time)
 
                     self.link_queue.put(new_job)
 
@@ -989,7 +991,7 @@ class AndroidApkLoader(Cmd):
 
         if self.since_id < 900:
             self.since_id += 1
-            job = DownloadJob(url=self.PAGE_URL % self.since_id, jtype=DownloadJob.TYPE_PAGE)
+            job = DownloadJob(url=self.PAGE_URL % self.since_id, jtype=DownloadJob.TYPE_PAGE, priority=10)
             self.link_queue.put(job)
 
     def process_detail_data(self, job, data, headers, raw_response):
@@ -1050,7 +1052,7 @@ class AndroidApkLoader(Cmd):
         app.data['variant_title'] = chosen_variant[1]
 
         new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DOWNLOAD, app=app,
-                              priority=random.randint(0, 1000), time_added=cur_time)
+                              priority=4000, time_added=cur_time)
 
         self.link_queue.put(new_job)
 
@@ -1095,7 +1097,7 @@ class AndroidApkLoader(Cmd):
             self.local_data.s.commit()
 
             new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_APK, app=app,
-                                  priority=random.randint(0, 1000), time_added=cur_time)
+                                  priority=5000, time_added=cur_time)
 
             self.link_queue.put(new_job)
 
@@ -1249,239 +1251,6 @@ class AndroidApkLoader(Cmd):
         except Exception as e:
             self.trace_logger.log(e)
             logger.error('APK parsing failed: %s' % e)
-
-    #
-    # OLD
-    #
-
-    def store_users_list(self, users):
-        """
-        Stores all user in the list
-        :param users
-        :return:
-        """
-        # Handling gaps in the user space ID. With user-only optimization it causes
-        # overlaps.
-        reduced_by = 0
-        with self.processed_user_set_lock:
-            ids = [user.user_id for user in users]
-            ids_ok = []
-            for id in ids:
-                if id in self.processed_user_set:
-                    reduced_by += 1
-                    continue
-                self.processed_user_set.add(id)
-                ids_ok.append(id)
-            users = [user for user in users if user.user_id in ids_ok]
-
-        # Bulk user load
-        s = self.session()
-        id_list = sorted([user.user_id for user in users])
-        db_users = s.query(GitHubUserDb).filter(GitHubUserDb.id.in_(id_list)).all()
-        db_user_map = {user.id: user for user in db_users}
-
-        for user in users:
-            self.new_apps_events.insert()
-
-            # Store user to the DB
-            try:
-                db_user = utils.defvalkey(db_user_map, key=user.user_id)
-                self.store_user(user, s, db_user=db_user, db_user_loaded=True)
-
-            except Exception as e:
-                logger.warning('[%02d] Exception in storing user %s' % (self.local_data.idx, e))
-                logger.warning(traceback.format_exc())
-                logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
-                self.trigger_quit()
-                break
-
-        try:
-            s.commit()
-            # logger.info('[%02d] Commited, reduced by: %s' % (self.local_data.idx, reduced_by))
-        except Exception as e:
-            logger.warning('[%02d] Exception in storing bulk users' % self.local_data.idx)
-            logger.warning(traceback.format_exc())
-            logger.info('[%02d] idlist: %s' % (self.local_data.idx, id_list))
-            self.trigger_quit()
-        finally:
-            utils.silent_close(s)
-
-    def process_old_keys(self, job, js, headers, raw_response):
-        """
-        Processing key loaded data
-        :param job:
-        :param js:
-        :param headers:
-        :param raw_response:
-        :return:
-        """
-        js_empty = js is None or len(js) == 0
-
-        # Expect failures, commit everything before
-        if self.merge and not js_empty:
-            try:
-                s = self.session()
-                s.commit()
-            except Exception as e:
-                logger.warning('Could not pre-commit: %s' % e)
-
-        # Store each key.
-        for key in js:
-            s = None
-            self.new_apks_events.insert()
-
-            try:
-                s = self.session()
-                self.store_key(job.user, key, s)
-                s.commit()
-
-                self.assoc_key(job.user.user_id, key['id'], s)
-                s.commit()
-
-                s.flush()        # writes changes to DB
-                s.expunge_all()  # removes objects from session
-
-            except Exception as e:
-                logger.warning('Exception in storing key %s' % e)
-                self.trace_logger.log(e)
-
-            finally:
-                utils.silent_close(s)
-                s = None
-
-    def store_user(self, user, s, db_user=None, db_user_loaded=False):
-        """
-        Stores username to the database.
-        :param user:
-        :return:
-        """
-        type_id = 0
-        if user.user_type == 'User':
-            type_id = 1
-        elif user.user_type == 'Organization':
-            type_id = 2
-
-        try:
-            if not db_user_loaded:
-                db_user = s.query(GitHubUserDb).filter(GitHubUserDb.id == user.user_id).one_or_none()
-            if db_user is not None:
-                db_user.date_last_check = salch.func.now()
-                db_user.usr_type = type_id
-                s.merge(db_user)
-                return 0
-
-        except Exception as e:
-            self.trace_logger.log(e)
-            logger.warning('User query problem: %s' % e)
-
-        # Store a new user here
-        try:
-            db_user = GitHubUserDb()
-            db_user.id = user.user_id
-            db_user.username = user.user_name
-            db_user.usr_type = type_id
-            s.add(db_user)
-            return 0
-
-        except Exception as e:
-            self.trace_logger.log(e)
-            logger.warning('[%02d] Exception during user store: %s' % (self.local_data.idx, e))
-            if db_user_loaded:
-                raise
-            return 1
-
-    def load_existing_key(self, key, s):
-        """
-        Loads existing key if exists
-        :param key:
-        :param s:
-        :return:
-        """
-        key_id = int(key['id'])
-        return s.query(GitHubKey).filter(GitHubKey.id == key_id).one_or_none()
-
-    def store_key(self, user, key, s):
-        """
-        Stores user key to the database.
-        :param user:
-        :param key:
-        :param s: current DB session
-        :return:
-        """
-
-        # Loading phase
-        existing_key = None
-        try:
-            if self.merge:
-                existing_key = self.load_existing_key(key, s)
-
-        except Exception as e:
-            logger.warning('Exception: %s' % e)
-
-        # Storing phase
-        try:
-            if existing_key is not None:
-                existing_key.date_last_check = salch.func.now()
-                s.merge(existing_key)
-                return 0
-
-            key_id = int(key['id'])
-            key_raw = key['key']
-
-            key_type, key_val = [utils.strip(x) for x in key_raw.split(' ', 1)]
-
-            db_key = GitHubKey()
-            db_key.id = key_id
-            db_key.key_id = key_id
-            db_key.key_type = key_type
-            db_key.key_user_found = user.user_name
-            db_key.key_user_id_found = user.user_id
-            db_key.text_raw = key_raw
-
-            if key_type == 'ssh-rsa':
-                try:
-                    key_obj = utils.load_ssh_pubkey(key_raw)
-                    if isinstance(key_obj, RSAPublicKey):
-                        db_key.key_size = key_obj.key_size
-                        numbers = key_obj.public_numbers()
-                        db_key.key_modulus_hex = '%x' % numbers.n
-                        db_key.key_exponent = numbers.e
-                except Exception as e:
-                    logger.info('Exception during processing the key[%s]: %s' % (key_type, e))
-
-            s.add(db_key)
-            return 0
-
-        except Exception as e:
-            utils.silent_rollback(s)
-            logger.warning('Exception during key store: %s' % e)
-            return 1
-
-    def assoc_key(self, user_id, key_id, s):
-        """
-        Association user <-> key
-        :param user_id:
-        :param key_id:
-        :param s:
-        :return:
-        """
-        try:
-            uassoc = GitHubUserKeys()
-            uassoc.user_id = user_id
-            uassoc.key_id = key_id
-            uassoc.fount_at = salch.func.now()
-            uassoc.lost_at = None
-            s.add(uassoc)
-            return 0
-
-        except Exception as e:
-            utils.silent_rollback(s)
-            logger.warning('Exception during key assoc: %s' % e)
-            return 1
-
-    #
-    # /OLD
-    #
 
     def flush_state(self):
         """
