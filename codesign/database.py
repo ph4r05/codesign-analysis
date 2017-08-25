@@ -274,7 +274,7 @@ class AndroidApkMirrorApp(Base):
     version_code = Column(String(255), nullable=True)
     version_number = Column(BigInteger, nullable=True)
     version_type = Column(String(255), nullable=True)
-    version_variant = Column(BigInteger, nullable=True)
+    version_variant = Column(String(255), nullable=True)
 
     date_discovered = Column(DateTime, default=func.now())
     date_last_check = Column(DateTime, default=func.now())
@@ -283,10 +283,13 @@ class AndroidApkMirrorApp(Base):
     file_size = Column(BigInteger, nullable=True)
     downloads = Column(BigInteger, nullable=True)
 
+    uploaded_at = Column(DateTime, default=None, nullable=True)
     processing_started_at = Column(DateTime, default=None, nullable=True)  # reservation
     download_started_at = Column(DateTime, default=None, nullable=True)  # reservation
-    is_processed = Column(SmallInteger, nullable=True)
-    is_downloaded = Column(SmallInteger, nullable=True)
+    processed_at = Column(DateTime, default=None, nullable=True)  # reservation
+    downloaded_at = Column(DateTime, default=None, nullable=True)  # reservation
+    is_processed = Column(SmallInteger, nullable=False, default=0)
+    is_downloaded = Column(SmallInteger, nullable=False, default=0)
 
     url_detail = Column(Text, nullable=True)
     aux_json = Column(Text, nullable=True)
@@ -300,8 +303,10 @@ class AndroidApkMirrorApk(Base):
     id = Column(BigInteger, primary_key=True)
     app_id = Column(ForeignKey('android_apk_mirror_app.id', name='fk_android_apk_mirror_apk_android_apk_mirror_app_id',
                                ondelete='CASCADE'), nullable=False, index=True)
+    app = relationship('AndroidApkMirrorApp', uselist=False)
 
     url_download = Column(Text, nullable=True)
+    fpath = Column(Text, nullable=True)
     post_id = Column(BigInteger, nullable=True)
 
     date_discovered = Column(DateTime, default=func.now())
