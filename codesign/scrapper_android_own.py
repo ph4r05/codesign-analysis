@@ -839,7 +839,7 @@ class AndroidApkLoader(Cmd):
         return None
 
     def load_app(self, id_=None, title=None, package=None, processing_check=True, uploaded=None,
-                 app_ver_type=None, s=None):
+                 app_ver_type=None, pid=None, s=None):
         """
         Loads app by name
         :param id_:
@@ -874,6 +874,9 @@ class AndroidApkLoader(Cmd):
                 AndroidApkMirrorApp.is_processed,
                 AndroidApkMirrorApp.processing_started_at == None,
                 AndroidApkMirrorApp.processing_started_at >= ct)
+
+            if pid is not None:
+                process_filter = salch.and_(AndroidApkMirrorApp.processing_pid == pid, process_filter)
 
             if uploaded:
                 process_filter = salch.or_(AndroidApkMirrorApp.uploaded_at >= uploaded, process_filter)
@@ -928,10 +931,12 @@ class AndroidApkLoader(Cmd):
                     logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s, variants: %s'
                                  % (version, uploaded, size, downloads, app_name, app_ver_type, has_variants))
 
+                    pid = os.getpid()
                     app = self.load_app(title=app_name, processing_check=True, uploaded=uploaded,
-                                        app_ver_type=app_ver_type)
-                    
+                                        app_ver_type=app_ver_type, pid=pid)
+
                     if app is not None:
+                        logger.info('Already has %s' % app_name)
                         continue
 
                     if self.args.test and app_idx > 1:  # and 'firefox' not in app_name.lower():
@@ -943,6 +948,7 @@ class AndroidApkLoader(Cmd):
 
                     app_data = collections.OrderedDict()
                     app_data['title'] = app_name
+                    app_data['pid'] = pid
                     app_data['version'] = version
                     app_data['uploaded'] = utils.unix_time(uploaded)
                     app_data['size'] = size
@@ -962,6 +968,7 @@ class AndroidApkLoader(Cmd):
                     mapp.company = company
                     mapp.url_detail = new_link
                     mapp.uploaded_at = uploaded
+                    mapp.processing_pid = pid
                     mapp.processing_started_at = salch.func.now()
                     mapp.date_discovered = salch.func.now()
                     mapp.date_last_check = salch.func.now()
