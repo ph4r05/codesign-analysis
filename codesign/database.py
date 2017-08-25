@@ -332,7 +332,7 @@ class AndroidApkMirrorApk(Base):
     sign_date = Column(DateTime, default=None)
     sign_info_cnt = Column(Integer, nullable=True)
     sign_serial = Column(String(255), nullable=True)
-    sign_issuer = Column(String(255), nullable=True)
+    sign_issuer = Column(Text, nullable=True)
     sign_alg = Column(String(64), nullable=True)
     sign_raw = Column(Text, nullable=True)
 
@@ -340,8 +340,8 @@ class AndroidApkMirrorApk(Base):
     cert_fprint = Column(String(255), nullable=True)
     cert_not_before = Column(DateTime, default=None)
     cert_not_after = Column(DateTime, default=None)
-    cert_dn = Column(String(255), nullable=True)
-    cert_issuer_dn = Column(String(255), nullable=True)
+    cert_dn = Column(Text, nullable=True)
+    cert_issuer_dn = Column(Text, nullable=True)
     cert_raw = Column(Text, nullable=True)
 
     pub_type = Column(String(32), nullable=True)
