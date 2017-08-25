@@ -16,6 +16,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
+import datetime
 import hashlib
 import requests
 import logging
@@ -237,8 +238,8 @@ class AndroidApkLoader(Cmd):
         self.resources_queue = Queue.PriorityQueue()
         self.local_data = threading.local()
 
-        self.new_users_events = EvtDequeue()
-        self.new_keys_events = EvtDequeue()
+        self.new_apps_events = EvtDequeue()
+        self.new_apks_events = EvtDequeue()
 
         self.db_config = None
         self.engine = None
@@ -314,15 +315,15 @@ class AndroidApkLoader(Cmd):
         elif line == '1':
             del js['link_queue']
 
-        print(json.dumps(js, indent=2))
+        print(json.dumps(js, indent=2, cls=utils.AutoJSONEncoder))
 
     def do_deq_enable(self, line):
-        self.new_keys_events.disabled = False
-        self.new_users_events.disabled = False
+        self.new_apks_events.disabled = False
+        self.new_apps_events.disabled = False
 
     def do_deq_disable(self, line):
-        self.new_keys_events.disabled = True
-        self.new_users_events.disabled = True
+        self.new_apks_events.disabled = True
+        self.new_apps_events.disabled = True
 
     #
     # Init
@@ -446,9 +447,9 @@ class AndroidApkLoader(Cmd):
 
             if wait_for_state:
                 self.state_thread.join()
-        except:
+        except Exception as e:
             logger.error('Exception during thread join')
-            logger.error(traceback.format_exc())
+            self.trace_logger.log(e)
 
         logger.info('All threads terminates, last state save')
         self.state_save()
@@ -837,11 +838,14 @@ class AndroidApkLoader(Cmd):
             return 'pro'
         return None
 
-    def load_app(self, title=None, package=None, s=None):
+    def load_app(self, id_=None, title=None, package=None, processing_check=True, uploaded=None, s=None):
         """
         Loads app by name
+        :param id_:
         :param title:
         :param package:
+        :param processing_check:
+        :param uploaded:
         :param s:
         :return:
         """
@@ -849,10 +853,32 @@ class AndroidApkLoader(Cmd):
             s = self.local_data.s
 
         q = s.query(AndroidApkMirrorApp)
+
+        if id_ is not None:
+            q = q.filter(AndroidApkMirrorApp.id == id_)
+
         if title is not None:
             q = q.filter(AndroidApkMirrorApp.app_name == title)
+
         if package is not None:
             q = q.filter(AndroidApkMirrorApp.package_name == package)
+
+        if processing_check:
+            ct = datetime.datetime.utcnow() - datetime.timedelta(minutes=20)
+            process_filter = salch.or_(
+                AndroidApkMirrorApp.is_downloaded,
+                AndroidApkMirrorApp.is_processed,
+                AndroidApkMirrorApp.processing_started_at == None,
+                AndroidApkMirrorApp.processing_started_at >= ct)
+
+            if uploaded:
+                process_filter = salch.or_(AndroidApkMirrorApp.uploaded_at >= uploaded, process_filter)
+
+            q = q.filter(process_filter)
+
+        elif uploaded is not None:
+            q = q.filter(AndroidApkMirrorApp.uploaded_at >= uploaded)
+
         return q.first()
 
     def process_page_data(self, job, data, headers, raw_response):
@@ -894,14 +920,16 @@ class AndroidApkLoader(Cmd):
                     logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s, variants: %s'
                                  % (version, uploaded, size, downloads, app_name, app_ver_type, has_variants))
 
-                    app = self.load_app(title=app_name)
-                    if app is not None and app.is_downloaded:
+                    app = self.load_app(title=app_name, processing_check=True, uploaded=uploaded)
+                    if app is not None:
                         continue
 
                     if app_idx > 1:  # and 'firefox' not in app_name.lower():
                         continue
 
                     new_link = self.link(link)
+                    abslen = len('https://www.apkmirror.com/apk/')
+                    company = new_link[abslen:new_link.find('/', abslen)]
 
                     app_data = collections.OrderedDict()
                     app_data['title'] = app_name
@@ -911,6 +939,27 @@ class AndroidApkLoader(Cmd):
                     app_data['downloads'] = downloads
                     app_data['has_variants'] = has_variants
                     app_data['app_ver_type'] = app_ver_type
+                    app_data['detail_url'] = new_link
+                    app_data['company'] = company
+
+                    s = self.local_data.s
+                    mapp = AndroidApkMirrorApp()
+                    mapp.app_name = app_name
+                    mapp.version_code = version
+                    mapp.version_type = app_ver_type
+                    mapp.file_size = size
+                    mapp.downloads = downloads
+                    mapp.company = company
+                    mapp.url_detail = new_link
+                    mapp.uploaded_at = uploaded
+                    mapp.processing_started_at = salch.func.now()
+                    mapp.date_discovered = salch.func.now()
+                    mapp.date_last_check = salch.func.now()
+
+                    s.add(mapp)
+                    s.commit()
+
+                    app_data['model_id'] = mapp.id
                     app = AndroidApp(data=app_data)
 
                     new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DETAIL, app=app,
@@ -1014,6 +1063,14 @@ class AndroidApkLoader(Cmd):
             app = job.app
             app.data['pacakge_name'] = package_name
             app.data['item_id'] = item_id
+            app.data['url_download'] = new_link
+
+            mapp = self.load_app(id_=app.data['model_id'])
+            mapp.package_name = package_name
+            mapp.download_started_at = salch.func.now()
+
+            self.local_data.s.merge(mapp)
+            self.local_data.s.commit()
 
             new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_APK, app=app,
                                   priority=random.randint(0, 1000), time_added=cur_time)
@@ -1041,10 +1098,67 @@ class AndroidApkLoader(Cmd):
         app_data = app.data
         app_data['apk'] = data
 
-        logger.info(json.dumps(app.data, indent=2))
-
         self.process_apk(data['fname'], data)
-        logger.info(json.dumps(app.data, indent=2))
+        logger.info(json.dumps(app.data, indent=2, cls=utils.AutoJSONEncoder))
+
+        mapp = self.load_app(id_=app.data['model_id'])
+        mapp.is_downloaded = 1
+        mapp.version_variant = utils.defvalkey(app_data, 'variant_title')
+        mapp.downloaded_at = salch.func.now()
+        self.local_data.s.merge(mapp)
+        self.local_data.s.commit()
+
+        apkdat = app_data['apk']
+
+        mapk = AndroidApkMirrorApk()
+        mapk.app = mapp
+        mapk.app_id = mapp.id
+        mapk.url_download = app_data['url_download']
+        mapk.fpath = utils.defvalkey(apkdat, 'fname')
+        mapk.post_id = app_data['item_id']
+        mapk.date_discovered = salch.func.now()
+
+        mapk.file_size = apkdat['size']
+        mapk.md5 = apkdat['md5']
+        mapk.sha1 = apkdat['sha1']
+        mapk.sha256 = apkdat['sha256']
+
+        mapk.is_xapk = utils.defvalkey(apkdat, 'is_xapk')
+        mapk.sub_apk_size = utils.defvalkey(apkdat, 'sub_apk_size')
+        mapk.apk_package = mapp.package_name
+        mapk.apk_version_code = utils.defvalkey(apkdat, 'apk_version_code')
+        mapk.apk_version_name = utils.defvalkey(apkdat, 'apk_version_name')
+        mapk.apk_min_sdk = utils.defvalkey(apkdat, 'apk_min_sdk')
+        mapk.apk_tgt_sdk = utils.defvalkey(apkdat, 'apk_tgt_sdk')
+        mapk.apk_max_sdk = utils.defvalkey(apkdat, 'apk_max_sdk')
+
+        mapk.sign_date = utils.defvalkey(apkdat, 'sign_date_dt')
+        mapk.sign_info_cnt = utils.defvalkey(apkdat, 'sign_info_cnt')
+        mapk.sign_serial = utils.defvalkey(apkdat, 'sign_serial')
+        mapk.sign_issuer = utils.defvalkey(apkdat, 'sign_issuer')
+        mapk.sign_alg = utils.defvalkey(apkdat, 'sign_alg')
+        mapk.sign_raw = utils.defvalkey(apkdat, 'sign_raw')
+
+        mapk.cert_alg = utils.defvalkey(apkdat, 'cert_alg')
+        mapk.cert_fprint = utils.defvalkey(apkdat, 'cert_fprint')
+        mapk.cert_not_before = utils.defvalkey(apkdat, 'cert_not_before_dt')
+        mapk.cert_not_after = utils.defvalkey(apkdat, 'cert_not_after_dt')
+        mapk.cert_dn = utils.defvalkey(apkdat, 'cert_dn')
+        mapk.cert_issuer_dn = utils.defvalkey(apkdat, 'cert_issuer_dn')
+        mapk.cert_raw = utils.defvalkey(apkdat, 'der')
+
+        mapk.pub_type = utils.defvalkey(apkdat, 'pubkey_type')
+        mapk.pub_modulus = utils.defvalkey(apkdat, 'modulus_hex')
+        mapk.pub_exponent = utils.defvalkey(apkdat, 'cert_e_hex')
+        mapk.pub_modulus_size = utils.defvalkey(apkdat, 'modulus_size')
+        mapk.pub_interesting = utils.defvalkey(apkdat, 'smells_nice')
+        self.local_data.s.add(mapk)
+        self.local_data.s.commit()
+
+        mapp.is_processed = 1
+        mapp.processed_at = salch.func.now()
+        self.local_data.s.merge(mapp)
+        self.local_data.s.commit()
 
     def process_apk(self, file_path, apk_rec):
         """
@@ -1053,25 +1167,9 @@ class AndroidApkLoader(Cmd):
         :param apk_rec:
         :return:
         """
-        # parse_again = False
-        # if 'pubkey_type' not in apk_rec:
-        #     logger.info('Parse again - key type not found')
-        #     parse_again = True
-        #
-        # elif not self.rescan and 'apk_version_code' in apk_rec and apk_rec['pubkey_type'] != 'RSA':
-        #     logger.info('Skipping re-parsing of non-RSA certificates: %s' % apk_rec['pubkey_type'])
-        #     return
-        #
-        # if not self.is_apk_processed(apk_rec):
-        #     parse_again = True
-        #
-        # if not parse_again:
-        #     print(apk_rec['modulus_hex'])
-        #     return
-
         # Downloaded - now parse
         try:
-            logger.info('Parsing APK')
+            logger.debug('Parsing APK')
 
             # Optimized parsing - parse only manifest and certificate, no file type inference.
             # In case of xapks (nested apks), use temp dir to extract it.
@@ -1156,7 +1254,7 @@ class AndroidApkLoader(Cmd):
         db_user_map = {user.id: user for user in db_users}
 
         for user in users:
-            self.new_users_events.insert()
+            self.new_apps_events.insert()
 
             # Store user to the DB
             try:
@@ -1203,7 +1301,7 @@ class AndroidApkLoader(Cmd):
         # Store each key.
         for key in js:
             s = None
-            self.new_keys_events.insert()
+            self.new_apks_events.insert()
 
             try:
                 s = self.session()
@@ -1246,7 +1344,7 @@ class AndroidApkLoader(Cmd):
                 return 0
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.warning('User query problem: %s' % e)
 
         # Store a new user here
@@ -1259,7 +1357,7 @@ class AndroidApkLoader(Cmd):
             return 0
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.warning('[%02d] Exception during user store: %s' % (self.local_data.idx, e))
             if db_user_loaded:
                 raise
@@ -1407,7 +1505,7 @@ class AndroidApkLoader(Cmd):
                 return
             with open(self.audit_file, 'a') as fa:
                 for x in self.audit_records_buffered:
-                    fa.write(json.dumps(x) + "\n")
+                    fa.write(json.dumps(x, cls=utils.AutoJSONEncoder) + "\n")
             self.audit_records_buffered = []
         except Exception as e:
             logger.error('Exception in audit log dump %s' % e)
@@ -1435,7 +1533,7 @@ class AndroidApkLoader(Cmd):
                 self.state_ram_check()
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.error('Exception in state: %s' % e)
 
         finally:
@@ -1460,6 +1558,23 @@ class AndroidApkLoader(Cmd):
                        % (cur_ram, cur_ram / 1024.0, self.max_mem))
         self.trigger_stop()
 
+    def link_type_char(self, x):
+        """
+        Link repr
+        :param x:
+        :return:
+        """
+        if x == DownloadJob.TYPE_PAGE:
+            return 'P'
+        elif x == DownloadJob.TYPE_DETAIL:
+            return '.'
+        elif x == DownloadJob.TYPE_DOWNLOAD:
+            return '-'
+        elif x == DownloadJob.TYPE_APK:
+            return '*'
+        else:
+            return ' '
+
     def state_gen(self):
         """
         Dumps state
@@ -1473,23 +1588,23 @@ class AndroidApkLoader(Cmd):
             js_q['memory'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
             # Dequeues
-            self.new_users_events.maintain()
-            self.new_keys_events.maintain()
+            self.new_apps_events.maintain()
+            self.new_apks_events.maintain()
 
-            users_in_5min = self.new_users_events.under_limit(5*60)
-            keys_in_5min = self.new_keys_events.under_limit(5*60)
+            apps_in_5min = self.new_apps_events.under_limit(5 * 60)
+            apks_in_5min = self.new_apks_events.under_limit(5 * 60)
 
-            js_q['users_dequeue_size'] = self.new_users_events.len()
-            js_q['keys_dequeue_size'] = self.new_keys_events.len()
-            js_q['users_5min'] = users_in_5min
-            js_q['keys_5min'] = keys_in_5min
-            js_q['users_1min'] = users_in_5min / 5.0
-            js_q['keys_1min'] = keys_in_5min / 5.0
+            js_q['app_dequeue_size'] = self.new_apps_events.len()
+            js_q['apk_dequeue_size'] = self.new_apks_events.len()
+            js_q['apps_5min'] = apps_in_5min
+            js_q['apks_5min'] = apks_in_5min
+            js_q['apps_1min'] = apps_in_5min / 5.0
+            js_q['apks_1min'] = apks_in_5min / 5.0
 
             # link queue structure
             qdata = list(self.link_queue.queue)
             qdata.sort(cmp=DownloadJob.cmp)
-            js_q['link_structure'] = ''.join(['.' if x.type == DownloadJob.TYPE_PAGE else 'U' for x in qdata])
+            js_q['link_structure'] = ''.join([self.link_type_char(x.type) for x in qdata])
 
             # Stats.
             js_q['resource_stats'] = [x.to_json() for x in list(self.resources_list)]
@@ -1499,7 +1614,7 @@ class AndroidApkLoader(Cmd):
             return js_q
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.error('Exception in state: %s', e)
 
     def state_save(self):
@@ -1512,7 +1627,7 @@ class AndroidApkLoader(Cmd):
             utils.flush_json(js_q, self.state_file_path)
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.error('Exception in state: %s', e)
 
     def state_resume(self):
@@ -1534,7 +1649,7 @@ class AndroidApkLoader(Cmd):
                 logger.info('Link queue resumed, entries: %d' % len(self.state['link_queue']))
 
         except Exception as e:
-            traceback.print_exc()
+            self.trace_logger.log(e)
             logger.warning('Exception in resuming the state %s' % e)
             logger.error('State resume failed, exiting')
             sys.exit(1)
