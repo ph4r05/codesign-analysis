@@ -838,7 +838,8 @@ class AndroidApkLoader(Cmd):
             return 'pro'
         return None
 
-    def load_app(self, id_=None, title=None, package=None, processing_check=True, uploaded=None, s=None):
+    def load_app(self, id_=None, title=None, package=None, processing_check=True, uploaded=None,
+                 app_ver_type=None, s=None):
         """
         Loads app by name
         :param id_:
@@ -863,6 +864,9 @@ class AndroidApkLoader(Cmd):
         if package is not None:
             q = q.filter(AndroidApkMirrorApp.package_name == package)
 
+        if app_ver_type is not None:
+            q = q.filter(AndroidApkMirrorApp.version_type == app_ver_type)
+
         if processing_check:
             ct = datetime.datetime.utcnow() - datetime.timedelta(minutes=20)
             process_filter = salch.or_(
@@ -880,6 +884,10 @@ class AndroidApkLoader(Cmd):
             q = q.filter(AndroidApkMirrorApp.uploaded_at >= uploaded)
 
         return q.first()
+
+    #
+    # Processing page
+    #
 
     def process_page_data(self, job, data, headers, raw_response):
         """
@@ -920,11 +928,13 @@ class AndroidApkLoader(Cmd):
                     logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s, variants: %s'
                                  % (version, uploaded, size, downloads, app_name, app_ver_type, has_variants))
 
-                    app = self.load_app(title=app_name, processing_check=True, uploaded=uploaded)
+                    app = self.load_app(title=app_name, processing_check=True, uploaded=uploaded,
+                                        app_ver_type=app_ver_type)
+                    
                     if app is not None:
                         continue
 
-                    if app_idx > 1:  # and 'firefox' not in app_name.lower():
+                    if self.args.test and app_idx > 1:  # and 'firefox' not in app_name.lower():
                         continue
 
                     new_link = self.link(link)
@@ -1160,6 +1170,12 @@ class AndroidApkLoader(Cmd):
         self.local_data.s.merge(mapp)
         self.local_data.s.commit()
 
+        if self.args.apk_done_dir != self.apk_dir:
+            try:
+                shutil.move(data['fname'], self.args.apk_done_dir)
+            except Exception as e:
+                self.trace_logger.log(e)
+
     def process_apk(self, file_path, apk_rec):
         """
         Processing APK - extracting useful information, certificate.
@@ -1201,7 +1217,6 @@ class AndroidApkLoader(Cmd):
                 apk_rec['cert_e'] = x509.public_key().public_numbers().e
                 apk_rec['cert_e_hex'] = '%x' % apk_rec['cert_e']
                 apk_rec['smells_nice'] = self.big_nose.smells_good(mod)
-                print('%x' % mod)
 
             elif isinstance(pub, DSAPublicKey):
                 apk_rec['pubkey_type'] = 'DSA'
@@ -1670,8 +1685,12 @@ def main():
                         help='Maximal memory threshold in kB when program terminates itself')
     parser.add_argument('--merge', dest='merge', default=False, action='store_const', const=True,
                         help='Merge DB operation - merge instead of add. slower, updates if exists')
+    parser.add_argument('--test', dest='test', default=False, action='store_const', const=True,
+                        help='Just testing')
     parser.add_argument('--apk-dir', dest='apk_dir', default='.',
                         help='Dir to cache APKs')
+    parser.add_argument('--apk-done-dir', dest='apk_done_dir', default='.',
+                        help='Dir to move APKs after processing finished')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
@@ -1695,54 +1714,3 @@ def main():
 # Launcher
 if __name__ == "__main__":
     main()
-
-
-
-
-
-# Download details page
-# detail_url = self.BASE_URL + link
-# apk_rec['url_detail'] = detail_url
-# logger.info('Downloading detail info: %s' % detail_url)
-# tree = self.load_page(detail_url)
-
-# # Sometimes there are more APKs matching
-# ahref = tree.xpath('//div[@class="table-cell rowheight addseparator expand pad dowrap"]/a')
-# if len(ahref) > 0:
-#     ahref = ahref[0]
-#     link = ahref.attrib['href']
-#     title = ahref.xpath('text()')
-#     logger.info('Title: %s, link: %s' % (title, link))
-#
-#     # Download particular APK page
-#     detail_url = self.BASE_URL + link
-#     apk_rec['url_detail2'] = detail_url
-#     logger.info('Downloading APK detail info: %s' % detail_url)
-#     tree = self.load_page(detail_url)
-#
-# ahref = tree.xpath('//a[@class="btn btn-flat downloadButton"]')[0]
-# link = ahref.attrib['href']
-# logger.info('Download link: %s' % link)
-# # TODO: fetch more info about the APK
-#
-# # Fetch page with direct link
-# download_url = self.BASE_URL + link
-# apk_rec['url_download'] = download_url
-# logger.info('Downloading APK download info: %s' % download_url)
-# tree = self.load_page(download_url)
-#
-# ahref = tree.xpath('//div[@class="noPadding col-md-6 col-sm-6 col-xs-12"]/p/a')[0]
-# link = ahref.attrib['href']
-# logger.info('Direct link: %s' % link)
-
-
-# item = ArtifactItem()
-# item['url'] = response.url
-# item['versions'] = versions
-# item['misc_files'] = misc_files
-# item['artifact_detected'] = is_artifact
-# item['confidence'] = art_conf
-# yield item
-# yield Request(pom_link, callback=self.parse_pom, meta=dict(meta))
-
-
