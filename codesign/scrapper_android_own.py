@@ -732,72 +732,6 @@ class AndroidApkLoader(Cmd):
         self.link_queue.put(job)
         logger.info('Kickoff link added: %s' % job.url)
 
-    def process_page_data(self, job, data, headers, raw_response):
-        """
-        Process app page listing
-        :param job:
-        :type job: DownloadJob
-        :param data:
-        :param headers:
-        :param raw_response:
-        :return:
-        """
-        cur_time = time.time()
-        tree = html.fromstring(data)
-        lists = tree.xpath('//div[@id="primary"]//div[@class="listWidget"]')
-        for list_widget in lists:
-            logger.debug('List widget: %s' % list_widget)
-            eapp = list_widget.xpath('div[@class="appRow"]')
-
-            if len(eapp) == 0:
-                logger.warning('No results')
-                return
-
-            for app_idx, eapp1 in enumerate(eapp):
-                try:
-                    tbl_cel = eapp1[0][1][0]
-                    ahref = tbl_cel[0][0]
-
-                    link = ahref.attrib['href']
-                    title = utils.utf8ize(utils.first(ahref.xpath('text()')))
-
-                    info_slide = eapp1.getnext()
-                    version, uploaded, size, downloads = self.get_info_details(info_slide)
-                    app_name = self.get_app_name(title, version)
-                    app_ver_type = self.get_app_version_type(title, version)
-                    has_variants = len(tbl_cel.xpath('.//div[@class="appRowVariantTag"]')) > 0
-
-                    logger.debug('Title / link [%s] [%s] ' % (title, link))
-                    logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s, variants: %s'
-                                 % (version, uploaded, size, downloads, app_name, app_ver_type, has_variants))
-
-                    app = self.load_app(title=app_name)
-                    if app is not None and app.is_downloaded:
-                        continue
-
-                    if app_idx > 1:  # and 'firefox' not in app_name.lower():
-                        continue
-
-                    new_link = self.link(link)
-
-                    app_data = collections.OrderedDict()
-                    app_data['title'] = app_name
-                    app_data['version'] = version
-                    app_data['uploaded'] = utils.unix_time(uploaded)
-                    app_data['size'] = size
-                    app_data['downloads'] = downloads
-                    app_data['has_variants'] = has_variants
-                    app_data['app_ver_type'] = app_ver_type
-                    app = AndroidApp(data=app_data)
-
-                    new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DETAIL, app=app,
-                                          priority=random.randint(0, 1000), time_added=cur_time)
-
-                    self.link_queue.put(new_job)
-
-                except Exception as e:
-                    self.trace_logger.log(e)
-
     def link(self, x):
         """
         Creates an absolute link
@@ -920,6 +854,72 @@ class AndroidApkLoader(Cmd):
         if package is not None:
             q = q.filter(AndroidApkMirrorApp.package_name == package)
         return q.first()
+
+    def process_page_data(self, job, data, headers, raw_response):
+        """
+        Process app page listing
+        :param job:
+        :type job: DownloadJob
+        :param data:
+        :param headers:
+        :param raw_response:
+        :return:
+        """
+        cur_time = time.time()
+        tree = html.fromstring(data)
+        lists = tree.xpath('//div[@id="primary"]//div[@class="listWidget"]')
+        for list_widget in lists:
+            logger.debug('List widget: %s' % list_widget)
+            eapp = list_widget.xpath('div[@class="appRow"]')
+
+            if len(eapp) == 0:
+                logger.warning('No results')
+                return
+
+            for app_idx, eapp1 in enumerate(eapp):
+                try:
+                    tbl_cel = eapp1[0][1][0]
+                    ahref = tbl_cel[0][0]
+
+                    link = ahref.attrib['href']
+                    title = utils.utf8ize(utils.first(ahref.xpath('text()')))
+
+                    info_slide = eapp1.getnext()
+                    version, uploaded, size, downloads = self.get_info_details(info_slide)
+                    app_name = self.get_app_name(title, version)
+                    app_ver_type = self.get_app_version_type(title, version)
+                    has_variants = len(tbl_cel.xpath('.//div[@class="appRowVariantTag"]')) > 0
+
+                    logger.debug('Title / link [%s] [%s] ' % (title, link))
+                    logger.debug('v: %s, upd: %s, size: %s, down: %s, appName: %s, verInfo: %s, variants: %s'
+                                 % (version, uploaded, size, downloads, app_name, app_ver_type, has_variants))
+
+                    app = self.load_app(title=app_name)
+                    if app is not None and app.is_downloaded:
+                        continue
+
+                    if app_idx > 1:  # and 'firefox' not in app_name.lower():
+                        continue
+
+                    new_link = self.link(link)
+
+                    app_data = collections.OrderedDict()
+                    app_data['title'] = app_name
+                    app_data['version'] = version
+                    app_data['uploaded'] = utils.unix_time(uploaded)
+                    app_data['size'] = size
+                    app_data['downloads'] = downloads
+                    app_data['has_variants'] = has_variants
+                    app_data['app_ver_type'] = app_ver_type
+                    app = AndroidApp(data=app_data)
+
+                    new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DETAIL, app=app,
+                                          priority=random.randint(0, 1000), time_added=cur_time)
+
+                    self.link_queue.put(new_job)
+
+                except Exception as e:
+                    self.trace_logger.log(e)
 
     def process_detail_data(self, job, data, headers, raw_response):
         """
