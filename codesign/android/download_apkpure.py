@@ -322,7 +322,7 @@ def main():
         new_json = os.path.join(dump_dir, '_apks_info.json')
         new_json_tmp = os.path.join(dump_dir, '_apks_info.json.tmp')
         with open(new_json_tmp, 'w') as fh:
-            fh.write(json.dumps(db, indent=2))
+            fh.write(json.dumps(db, indent=2, cls=utils.AutoJSONEncoder))
             fh.flush()
             last_save = cur_time
         shutil.move(new_json_tmp, new_json)

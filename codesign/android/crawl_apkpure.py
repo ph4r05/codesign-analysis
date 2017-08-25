@@ -132,7 +132,7 @@ def dump_apps(mode, state_file, apks):
 
         apks += part_apks
         with open(state_file, 'w') as fh:
-            fh.write(json.dumps({'apks': apks}, indent=2))
+            fh.write(json.dumps({'apks': apks}, indent=2, cls=utils.AutoJSONEncoder))
 
         print('Page %s loaded' % page)
         page = page + 1 if page is not None else 1

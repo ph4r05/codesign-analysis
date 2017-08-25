@@ -95,8 +95,8 @@ def main():
 
     parser = GPlayParser(rank_file)
     apks = parser.process()
-    js = json.dumps({'type': 'googleplay', 'apks': apks}, indent=2)
-    print js
+    js = json.dumps({'type': 'googleplay', 'apks': apks}, indent=2, cls=utils.AutoJSONEncoder)
+    print(js)
 
 
 # Launcher

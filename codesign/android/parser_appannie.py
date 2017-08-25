@@ -100,8 +100,8 @@ def main():
 
     parser = AppAnnieParser(rank_file)
     apks = parser.process()
-    js = json.dumps({'type': 'appannie', 'apks': apks}, indent=2)
-    print js
+    js = json.dumps({'type': 'appannie', 'apks': apks}, indent=2, cls=utils.AutoJSONEncoder)
+    print(js)
 
 
 # Launcher

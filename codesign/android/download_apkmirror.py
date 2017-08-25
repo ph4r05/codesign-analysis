@@ -166,7 +166,7 @@ def main():
     pkg = args.package
     l = ApkMirrorLoader()
     apk = l.load(pkg)
-    print json.dumps(apk, indent=2)
+    print(json.dumps(apk, indent=2, cls=utils.AutoJSONEncoder))
 
 
 # Launcher
