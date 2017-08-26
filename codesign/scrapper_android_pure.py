@@ -1067,11 +1067,13 @@ class AndroidApkLoader(Cmd):
         self.local_data.s.merge(mapp)
         self.local_data.s.commit()
 
-        if self.args.apk_done_dir != self.apk_dir:
-            try:
+        try:
+            if self.args.apk_done_dir != self.apk_dir:
                 shutil.move(data['fname'], self.args.apk_done_dir)
-            except Exception as e:
-                self.trace_logger.log(e)
+            else:
+                os.remove(data['fname'])
+        except Exception as e:
+            self.trace_logger.log(e)
 
     def process_apk(self, file_path, apk_rec):
         """
