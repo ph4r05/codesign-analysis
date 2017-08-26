@@ -487,6 +487,7 @@ class AndroidApkLoader(Cmd):
             # Job processing starts here - fetch data page with the resource.
             ret_data = None
             try:
+                self.local_data.s = None
                 self.local_data.job = job
                 self.local_data.resource = resource
                 ret_data, headers, raw_response = self.load_page_local()
