@@ -764,7 +764,7 @@ class AndroidApkLoader(Cmd):
             x = '/%s' %x
         return self.BASE_URL % x
 
-    def load_app(self, id_=None, title=None, package=None, processing_check=True, uploaded=None,
+    def load_app(self, id_=None, title=None, package=None, processing_check=False, uploaded=None,
                  app_ver_type=None, pid=None, s=None):
         """
         Loads app by name
@@ -976,7 +976,7 @@ class AndroidApkLoader(Cmd):
             app = job.app
             app.data['url_apk'] = apk_link
 
-            mapp = self.load_app(id_=app.data['model_id'])
+            mapp = self.load_app(id_=app.data['model_id'], processing_check=False)
             mapp.download_started_at = salch.func.now()
 
             self.local_data.s.merge(mapp)
@@ -1009,7 +1009,7 @@ class AndroidApkLoader(Cmd):
         self.process_apk(data['fname'], data)
         logger.info(json.dumps(app.data, indent=2, cls=utils.AutoJSONEncoder))
 
-        mapp = self.load_app(id_=app.data['model_id'])
+        mapp = self.load_app(id_=app.data['model_id'], processing_check=False)
         mapp.is_downloaded = 1
         mapp.version_variant = utils.defvalkey(app_data, 'variant_title')
         mapp.downloaded_at = salch.func.now()
