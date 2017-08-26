@@ -1138,7 +1138,7 @@ class AndroidApkLoader(Cmd):
         mapk = AndroidApkMirrorApk()
         mapk.app = mapp
         mapk.app_id = mapp.id
-        mapk.url_download = app_data['url_download']
+        mapk.url_download = utils.utf8ize(app_data['url_download'])
         mapk.fpath = utils.defvalkey(apkdat, 'fname')
         mapk.post_id = app_data['item_id']
         mapk.date_discovered = salch.func.now()
@@ -1160,7 +1160,7 @@ class AndroidApkLoader(Cmd):
         mapk.sign_date = utils.defvalkey(apkdat, 'sign_date_dt')
         mapk.sign_info_cnt = utils.defvalkey(apkdat, 'sign_info_cnt')
         mapk.sign_serial = utils.defvalkey(apkdat, 'sign_serial')
-        mapk.sign_issuer = utils.defvalkey(apkdat, 'sign_issuer')
+        mapk.sign_issuer = utils.utf8ize(utils.defvalkey(apkdat, 'sign_issuer'))
         mapk.sign_alg = utils.defvalkey(apkdat, 'sign_alg')
         mapk.sign_raw = utils.defvalkey(apkdat, 'sign_raw')
 
@@ -1168,8 +1168,8 @@ class AndroidApkLoader(Cmd):
         mapk.cert_fprint = utils.defvalkey(apkdat, 'cert_fprint')
         mapk.cert_not_before = utils.defvalkey(apkdat, 'cert_not_before_dt')
         mapk.cert_not_after = utils.defvalkey(apkdat, 'cert_not_after_dt')
-        mapk.cert_dn = utils.defvalkey(apkdat, 'cert_dn')
-        mapk.cert_issuer_dn = utils.defvalkey(apkdat, 'cert_issuer_dn')
+        mapk.cert_dn = utils.utf8ize(utils.defvalkey(apkdat, 'cert_dn'))
+        mapk.cert_issuer_dn = utils.utf8ize(utils.defvalkey(apkdat, 'cert_issuer_dn'))
         mapk.cert_raw = utils.defvalkey(apkdat, 'der')
 
         mapk.pub_type = utils.defvalkey(apkdat, 'pubkey_type')
