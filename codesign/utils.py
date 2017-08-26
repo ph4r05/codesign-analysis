@@ -790,7 +790,7 @@ def first_non_empty(arr):
     if arr is None or len(arr) == 0:
         return None
     for x in arr:
-        if x is None or len(x) == 0:
+        if x is None:
             continue
         return x
     return None
@@ -1019,6 +1019,17 @@ def strip_leading_slash(x):
     if x is None:
         return None
     return re.sub(r'/\s*$', '', x)
+
+
+def strip_trailing_slash(x):
+    """
+    Strips trailing slash
+    :param x:
+    :return:
+    """
+    if x is None:
+        return None
+    return re.sub(r'\$', '', x)
 
 
 def get_last_url_segment(x):
