@@ -1068,10 +1068,11 @@ class AndroidApkLoader(Cmd):
         self.local_data.s.commit()
 
         try:
-            if self.args.apk_done_dir != self.apk_dir:
-                shutil.move(data['fname'], self.args.apk_done_dir)
-            else:
+            if self.args.trash:
                 os.remove(data['fname'])
+            elif self.args.apk_done_dir != self.apk_dir:
+                shutil.move(data['fname'], self.args.apk_done_dir)
+
         except Exception as e:
             self.trace_logger.log(e)
 
@@ -1355,6 +1356,8 @@ def main():
                         help='Dir to cache APKs')
     parser.add_argument('--apk-done-dir', dest='apk_done_dir', default='.',
                         help='Dir to move APKs after processing finished')
+    parser.add_argument('--trash', dest='trash', default=False, action='store_const', const=True,
+                        help='Delete already processed APKs')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
