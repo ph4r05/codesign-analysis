@@ -577,7 +577,7 @@ class AndroidApkLoader(Cmd):
         job.last_fail = time.time()
 
         # if failed too many times - log and discard.
-        if job.fail_cnt > 35:
+        if job.fail_cnt > 35 or (job.type == DownloadJob.TYPE_APK and job.fail_cnt > 5):
             logger.warning('Job failed too many times %s' % job.url)
             self.audit_log('too-many-fails', job.url, jtype=job.type, job=job)
             self.flush_audit()
@@ -603,7 +603,7 @@ class AndroidApkLoader(Cmd):
         if job.type == DownloadJob.TYPE_APK:
             data = collections.OrderedDict()
 
-            res = requests.get(job.url, stream=True, timeout=15)
+            res = requests.get(job.url, stream=True, timeout=25)
             nurl = res.url
 
             fname = None
