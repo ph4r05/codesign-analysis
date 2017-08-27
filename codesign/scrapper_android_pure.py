@@ -1057,7 +1057,7 @@ class AndroidApkLoader(Cmd):
         mapk.sign_date = utils.defvalkey(apkdat, 'sign_date_dt')
         mapk.sign_info_cnt = utils.defvalkey(apkdat, 'sign_info_cnt')
         mapk.sign_serial = utils.defvalkey(apkdat, 'sign_serial')
-        mapk.sign_issuer = utils.utf8ize(utils.defvalkey(apkdat, 'sign_issuer'))
+        mapk.sign_issuer = (utils.defvalkey(apkdat, 'sign_issuer'))
         mapk.sign_alg = utils.defvalkey(apkdat, 'sign_alg')
         mapk.sign_raw = utils.defvalkey(apkdat, 'sign_raw')
 
