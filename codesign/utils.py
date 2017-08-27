@@ -65,7 +65,7 @@ class AutoJSONEncoder(JSONEncoder):
         if isinstance(o, set):
             return list(o)
         elif isinstance(o, datetime.datetime):
-            return o.strftime("%s %s" % (self.DATE_FORMAT, self.TIME_FORMAT))
+            return unix_time(o)  # o.strftime("%s %s" % (self.DATE_FORMAT, self.TIME_FORMAT))
         elif isinstance(o, datetime.date):
             return o.strftime(self.DATE_FORMAT)
         elif isinstance(o, datetime.time):
@@ -679,6 +679,14 @@ def silent_rollback(c):
     try:
         if c is not None:
             c.rollback()
+    except:
+        pass
+
+
+def silent_expunge(c):
+    try:
+        if c is not None:
+            c.expunge_all()
     except:
         pass
 

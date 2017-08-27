@@ -273,6 +273,13 @@ class AndroidApkLoader(Cmd):
         self.trigger_stop()
         utils.try_touch('.android-quit')
 
+    def can_run(self):
+        """
+        Safe to run?
+        :return:
+        """
+        return not self.stop_event.is_set() and not self.terminate
+
     #
     # CMD handlers
     #
@@ -541,6 +548,7 @@ class AndroidApkLoader(Cmd):
                 self.on_job_failed(job)
 
             finally:
+                utils.silent_expunge(self.local_data.s)
                 utils.silent_close(self.local_data.s)
                 self.local_data.s = None
                 self.local_data.resource = None
@@ -609,6 +617,8 @@ class AndroidApkLoader(Cmd):
             md5 = hashlib.md5()
             with open(fname, 'wb') as f:
                 for chunk in res.iter_content(chunk_size=4096):
+                    if not self.can_run():
+                        raise Exception('Terminated')
                     if chunk:
                         f.write(chunk)
                         sha1.update(chunk)
@@ -977,9 +987,12 @@ class AndroidApkLoader(Cmd):
                     mapp.date_last_check = salch.func.now()
 
                     s.add(mapp)
+                    s.flush()
                     s.commit()
-
                     app_data['model_id'] = mapp.id
+
+                    s.expunge_all()  # removes objects from session()
+
                     app = AndroidApp(data=app_data)
 
                     new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_DETAIL, app=app,
@@ -1096,6 +1109,7 @@ class AndroidApkLoader(Cmd):
 
             self.local_data.s.merge(mapp)
             self.local_data.s.commit()
+            self.local_data.s.expunge_all()  # removes objects from session()
 
             new_job = DownloadJob(url=new_link, jtype=DownloadJob.TYPE_APK, app=app,
                                   priority=5000, time_added=cur_time)
@@ -1184,6 +1198,7 @@ class AndroidApkLoader(Cmd):
         mapp.processed_at = salch.func.now()
         self.local_data.s.merge(mapp)
         self.local_data.s.commit()
+        self.local_data.expunge_all()  # removes objects from session()
 
         try:
             if self.args.trash:
