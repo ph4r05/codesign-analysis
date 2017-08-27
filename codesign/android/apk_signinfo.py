@@ -12,6 +12,7 @@ import argparse
 import inspect
 import binascii
 import logging
+import base64
 import coloredlogs
 from apk_parse.apk import APK
 from pyx509.models import PKCS7, PKCS7_SignedData
@@ -34,16 +35,23 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Extracts Signing information from the APK')
     parser.add_argument('files', nargs=argparse.ZERO_OR_MORE, default=[], help='APK files')
+    parser.add_argument('--der', dest='der', default=False, action='store_const', const=True,
+                        help='DER only')
     args = parser.parse_args()
 
     for file_name in args.files:
         apkf = APK(file_name)
         pem = apkf.cert_pem
+
+        der = apkf.pkcs7_der
+        if args.der:
+            sys.stdout.write(der)
+            return
+
         print(pem)
         print(apkf.cert_text)
 
-        p7 = PKCS7.from_der(apkf.pkcs7_der)
-
+        p7 = PKCS7.from_der(der)
         try:
             signed_date, valid_from, valid_to, signer = p7.get_timestamp_info()
             print('Sign date: %s = %s' % (utils.unix_time_millis(signed_date)), utils.fmt_time(signed_date))
