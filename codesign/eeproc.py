@@ -289,9 +289,11 @@ class Eeproc(object):
         all_years = collections.defaultdict(lambda: 0)
         nice_years = collections.defaultdict(lambda: 0)
 
+        cap_eeids = 9e99 if self.args.cap is None else self.args.cap
+        num_eeids = 0
         for rec in recs:
             id = int(rec['id'])
-            num_people += 1
+            ignore_this_one = False
 
             has_auth = False
             has_sign = False
@@ -300,20 +302,28 @@ class Eeproc(object):
 
             dn = None
             for res_idx, res in enumerate(rec['res']):
+                if ignore_this_one:
+                    break
+
                 dn = res['dn']
                 certs = res['certs']
 
                 cat_o = self.match_o(dn)
                 cat_uo = self.match_ou(dn)
-                if cat_uo == AUTH:
-                    people_counts[cat_o] += 1
 
                 if cat_o == IDCARD:
+                    if num_eeids >= cap_eeids:
+                        ignore_this_one = True
+                        break
+
                     all_ids.append(id)
                     if cat_uo == AUTH:
                         has_auth = True
                     if cat_uo == SIGN:
                         has_sign = True
+
+                if cat_uo == AUTH:
+                    people_counts[cat_o] += 1
 
                 desc = '%s_%s' % (cat_o, cat_uo)
                 for idx, crt_hex in enumerate(certs):
@@ -354,11 +364,16 @@ class Eeproc(object):
 
                     except Exception as e:
                         logger.warning('Exception : %s' % e)
-
+                        
+            if ignore_this_one:
+                continue
             if has_auth != has_sign:
                 logger.warning('Not matching auth/sign: %s, %s' % (id, dn))
             if has_auth == has_sign and has_pos_auth != has_pos_sign:
                 logger.warning('Not matching pos auth/sign: %s, %s' % (id, dn))
+            if has_auth:
+                num_eeids += 1
+            num_people += 1
 
         if args.classif:
             classif_pos_fh.close()
@@ -509,6 +524,9 @@ def main():
 
     parser.add_argument('--plot-serial', dest='plot_serial', default=False, action='store_const', const=True,
                         help='Plot serial vs count')
+
+    parser.add_argument('--cap', dest='cap', default=None, type=int,
+                        help='Max number of IDs')
 
     parser.add_argument('--classif', dest='classif', default=False, action='store_const', const=True,
                         help='Generate classification JSON from the occurrences')
