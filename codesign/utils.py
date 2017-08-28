@@ -1262,3 +1262,31 @@ def safe_filename(x):
     """
     return re.sub('[^\w_.)( -]', '', x)
 
+
+def try_int(x):
+    """
+    Convert to int
+    :param x:
+    :return:
+    """
+    if x is None:
+        return None
+    try:
+        return int(x)
+    except:
+        pass
+    
+
+def try_float(x):
+    """
+    Convert to float
+    :param x:
+    :return:
+    """
+    if x is None:
+        return None
+    try:
+        return try_float(x)
+    except:
+        pass
+
