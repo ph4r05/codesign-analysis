@@ -598,12 +598,12 @@ class GitHubLoader(Cmd):
         res = requests.get(job.url, timeout=10, auth=auth)
         headers = res.headers
 
-        resource.reset_time = float(headers.get('X-RateLimit-Reset'))
-        resource.remaining = int(headers.get('X-RateLimit-Remaining'))
+        resource.reset_time = utils.try_float(headers.get('X-RateLimit-Reset'))
+        resource.remaining = utils.try_int(headers.get('X-RateLimit-Remaining'))
         resource.last_used = time.time()
         resource.used_cnt += 1
 
-        if res.status_code == 403 and resource.remaining < 10:
+        if res.status_code == 403 and resource.remaining is not None and resource.remaining < 10:
             resource.fail_cnt += 1
             raise RateLimitHit
 
@@ -1008,10 +1008,10 @@ class GitHubLoader(Cmd):
         try:
             resource = self.resources_queue.get(True, timeout=1.0)
             if resource.remaining is not None and resource.remaining <= self.threads + 2:
-                sleep_sec = resource.reset_time - time.time()
+                sleep_sec = resource.reset_time - time.time() if resource.reset_time is not None else 15*60
                 sleep_sec += 120  # extra 2 minutes to avoid problems with resources
 
-                logger.info('Rate limit exceeded on resource %s, remaining: %d, sleeping till: %d, it is %d seconds, '
+                logger.info('Rate limit exceeded on resource %s, remaining: %s, sleeping till: %s, it is %d seconds, '
                             '%d minutes'
                             % (resource.usr, resource.remaining, resource.reset_time, sleep_sec, sleep_sec / 60.0))
                 self.sleep_interruptible(time.time() + sleep_sec)

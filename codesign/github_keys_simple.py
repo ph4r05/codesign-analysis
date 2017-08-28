@@ -161,9 +161,9 @@ class GitHubLoader(object):
                     logger.warning('URL not found: %s' % url)
                     return None, None, None
 
-                self.rate_limit_reset = float(headers.get('X-RateLimit-Reset')) + 10
-                self.rate_limit_remaining = int(headers.get('X-RateLimit-Remaining'))
-                if self.rate_limit_remaining <= 1:
+                self.rate_limit_reset = utils.try_float(headers.get('X-RateLimit-Reset')) + 10
+                self.rate_limit_remaining = utils.try_int(headers.get('X-RateLimit-Remaining'))
+                if self.rate_limit_remaining is not None and self.rate_limit_remaining <= 1:
                     sleep_sec = self.rate_limit_reset - time.time()
 
                     logger.info('Rate limit exceeded, sleeping till: %d, it is %d seconds, %d minutes'
