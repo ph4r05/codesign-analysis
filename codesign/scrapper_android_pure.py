@@ -109,7 +109,7 @@ class DownloadJob(object):
     TYPE_DOWNLOAD = 3
     TYPE_APK = 4
 
-    __slots__ = ['url', 'type', 'app', 'fail_cnt', 'last_fail', 'priority', 'time_added']
+    __slots__ = ['url', 'type', 'app', 'fail_cnt', 'last_fail', 'priority', 'time_added', 'is_heavy']
 
     def __init__(self, url=None, jtype=TYPE_SITEMAP, app=None, priority=0, time_added=None, *args, **kwargs):
         self.url = url
@@ -118,6 +118,7 @@ class DownloadJob(object):
         self.fail_cnt = 0
         self.last_fail = 0
         self.priority = priority
+        self.is_heavy = kwargs.get('is_heavy', False)
         self.time_added = time.time() if time_added is None else time_added
 
     def to_json(self):
@@ -128,6 +129,7 @@ class DownloadJob(object):
         js['last_fail'] = self.last_fail
         js['priority'] = self.priority
         js['time_added'] = self.time_added
+        js['is_heavy'] = self.is_heavy
         if self.app is not None:
             js['app'] = self.app.to_json()
         return js
@@ -141,6 +143,7 @@ class DownloadJob(object):
         tj.last_fail = js['last_fail']
         tj.priority = utils.defvalkey(js, 'priority', 0)
         tj.time_added = utils.defvalkey(js, 'time_added', 0)
+        tj.is_heavy = utils.defvalkey(js, 'is_heavy', False)
         if 'app' in js:
             tj.app = AndroidApp.from_json(js['app'])
         return tj
@@ -237,6 +240,7 @@ class AndroidApkLoader(Cmd):
 
         self.resources_list = []
         self.resources_queue = Queue.PriorityQueue()
+        self.heavy_resource_queue = Queue.PriorityQueue()
         self.local_data = threading.local()
 
         self.new_apps_events = EvtDequeue()
@@ -358,6 +362,9 @@ class AndroidApkLoader(Cmd):
             r = AccessResource(usr=None, token=None)
             self.resources_list.append(r)
             self.resources_queue.put(r)
+
+        r = AccessResource(usr=None, token=None)
+        self.resource_heavy_return(r)
 
     def init_db(self):
         """
@@ -492,6 +499,15 @@ class AndroidApkLoader(Cmd):
                 self.resource_return(resource)
                 continue
 
+            # Has resource for heavy processing?
+            self.local_data.heavy_res = None
+            if job.type == DownloadJob.TYPE_SITEMAP or job.is_heavy:
+                self.local_data.heavy_res = self.resource_heavy_allocate()
+                if self.local_data.heavy_res is None:
+                    self.link_queue.put(job)  # re-insert to the queue for later processing
+                    self.resource_return(resource)
+                    continue
+
             # Job processing starts here - fetch data page with the resource.
             ret_data = None
             try:
@@ -503,6 +519,7 @@ class AndroidApkLoader(Cmd):
             except RateLimitHit as e:
                 logger.error('[%d] Rate limit hit: %s, failcnt: %d, res: %s, exception: %s'
                              % (idx, job.url, job.fail_cnt, resource.usr, e))
+                self.resource_heavy_return()
                 continue
 
             except Exception as e:
@@ -510,6 +527,7 @@ class AndroidApkLoader(Cmd):
                              % (idx, job.url, job.fail_cnt, resource.usr, e))
 
                 self.on_job_failed(job)
+                self.resource_heavy_return()
                 continue
 
             finally:
@@ -560,6 +578,7 @@ class AndroidApkLoader(Cmd):
             finally:
                 utils.silent_expunge(self.local_data.s)
                 utils.silent_close(self.local_data.s)
+                self.resource_heavy_return()
                 self.local_data.s = None
                 self.local_data.resource = None
                 self.local_data.job = None
@@ -716,6 +735,30 @@ class AndroidApkLoader(Cmd):
         :return:
         """
         self.resources_queue.put(res)
+
+    def resource_heavy_allocate(self, blocking=True, timeout=1.0):
+        """
+        Takes resource from the pool.
+        :return: resource or None if not available in the time
+        """
+        try:
+            resource = self.heavy_resource_queue.get(True, timeout=1.0)
+            return resource
+
+        except Queue.Empty:
+            return None
+
+    def resource_heavy_return(self, res=None):
+        """
+        Returns resource to the pool
+        :param res:
+        :return:
+        """
+        if res is None:
+            res = self.local_data.heavy_res
+        if res is None:
+            return
+        self.heavy_resource_queue.put(res)
 
     def sleep_interruptible(self, until_time):
         """
@@ -876,7 +919,7 @@ class AndroidApkLoader(Cmd):
 
             logger.debug(url)
             new_job = DownloadJob(url=self.link(url), jtype=DownloadJob.TYPE_SITEMAP, app=None,
-                                  priority=1000, time_added=cur_time)
+                                  priority=1000, time_added=cur_time, is_heavy=True)
             self.link_queue.put(new_job)
 
     def process_sitemap_sub(self, job, data, headers, raw_response):
