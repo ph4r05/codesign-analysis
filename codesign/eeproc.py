@@ -62,6 +62,7 @@ class Eeproc(object):
     """
     def __init__(self):
         self.big_nose = BigNose()
+        self.nose_time = 0
         self.args = None
 
         self.totals = collections.defaultdict(lambda: [0, 0])
@@ -289,6 +290,7 @@ class Eeproc(object):
         all_years = collections.defaultdict(lambda: 0)
         nice_years = collections.defaultdict(lambda: 0)
 
+        ctime = time.time()
         cap_eeids = 9e99 if self.args.cap is None else self.args.cap
         num_eeids = 0
         for rec in recs:
@@ -398,6 +400,8 @@ class Eeproc(object):
                 if pref_len & 1:
                     pad = ' ' + pad
                 print('%s %s %4d / %4d ~ %3.5f %%' % (pref, pad, cur[1], cur[0], cur[1]*100.0/cur[0] if cur[0] > 0 else -1))
+
+        print('\nTotal time: %s s' % (time.time() - ctime))
 
         print('\nTotals per user: ')
         print(json.dumps(people_counts, indent=2))
