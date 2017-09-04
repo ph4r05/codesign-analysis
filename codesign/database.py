@@ -439,6 +439,6 @@ class AndroidApkPureApk(Base):
     pub_modulus = Column(Text, nullable=True)
     pub_exponent = Column(Text, nullable=True)
     pub_modulus_size = Column(Integer, nullable=True)
-    pub_interesting = Column(Integer, nullable=False, default=0)
+    pub_interesting = Column(Integer, nullable=False, default=0, index=True)
 
     aux_json = Column(Text, nullable=True)
