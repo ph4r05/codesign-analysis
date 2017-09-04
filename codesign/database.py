@@ -270,7 +270,7 @@ class AndroidApkMirrorApp(Base):
     id = Column(BigInteger, primary_key=True)
 
     app_name = Column(String(255), nullable=True)
-    package_name = Column(String(255), nullable=True)
+    package_name = Column(String(255), nullable=True, index=True)
     version_code = Column(String(255), nullable=True)
     version_number = Column(BigInteger, nullable=True)
     version_type = Column(String(255), nullable=True)
@@ -361,7 +361,7 @@ class AndroidApkPureApp(Base):
     id = Column(BigInteger, primary_key=True)
 
     app_name = Column(String(255), nullable=True)
-    package_name = Column(String(255), nullable=True)
+    package_name = Column(String(255), nullable=True, index=True)
     version_code = Column(String(255), nullable=True)
     version_number = Column(BigInteger, nullable=True)
     version_type = Column(String(255), nullable=True)
