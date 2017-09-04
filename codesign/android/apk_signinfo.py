@@ -54,9 +54,9 @@ def main():
         p7 = PKCS7.from_der(der)
         try:
             signed_date, valid_from, valid_to, signer = p7.get_timestamp_info()
-            print('Sign date: %s = %s' % (utils.unix_time_millis(signed_date)), utils.fmt_time(signed_date))
-            print('Sign not before: %s = %s' % (utils.unix_time_millis(valid_from)), utils.fmt_time(valid_from))
-            print('Sign not after: %s = %s' % (utils.unix_time_millis(valid_to)), utils.fmt_time(valid_to))
+            print('Sign date: %s = %s' % (utils.unix_time_millis(signed_date), utils.fmt_time(signed_date)))
+            print('Sign not before: %s = %s' % (utils.unix_time_millis(valid_from), utils.fmt_time(valid_from)))
+            print('Sign not after: %s = %s' % (utils.unix_time_millis(valid_to), utils.fmt_time(valid_to)))
             print('Signer: %s' % str(signer))
         except Exception as e:
             logger.error('Error parsing signer info: %s' % e)
