@@ -214,7 +214,7 @@ pip install SQLAlchemy
 Ubuntu:
 ```
 sudo apt-get install python-pip python-dev libmysqlclient-dev
-sudo apt-get install libsasl2-dev python-dev libldap2-dev libssl-dev
+sudo apt-get install libsasl2-dev python-dev libldap2-dev libssl-dev libsqlite3-dev libreadline-dev lbzip2
 ```
 
 CentOS:
@@ -250,7 +250,7 @@ module add cmake-3.6.2
 module add gcc-4.8.2
 ```
 
-## Python 2.7.13
+## Python 2.7.13 / 3.6.2
 
 It won't work with lower Python version. Use `pyenv` to install a new Python version.
 It internally downloads Python sources and installs it to `~/.pyenv`.
@@ -262,6 +262,16 @@ echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
 echo 'eval "$(pyenv init -)"' >> ~/.bashrc
 exec $SHELL
 pyenv install 2.7.13
+pyenv install 3.6.2
 pyenv local 2.7.13
 ```
+
+## Pip package fix
+
+```
+pip install -U pip setuptools twine
+python setup.py sdist
+twine upload dist/*
+```
+
 
