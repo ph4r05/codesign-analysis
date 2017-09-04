@@ -651,8 +651,8 @@ class AndroidApkLoader(Cmd):
             md5 = hashlib.md5()
             with open(fname, 'wb') as f:
                 for chunk in res.iter_content(chunk_size=4096):
-                    if not self.can_run():
-                        raise Exception('Terminated')
+                    # if not self.can_run():
+                    #     raise Exception('Terminated')
                     if chunk:
                         f.write(chunk)
                         sha1.update(chunk)
@@ -997,6 +997,7 @@ class AndroidApkLoader(Cmd):
                 app_data['model_id'] = mapp.id
 
                 s.expunge_all()  # removes objects from session()
+                self.new_apps_events.insert()
 
                 app = AndroidApp(data=app_data)
                 new_job = DownloadJob(url=download_url, jtype=DownloadJob.TYPE_DOWNLOAD, app=app,
@@ -1125,6 +1126,7 @@ class AndroidApkLoader(Cmd):
         self.local_data.s.merge(mapp)
         self.local_data.s.commit()
         self.local_data.s.expunge_all()  # removes objects from session()
+        self.new_apks_events.insert()
 
         try:
             if self.args.trash:
