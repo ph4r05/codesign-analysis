@@ -4,6 +4,8 @@
 # http://sangaline.com/post/advanced-web-scraping-tutorial/
 #
 
+from past.builtins import cmp
+
 import os
 import sys
 import inspect
@@ -148,6 +150,24 @@ class DownloadJob(object):
             tj.app = AndroidApp.from_json(js['app'])
         return tj
 
+    def to_tuple(self, same_cat=False):
+        """
+        Tuple for comparison
+        :return:
+        """
+        if not same_cat:
+            return -1 * self.priority, self.time_added
+
+        # sitemap - take newer
+        if self.type == DownloadJob.TYPE_SITEMAP:
+            idx = 0
+            match = re.search(r'-([0-9]+)\.xml$', self.url)
+            if match:
+                idx = int(match.group(1))
+            return self.fail_cnt, idx, self.time_added, -1 * self.priority
+
+        return self.fail_cnt, self.time_added, -1 * self.priority
+
     @staticmethod
     def cmp(self, other):
         """
@@ -156,6 +176,11 @@ class DownloadJob(object):
         :param other:
         :return:
         """
+        same_cat = self.type == other.type
+        return cmp(self.to_tuple(same_cat), other.to_tuple(same_cat))
+
+    @staticmethod
+    def cmp_old(self, other):
         # Inside the category: fail cnt, time added.
         if self.type == other.type:
             if self.fail_cnt == other.fail_cnt:
