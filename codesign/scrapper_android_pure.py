@@ -225,6 +225,8 @@ class AndroidApkLoader(Cmd):
 
         self.args = cmd_args
         self.apk_dir = self.args.apk_dir
+        self.socks_proxy = cmd_args.socks
+        self.sitemap_dir = cmd_args.sitemap_dir
 
         self.attempts = int(attempts)
         self.total = None
@@ -650,12 +652,19 @@ class AndroidApkLoader(Cmd):
         job = self.local_data.job
         data = None
 
+        proxies = None
+        if self.socks_proxy:
+            proxies = {
+                'http': 'socks5://%s' % self.socks_proxy,
+                'https': 'socks5://%s' % self.socks_proxy
+            }
+
         # Streamed downloading of the APK to the file
         res = None
         if job.type == DownloadJob.TYPE_APK:
             data = collections.OrderedDict()
 
-            res = requests.get(job.url, stream=True, timeout=25)
+            res = requests.get(job.url, stream=True, timeout=25, proxies=proxies)
             nurl = res.url
 
             fname = None
@@ -697,7 +706,7 @@ class AndroidApkLoader(Cmd):
             data['md5'] = md5.hexdigest()
 
         else:
-            res = requests.get(job.url, timeout=10, auth=auth)
+            res = requests.get(job.url, timeout=10, auth=auth, proxies=proxies)
 
         headers = res.headers
         resource.reset_time = float(headers.get('X-RateLimit-Reset', 0))
@@ -929,6 +938,9 @@ class AndroidApkLoader(Cmd):
         :return:
         """
         cur_time = time.time()
+
+        self.save_sitemap(job, data)
+
         tree = html.fromstring(data)
         locs = tree.xpath('//loc')
 
@@ -958,6 +970,8 @@ class AndroidApkLoader(Cmd):
         """
         cur_time = time.time()
         pid = os.getpid()
+
+        self.save_sitemap(job, data)
 
         tree = html.fromstring(data)
         urls = tree.xpath('//url')
@@ -1234,6 +1248,20 @@ class AndroidApkLoader(Cmd):
         self.state['rate_limit_reset'] = self.rate_limit_reset
         utils.flush_json(self.state, self.state_file_path)
 
+    def save_sitemap(self, job, data):
+        """
+        Saves sitemap to a file if applicable
+        :param data:
+        :return:
+        """
+        if self.sitemap_dir is None:
+            return
+        url = job.url
+        fname = url[url.rfind('/')+1:]
+        fpath = os.path.join(self.sitemap_dir, fname)
+        with open(fpath, 'w') as fh:
+            fh.write(data)
+
     #
     # Auditing - errors, problems for further analysis
     #
@@ -1444,6 +1472,10 @@ def main():
                         help='Dir to move APKs after processing finished')
     parser.add_argument('--trash', dest='trash', default=False, action='store_const', const=True,
                         help='Delete already processed APKs')
+    parser.add_argument('--socks', dest='socks', default=None,
+                        help='SOCKS proxy server to use')
+    parser.add_argument('--sitemap-dir', dest='sitemap_dir', default=None,
+                        help='Directory to store sitemaps')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
