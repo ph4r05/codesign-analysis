@@ -695,7 +695,7 @@ class AndroidApkLoader(Cmd):
                 f.flush()
 
             size = os.path.getsize(fname)
-            if size < 500:
+            if size < 1500:
                 raise SkipException('File size too small: %s' % size)
 
             data['download_url'] = job.url
@@ -972,6 +972,8 @@ class AndroidApkLoader(Cmd):
         pid = os.getpid()
 
         self.save_sitemap(job, data)
+        if self.args.sitemap_only:
+            return
 
         tree = html.fromstring(data)
         urls = tree.xpath('//url')
@@ -1259,6 +1261,11 @@ class AndroidApkLoader(Cmd):
         url = job.url
         fname = url[url.rfind('/')+1:]
         fpath = os.path.join(self.sitemap_dir, fname)
+
+        if os.path.exists(fpath) and os.path.getsize(fpath) > 3000:
+            logger.info('Already saved %s' % fname)
+            return
+
         with open(fpath, 'w') as fh:
             fh.write(data)
 
@@ -1476,6 +1483,8 @@ def main():
                         help='SOCKS proxy server to use')
     parser.add_argument('--sitemap-dir', dest='sitemap_dir', default=None,
                         help='Directory to store sitemaps')
+    parser.add_argument('--sitemap-only', dest='sitemap_only', default=False, action='store_const', const=True,
+                        help='Download only sitemaps')
 
     args = parser.parse_args(args=args_src[1:])
     config_file = args.config
