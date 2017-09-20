@@ -442,3 +442,95 @@ class AndroidApkPureApk(Base):
     pub_interesting = Column(Integer, nullable=False, default=0, index=True)
 
     aux_json = Column(Text, nullable=True)
+
+
+class AndroidApkFilesApp(Base):
+    """
+    Androd application base
+    """
+    __tablename__ = 'android_apk_files_app'
+    id = Column(BigInteger, primary_key=True)
+
+    app_name = Column(String(255), nullable=True)
+    package_name = Column(String(255), nullable=True, index=True)
+    version_code = Column(String(255), nullable=True)
+    version_number = Column(BigInteger, nullable=True)
+    version_type = Column(String(255), nullable=True)
+    version_variant = Column(String(255), nullable=True)
+
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+
+    company = Column(String(255), nullable=True)
+    file_size = Column(BigInteger, nullable=True)
+    downloads = Column(BigInteger, nullable=True)
+    uploaded_at = Column(DateTime, default=None, nullable=True)
+
+    processing_pid = Column(Integer, nullable=True)
+    processing_started_at = Column(DateTime, default=None, nullable=True)  # reservation
+    download_started_at = Column(DateTime, default=None, nullable=True)  # reservation
+    processed_at = Column(DateTime, default=None, nullable=True)  # reservation
+    downloaded_at = Column(DateTime, default=None, nullable=True)  # reservation
+    is_processed = Column(SmallInteger, nullable=False, default=0)
+    is_downloaded = Column(SmallInteger, nullable=False, default=0)
+
+    url_detail = Column(Text, nullable=True)
+    aux_json = Column(Text, nullable=True)
+
+
+class AndroidApkFilesApk(Base):
+    """
+    GitHub SSH auth keys
+    """
+    __tablename__ = 'android_apk_files_apk'
+    id = Column(BigInteger, primary_key=True)
+    app_id = Column(ForeignKey('android_apk_files_app.id', name='fk_android_apk_files_apk_android_apk_files_app_id',
+                               ondelete='CASCADE'), nullable=False, index=True)
+    app = relationship('AndroidApkFilesApp', uselist=False)
+
+    url_download = Column(Text, nullable=True)
+    fpath = Column(Text, nullable=True)
+    post_id = Column(BigInteger, nullable=True)
+
+    date_discovered = Column(DateTime, default=func.now())
+    date_last_check = Column(DateTime, default=func.now())
+    date_lost = Column(DateTime, default=None)
+
+    file_size = Column(BigInteger, nullable=True)
+    md5 = Column(String(128), nullable=True)
+    sha1 = Column(String(128), nullable=True)
+    sha256 = Column(String(128), nullable=True)
+
+    is_xapk = Column(SmallInteger, nullable=True)
+    sub_apk_size = Column(BigInteger, nullable=True)
+
+    apk_package = Column(String(255), nullable=True)
+    apk_version_code = Column(String(255), nullable=True)
+    apk_version_name = Column(String(255), nullable=True)
+    apk_min_sdk = Column(String(128), nullable=True)
+    apk_tgt_sdk = Column(String(128), nullable=True)
+    apk_max_sdk = Column(String(128), nullable=True)
+
+    sign_date = Column(DateTime, default=None)
+    sign_info_cnt = Column(Integer, nullable=True)
+    sign_serial = Column(String(255), nullable=True)
+    sign_issuer = Column(Text, nullable=True)
+    sign_alg = Column(String(64), nullable=True)
+    sign_raw = Column(Text, nullable=True)
+
+    cert_alg = Column(String(64), nullable=True)
+    cert_fprint = Column(String(255), nullable=True)
+    cert_not_before = Column(DateTime, default=None)
+    cert_not_after = Column(DateTime, default=None)
+    cert_dn = Column(Text, nullable=True)
+    cert_issuer_dn = Column(Text, nullable=True)
+    cert_raw = Column(Text, nullable=True)
+
+    pub_type = Column(String(32), nullable=True)
+    pub_modulus = Column(Text, nullable=True)
+    pub_exponent = Column(Text, nullable=True)
+    pub_modulus_size = Column(Integer, nullable=True)
+    pub_interesting = Column(Integer, nullable=False, default=0)
+
+    aux_json = Column(Text, nullable=True)
+
