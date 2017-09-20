@@ -113,6 +113,8 @@ class SonarSSLProcess(object):
         parser.add_argument('--download-only', dest='download_only', default=False, action='store_const', const=True,
                             help='Performs only download of all links needed for analysis later')
 
+        # TODO: cert database... one file with all certificates collected so far. missing certs.
+
         self.args = parser.parse_args()
 
         if self.args.sec:
