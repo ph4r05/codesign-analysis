@@ -33,4 +33,14 @@ for srv in `cat $PBS_NODEFILE`; do
 done
 echo "Finished"
 
+tput bel
+tput bel
+tput bel
+sleep 3
+
+# Restart task
+qsub -l select=92:ncpus=1:mem=2gb:scratch_local=200mb -l walltime=01:59:00 -l place=scatter \
+./cas/assets/meta-scripts/ee-fetch-mpi.sh
+
+sleep 1
 
