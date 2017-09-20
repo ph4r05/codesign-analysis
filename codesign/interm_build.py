@@ -364,7 +364,7 @@ class IntermediateBuilder(object):
 
         if self.args.sec:
             import sec
-            self.fmagic = sec.Fprinter(167)
+            self.fmagic = sec.Fprinter()
 
         self.work()
 
