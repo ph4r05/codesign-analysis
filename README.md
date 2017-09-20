@@ -1,6 +1,15 @@
 # Codesign analysis
 
-# Experiments
+Tools used for data processing for ACSAC 2017 & CCS 2017 & some other.
+
+The scripts are usually directly runnable from the command line. Try invoking with `--help` option for more info.
+
+* `censys_eco_*` scripts are related to the HTTPS Ecosystem dataset processing.
+* `censys_sonarssl_*` scripts are related to the SonarSSL dataset processing.
+* `censys_*` others than above are general tools related to Censys TLS scans data processing.
+* `pgp_*` scripts are related to the PGP dataset processing
+
+# Experiments with PBSPro
 
 ## Generate TLS fetch jobs
 
