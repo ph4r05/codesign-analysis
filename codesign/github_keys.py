@@ -1005,6 +1005,7 @@ class GitHubLoader(Cmd):
                     .one_or_none()
 
             if uassoc is not None:
+                uassoc.lost_at = None
                 return
 
             if uassoc is None:
