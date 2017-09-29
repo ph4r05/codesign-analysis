@@ -833,7 +833,7 @@ class GitHubLoader(Cmd):
             try:
                 s = self.session()
                 self.store_key(job.user, key, s)
-                key_ids.append(key['id'])
+                key_ids.append(int(key['id']))
                 s.commit()
 
                 self.assoc_key(job.user.user_id, key['id'], s)
@@ -1036,7 +1036,7 @@ class GitHubLoader(Cmd):
                 .filter(GitHubUserKeys.user_id == user_id)
 
             if len(key_id) > 0:
-                q = q.filter(GitHubUserKeys.user_id.notin_(key_id))
+                q = q.filter(GitHubUserKeys.key_id.notin_(key_id))
 
             q.update({GitHubUserKeys.lost_at: salch.func.now()}, synchronize_session='fetch')
             return 0
