@@ -825,6 +825,7 @@ class GitHubLoader(Cmd):
                 logger.warning('Could not pre-commit: %s' % e)
 
         # Store each key.
+        key_ids = []
         for key in js:
             s = None
             self.new_keys_events.insert()
@@ -832,6 +833,7 @@ class GitHubLoader(Cmd):
             try:
                 s = self.session()
                 self.store_key(job.user, key, s)
+                key_ids.append(key['id'])
                 s.commit()
 
                 self.assoc_key(job.user.user_id, key['id'], s)
@@ -847,6 +849,20 @@ class GitHubLoader(Cmd):
             finally:
                 utils.silent_close(s)
                 s = None
+
+        # Deassoc lost keys
+        try:
+            s = self.session()
+            self.deassoc_lost_keys(job.user.user_id, key_ids, s)
+            s.commit()
+
+        except Exception as e:
+            logger.warning('Exception in deassoc for users %s : %s' % (job.user.user_id, e))
+            self.trace_logger.log(e)
+
+        finally:
+            utils.silent_close(s)
+            s = None
 
         self.on_keys_processed()
 
@@ -938,7 +954,7 @@ class GitHubLoader(Cmd):
             if existing_key is not None:
                 existing_key.date_last_check = salch.func.now()
                 s.merge(existing_key)
-                return 0
+                return existing_key
 
             key_id = int(key['id'])
             key_raw = key['key']
@@ -965,7 +981,7 @@ class GitHubLoader(Cmd):
                     logger.info('Exception during processing the key[%s]: %s' % (key_type, e))
 
             s.add(db_key)
-            return 0
+            return db_key
 
         except Exception as e:
             utils.silent_rollback(s)
@@ -981,17 +997,52 @@ class GitHubLoader(Cmd):
         :return:
         """
         try:
-            uassoc = GitHubUserKeys()
-            uassoc.user_id = user_id
-            uassoc.key_id = key_id
-            uassoc.fount_at = salch.func.now()
-            uassoc.lost_at = None
-            s.add(uassoc)
+            uassoc = None
+            if self.merge:
+                uassoc = s.query(GitHubUserKeys)\
+                    .filter(GitHubUserKeys.user_id == user_id)\
+                    .filter(GitHubUserKeys.key_id == key_id)\
+                    .one_or_none()
+
+            if uassoc is not None:
+                return
+
+            if uassoc is None:
+                uassoc = GitHubUserKeys()
+                uassoc.user_id = user_id
+                uassoc.key_id = key_id
+                uassoc.fount_at = salch.func.now()
+                uassoc.lost_at = None
+                s.add(uassoc)
+
             return 0
 
         except Exception as e:
             utils.silent_rollback(s)
             logger.warning('Exception during key assoc: %s' % e)
+            return 1
+
+    def deassoc_lost_keys(self, user_id, key_id, s):
+        """
+        Mark all lost keys as lost for the given user (not in key_id)
+        :param user_id:
+        :param key_id:
+        :param s:
+        :return:
+        """
+        try:
+            q = s.query(GitHubUserKeys)\
+                .filter(GitHubUserKeys.user_id == user_id)
+
+            if len(key_id) > 0:
+                q = q.filter(GitHubUserKeys.user_id.notin_(key_id))
+
+            q.update({GitHubUserKeys.lost_at: salch.func.now()}, synchronize_session='fetch')
+            return 0
+
+        except Exception as e:
+            utils.silent_rollback(s)
+            logger.warning('Exception during key deassoc: %s' % e)
             return 1
 
     def flush_state(self):
