@@ -87,7 +87,7 @@ qdel 1085540
 ## Inspect Censys data
 
 ```
-curl -s https://scans.io/zsearch/data.json.lz4 2>&1 | lz4cat | head -n 1
+curl -s https://scans.io/zsearch/data.json.lz4 2>&1 | lz4 -d -c - | head -n 1
 ```
 
 For that you may need to install lz4:
@@ -245,7 +245,7 @@ CentOS:
 ```
 sudo yum install gcc gcc-c++ make automake autoreconf libtool
 sudo yum install python-devel python-pip gcc gcc-c++ make automake autoreconf libtool openssl-devel libffi-devel dialog
-sudo yum install mysql-devel redhat-rpm-config gcc
+sudo yum install mysql-devel redhat-rpm-config readline-devel libzip-devel bzip2-devel
 sudo yum install openldap-devel
 ```
 
