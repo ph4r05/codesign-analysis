@@ -182,6 +182,16 @@ class Eeproc(object):
         d1 = (int(s[0])-1) / 2
         return 1800 + d1 * 100 + lst
 
+    def datetime_from_serial(self, s):
+        """
+        Datetime extraction from serial
+        :param s:
+        :return:
+        """
+        y = self.year_from_serial(s)
+        s = str(s)
+        return datetime.datetime(year=y, month=int(s[3:5]), day=int(s[5:7]))
+
     def serial_from_serial(self, s):
         """
         Serial number from the ID
@@ -289,6 +299,10 @@ class Eeproc(object):
 
         all_years = collections.defaultdict(lambda: 0)
         nice_years = collections.defaultdict(lambda: 0)
+
+        dtnow = datetime.datetime.now()
+        votable_all = 0
+        votable_vuln = 0
 
         ctime = time.time()
         cap_eeids = 9e99 if self.args.cap is None else self.args.cap
@@ -401,6 +415,17 @@ class Eeproc(object):
                     pad = ' ' + pad
                 print('%s %s %4d / %4d ~ %3.5f %%' % (pref, pad, cur[1], cur[0], cur[1]*100.0/cur[0] if cur[0] > 0 else -1))
 
+        dates_all = [self.datetime_from_serial(cur) for cur in all_ids]
+        dates_vuln = [self.datetime_from_serial(cur) for cur in nice_numbers]
+
+        for cur in dates_vuln:
+            if (dtnow - cur).days > 18*365:
+                votable_vuln += 1
+
+        for cur in dates_all:
+            if (dtnow - cur).days > 18*365:
+                votable_all += 1
+
         print('\nTotal time: %s s' % (time.time() - ctime))
 
         print('\nTotals per user: ')
@@ -413,6 +438,15 @@ class Eeproc(object):
         print(json.dumps(self.non_rsa_cats, indent=2))
 
         print('\nDER certs: %s, rsa: %s, people: %s' % (self.num_der_certs, self.num_rsa, num_people))
+
+        print('\nVotable all: %s' % votable_all)
+        print('Votable vuln: %s' % votable_vuln)
+
+        print('Oldest person: %s' % min(dates_all))
+        print('Oldest vuln person: %s' % min(dates_vuln))
+
+        print('Newest person: %s' % max(dates_all))
+        print('Newest vuln person: %s' % max(dates_vuln))
 
         # y-analysis
         nice_numbers = sorted(list(set(nice_numbers)))
